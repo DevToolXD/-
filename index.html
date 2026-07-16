@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🎁 우리반 마니또</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1 class="logo">🎁 우리반 마니또</h1>
+      <button id="btn-home" class="link-btn hidden">← 처음으로</button>
+    </header>
+
+    <main id="app">
+      <!-- ============ 역할 선택 ============ -->
+      <section data-view="home" class="view card">
+        <h2>누구세요?</h2>
+        <div class="role-grid">
+          <button class="role-btn" data-role="student">
+            <span class="emoji">🙋</span>
+            <span>학생이에요</span>
+          </button>
+          <button class="role-btn" data-role="admin">
+            <span class="emoji">👩‍🏫</span>
+            <span>선생님이에요</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============ 학생 로그인 ============ -->
+      <section data-view="student-login" class="view card hidden">
+        <h2>🙋 학생 로그인</h2>
+        <label>이름 선택
+          <select id="student-name"></select>
+        </label>
+        <label>비밀번호
+          <input id="student-pw" type="password" autocomplete="off" placeholder="간단한 비밀번호" />
+        </label>
+        <p class="hint" id="student-login-hint"></p>
+        <button id="student-login-btn" class="primary">로그인</button>
+      </section>
+
+      <!-- ============ 학생 대시보드 ============ -->
+      <section data-view="student-home" class="view hidden">
+        <div class="card">
+          <h2>안녕하세요, <span id="student-greeting"></span>님 👋</h2>
+          <p class="muted">
+            내 마니또가 누구인지는 비밀이에요. 대신 소원을 남기면 나를 몰래
+            돌봐주는 마니또에게 익명으로 전달돼요.
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>💌 마니또에게 소원 보내기</h3>
+          <p class="muted small">
+            "이런 거 도와주면 좋겠다" 하는 걸 적어보세요. 보낸 사람 이름은
+            숨겨집니다.
+          </p>
+          <textarea id="wish-text" maxlength="500" rows="3"
+            placeholder="예) 다음 시험 공부 같이 해주면 좋겠어요!"></textarea>
+          <button id="wish-send-btn" class="primary">익명으로 보내기</button>
+          <p class="hint" id="wish-hint"></p>
+        </div>
+
+        <div class="card">
+          <h3>📨 내가 돌보는 친구의 소원함</h3>
+          <p class="muted small">
+            내가 몰래 돌봐주는 친구가 남긴 소원이에요. (누구인지는 비밀!)
+          </p>
+          <button id="inbox-refresh" class="ghost">새로고침</button>
+          <ul id="inbox-list" class="msg-list"></ul>
+        </div>
+
+        <div class="card subtle">
+          <h3>📤 내가 보낸 소원</h3>
+          <ul id="sent-list" class="msg-list"></ul>
+        </div>
+      </section>
+
+      <!-- ============ 관리자 로그인 ============ -->
+      <section data-view="admin-login" class="view card hidden">
+        <h2>👩‍🏫 선생님 로그인</h2>
+        <p class="muted small" id="admin-setup-note"></p>
+        <label>관리자 코드
+          <input id="admin-code" type="password" autocomplete="off" placeholder="관리자 코드" />
+        </label>
+        <p class="hint" id="admin-login-hint"></p>
+        <button id="admin-login-btn" class="primary">입장</button>
+      </section>
+
+      <!-- ============ 관리자 대시보드 ============ -->
+      <section data-view="admin-home" class="view hidden">
+        <div class="card">
+          <h2>👩‍🏫 관리자</h2>
+          <p class="muted" id="admin-status"></p>
+        </div>
+
+        <div class="card">
+          <h3>1. 학생 명단 입력</h3>
+          <p class="muted small">한 줄에 한 명씩 이름을 적어주세요.</p>
+          <textarea id="roster" rows="6" placeholder="김철수&#10;이영희&#10;박민수"></textarea>
+          <button id="roster-add-btn" class="primary">명단에 추가</button>
+          <p class="hint" id="roster-hint"></p>
+          <ul id="roster-list" class="chip-list"></ul>
+        </div>
+
+        <div class="card">
+          <h3>2. 마니또 배정</h3>
+          <p class="muted small">
+            자기 자신 제외, 1:1, 순환 구조로 중복 없이 랜덤 배정합니다.
+          </p>
+          <div class="row">
+            <button id="assign-btn" class="primary">🎲 마니또 배정하기</button>
+            <button id="reshuffle-btn" class="ghost">🔄 재배정</button>
+          </div>
+          <p class="hint" id="assign-hint"></p>
+        </div>
+
+        <div class="card">
+          <h3>3. 전체 마니또 관계 공개</h3>
+          <p class="muted small">
+            관리자만 볼 수 있어요. (관리자 코드로 암호화되어 저장됩니다)
+          </p>
+          <button id="reveal-btn" class="ghost">🔓 전체 공개 보기</button>
+          <div id="reveal-wrap" class="hidden">
+            <table id="reveal-table" class="tbl">
+              <thead>
+                <tr><th>마니또 (돌보는 사람)</th><th>→</th><th>대상 (돌봄 받는 사람)</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="hint" id="reveal-hint"></p>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <footer class="foot">
+      <span>GitHub Pages + Firebase · 순수 HTML/CSS/JS</span>
+    </footer>
+
+    <script type="module" src="js/app.js"></script>
+  </body>
+</html>
