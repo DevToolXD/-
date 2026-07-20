@@ -21,16 +21,36 @@
     </header>
 
     <main id="app">
-      <!-- ============ 학급코드 입력 ============ -->
+      <!-- ============ 홈 (사이드바에서 학급 선택) ============ -->
       <section data-view="class-gate" class="view">
-        <div class="glass-card intro-card">
-          <p class="eyebrow">시작하기 전에</p>
-          <h1>학급코드를 입력해주세요</h1>
-          <p class="muted">6학년 1반은 0601, 2반은 0602 … 담임 선생님께 받은 4자리 코드를 입력하세요.</p>
-          <input id="class-code-input" class="code-input" inputmode="numeric" maxlength="4"
-            placeholder="0601" autocomplete="off" />
-          <p class="hint" id="class-gate-hint"></p>
-          <button id="class-gate-btn" class="btn btn-primary btn-lg">입장하기</button>
+        <div class="landing-shell">
+          <aside class="sidebar glass-card">
+            <p class="eyebrow">바로가기</p>
+            <nav class="side-nav">
+              <button class="side-nav-item" data-code="0603">
+                <span class="side-nav-code">0603</span>
+                <span class="side-nav-label">6학년 3반</span>
+              </button>
+              <button class="side-nav-item" data-code="1889">
+                <span class="side-nav-code">1889</span>
+                <span class="side-nav-label">테스트 모드</span>
+              </button>
+            </nav>
+            <button id="other-code-toggle" class="link-btn side-other-toggle">다른 학급코드 입력</button>
+          </aside>
+
+          <div class="landing-main glass-card">
+            <p class="eyebrow">시작하기 전에</p>
+            <h1>학급을 선택해주세요</h1>
+            <p class="muted">왼쪽 목록에서 학급을 누르면 바로 시작할 수 있어요.</p>
+
+            <div id="other-code-form" class="hidden">
+              <input id="class-code-input" class="code-input" inputmode="numeric" maxlength="4"
+                placeholder="0601" autocomplete="off" />
+              <p class="hint" id="class-gate-hint"></p>
+              <button id="class-gate-btn" class="btn btn-primary btn-lg">입장하기</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -222,7 +242,10 @@
       <p id="chaos-transition-text" class="chaos-transition-text"></p>
     </div>
 
-    <footer class="foot">Made by 정후교</footer>
+    <footer class="foot">
+      <p>Made by 정후교</p>
+      <p>광고문의: 정후교(진짜해줌)</p>
+    </footer>
 
     <script type="module" src="js/app.js"></script>
   </body>

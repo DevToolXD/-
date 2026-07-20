@@ -387,9 +387,12 @@ const FLASHY_KEY = "manito.flashy";
 // 정상 문구 -> 번역기를 돌린 것 같은 어색한 문구. 무조건 마침표로 끝남.
 const CHAOS_TEXT_MAP = [
   ["#class-gate-btn", "입장을 하다."],
-  [".intro-card h1", "학급코드를 입력하는 것을 하다."],
-  [".intro-card .eyebrow", "시작하기 전에 하는 것."],
-  [".intro-card > p.muted", "6학년 1반은 0601을 넣는 것을 권장하다. 2반은 0602를 넣는 것을 권장하다."],
+  [".landing-main h1", "학급을 선택하는 것을 하다."],
+  [".landing-main .eyebrow", "시작하기 전에 하는 것."],
+  [".landing-main > p.muted", "왼쪽 목록을 누르는 것을 권장하다."],
+  [".side-nav-item:nth-of-type(1) .side-nav-label", "육학년 삼반인 것."],
+  [".side-nav-item:nth-of-type(2) .side-nav-label", "테스트를 하는 모드인 것."],
+  ["#other-code-toggle", "다른 학급코드를 입력하는 것."],
   ['.role-btn[data-role="student"] .role-title', "학생이다."],
   ['.role-btn[data-role="student"] .role-desc', "로그인을 계정에 접속하다. 그리고 소원을 남기는 것을 하다."],
   ['.role-btn[data-role="admin"] .role-title', "선생님이다."],
@@ -544,8 +547,23 @@ function playChaosTransition() {
 }
 
 // =============================================================
-//  1) 학급코드 입력
+//  1) 홈 (사이드바 바로가기 / 다른 학급코드 입력)
 // =============================================================
+function enterClass(code) {
+  classCode = code;
+  setClassChip(code);
+  if (code === TEST_CODE) toast("테스트 모드로 진행합니다.");
+  showView("home");
+}
+
+$$(".side-nav-item").forEach((b) =>
+  b.addEventListener("click", () => enterClass(b.dataset.code))
+);
+
+$("#other-code-toggle").addEventListener("click", () => {
+  $("#other-code-form").classList.toggle("hidden");
+});
+
 const codeInput = $("#class-code-input");
 codeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#class-gate-btn").click(); });
 
@@ -555,12 +573,9 @@ $("#class-gate-btn").addEventListener("click", () => {
     setHint("#class-gate-hint", "올바른 학급코드가 아니에요. (예: 0603)");
     return;
   }
-  classCode = code;
-  setClassChip(code);
   setHint("#class-gate-hint", "");
   codeInput.value = "";
-  if (code === TEST_CODE) toast("테스트 모드로 진행합니다.");
-  showView("home");
+  enterClass(code);
 });
 
 // =============================================================

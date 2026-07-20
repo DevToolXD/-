@@ -187,8 +187,47 @@ body::after {
   }
 }
 
-.intro-card { max-width: 520px; margin: 8vh auto 0; text-align: left; }
 .form-card { max-width: 460px; margin: 4vh auto 0; }
+
+/* ---- 홈: 사이드바 + 안내 영역 ---- */
+.landing-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  max-width: 820px;
+  margin: 6vh auto 0;
+  align-items: start;
+}
+.sidebar { padding: 22px 18px; }
+.side-nav { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.side-nav-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg-strong);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease;
+}
+.side-nav-item:hover { border-color: var(--green-500); transform: translateX(2px); }
+.side-nav-item:active { transform: scale(0.97); }
+.side-nav-code {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--green-600);
+}
+.side-nav-label { color: var(--muted); font-size: 0.88rem; }
+.side-other-toggle { margin-top: 14px; padding-left: 4px; }
+.landing-main { text-align: left; }
+
+@media (max-width: 640px) {
+  .landing-shell { grid-template-columns: 1fr; }
+}
 
 .eyebrow {
   text-transform: uppercase;
@@ -375,6 +414,7 @@ input:focus, select:focus, textarea:focus {
   padding: 10px 20px 30px;
   letter-spacing: 0.02em;
 }
+.foot p { margin: 2px 0; }
 
 .hidden { display: none !important; }
 
