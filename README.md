@@ -1,4 +1,4 @@
-# 🎁 우리반 마니또 (GitHub Pages + Firebase)
+ 🎁 우리반 마니또 (GitHub Pages + Firebase)
 
 프레임워크 없이 순수 HTML/CSS/JS로 만든 마니또(Secret Santa) 웹앱입니다.
 데이터는 Firebase Firestore에 저장하고, 이름+비밀번호로 간단히 로그인합니다.
