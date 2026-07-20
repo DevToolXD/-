@@ -248,6 +248,7 @@ async function logout() {
   for (let i = 0; i < steps.length; i++) {
     const remain = steps.length - i;
     const msg = chaos ? `${steps[i]} (남은 확인: ${remain}/${steps.length})` : steps[i];
+    if (chaos) playBlipSound();
     if (!(await confirmModal(msg))) return;
   }
   clearSession();
@@ -290,6 +291,94 @@ function updateSpecialMode() {
 }
 
 // =============================================================
+//  쓸때없이 화려한 모드용 효과음 (외부 파일 없이 Web Audio API로 즉석 합성)
+// =============================================================
+let audioCtx = null;
+function getAudioCtx() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!audioCtx) audioCtx = new Ctx();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+function makeNoiseBuffer(ctx, seconds) {
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+// "퍼버벙!!" 폭발음: 저음 쿵 + 감쇠하는 노이즈
+function playBoomSound() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  const noise = ctx.createBufferSource();
+  noise.buffer = makeNoiseBuffer(ctx, 0.35);
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1800, now);
+  filter.frequency.exponentialRampToValueAtTime(120, now + 0.3);
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.45, now);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+  noise.connect(filter).connect(noiseGain).connect(ctx.destination);
+  noise.start(now);
+  noise.stop(now + 0.35);
+
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(150, now);
+  osc.frequency.exponentialRampToValueAtTime(40, now + 0.25);
+  const oscGain = ctx.createGain();
+  oscGain.gain.setValueAtTime(0.55, now);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+  osc.connect(oscGain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.25);
+}
+
+// 화면 전환용 "슈우우웅" 효과음
+function playWhooshSound() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const noise = ctx.createBufferSource();
+  noise.buffer = makeNoiseBuffer(ctx, 0.5);
+  const filter = ctx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.Q.value = 0.8;
+  filter.frequency.setValueAtTime(300, now);
+  filter.frequency.exponentialRampToValueAtTime(3500, now + 0.35);
+  filter.frequency.exponentialRampToValueAtTime(500, now + 0.5);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.32, now + 0.15);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+  noise.connect(filter).connect(gain).connect(ctx.destination);
+  noise.start(now);
+  noise.stop(now + 0.5);
+}
+
+// 로그아웃 단계마다 삑 소리
+function playBlipSound() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(880, now);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.15, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.12);
+}
+
+// =============================================================
 //  쓸때없이 화려한 모드 — 인도/대만 B급 저예산 CG 감성
 //  (줌펀치 + 유리깨짐 + 만화 효과음 + 화면흔들림 + 어색한 번역투 문구)
 // =============================================================
@@ -306,8 +395,9 @@ const CHAOS_TEXT_MAP = [
   ['.role-btn[data-role="admin"] .role-title', "선생님이다."],
   ['.role-btn[data-role="admin"] .role-desc', "명단을 관리하는 것과 마니또를 배정하는 것을 하다."],
   ['[data-view="student-login"] h2', "학생이 로그인을 계정에 접속하다."],
-  ['[data-view="student-login"] label:nth-of-type(1)', "이름을 입력하는 것."],
-  ['[data-view="student-login"] label:nth-of-type(2)', "비밀번호를 입력하는 것."],
+  ['[data-view="student-login"] label:nth-of-type(1) .label-text', "이름을 입력하는 것."],
+  ['[data-view="student-login"] label:nth-of-type(2) .label-text', "비밀번호를 입력하는 것."],
+  ['[data-view="admin-login"] label .label-text', "관리자 코드를 입력하는 것."],
   ["#student-login-btn", "로그인을 계정에 접속하다."],
   ['[data-view="student-home"] .muted:not(.small)', "마니또를 나의 도와줄 학생. 소원을 남기면 전달되는 것을 하다."],
   ['[data-view="student-home"] h3:nth-of-type(1)', "나의 소원인 것."],
@@ -418,6 +508,7 @@ function chaosClickEffect(e) {
   screenShake();
   spawnBoomText(e.clientX, e.clientY);
   spawnShatter(e.clientX, e.clientY);
+  playBoomSound();
   const target = e.target.closest(".btn, .glass-card, .role-btn");
   if (target) punchElement(target);
   if (navigator.vibrate) navigator.vibrate([10, 20, 30]);
@@ -431,6 +522,7 @@ document.addEventListener("click", (e) => {
 const CHAOS_TRANSITION_WORDS = ["슈우우우우숙", "부아아아앙", "콰과과광", "삐리리링", "두구두구두구"];
 function playChaosTransition() {
   screenShake();
+  playWhooshSound();
   const overlay = $("#chaos-transition");
   const text = $("#chaos-transition-text");
   text.textContent = CHAOS_TRANSITION_WORDS[Math.floor(Math.random() * CHAOS_TRANSITION_WORDS.length)] + "... 빠바!!";
