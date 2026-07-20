@@ -45,12 +45,15 @@ const created = { students: [], secrets: [] };
 
 async function main() {
   console.log(`\n[0] 사전 점검: classes/${TEST_CODE} 기존 데이터 확인`);
+  // 정보성 확인일 뿐 실패로 집계하지 않음 — 실제 사용자가 라이브 사이트에서
+  // 테스트 모드를 쓰고 있다면 학생이 들어있는 게 정상이다. 아래 모든 단계는
+  // TAG 접두사가 붙은 자체 학생만 만들고 지우므로 기존 데이터를 건드리지 않는다.
   const existingStudents = await list(`classes/${TEST_CODE}/students`);
-  const clean = existingStudents.length === 0;
-  check("테스트 학급이 비어있어 전체 흐름 검증 가능", clean);
-  if (!clean) {
-    console.log("  ⚠️ 기존 데이터가 있어 배정(assign)은 건너뛰고 안전한 범위만 검증합니다.");
-  }
+  console.log(
+    existingStudents.length === 0
+      ? "  ℹ️ 테스트 학급이 비어있음"
+      : `  ℹ️ 테스트 학급에 기존 학생 ${existingStudents.length}명 있음(실사용 중일 수 있음) — 건드리지 않고 태그된 학생만 별도로 사용`
+  );
 
   console.log("\n[1] 학급 관리자 코드 등록/검증 (기존 설정 없을 때만)");
   const classDoc = await get(`classes/${TEST_CODE}`);

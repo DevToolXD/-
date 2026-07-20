@@ -17,17 +17,24 @@ const BACK_TARGET = {
   "super-admin": "home",
 };
 
+const LOGGED_IN_VIEWS = ["student-home", "admin-home", "super-admin"];
 let currentView = "class-gate";
 
 function showView(name) {
   currentView = name;
   $$("[data-view]").forEach((v) => v.classList.add("hidden"));
   $(`[data-view="${name}"]`).classList.remove("hidden");
-  $("#btn-back").classList.toggle("hidden", name === "class-gate");
+  const backBtn = $("#btn-back");
+  backBtn.classList.toggle("hidden", name === "class-gate");
+  backBtn.textContent = LOGGED_IN_VIEWS.includes(name) ? "로그아웃" : "뒤로";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 $("#btn-back").addEventListener("click", () => {
+  if (LOGGED_IN_VIEWS.includes(currentView)) {
+    logout();
+    return;
+  }
   const target = BACK_TARGET[currentView] || "class-gate";
   if (target === "class-gate") resetClass();
   student = null;
@@ -118,8 +125,25 @@ function flyToJar(sourceEl, jarEl, text) {
 }
 
 // =============================================================
-//  세션 상태
+//  세션 상태 (localStorage에 저장 → 새로고침해도 로그인 유지)
 // =============================================================
+const SESSION_KEY = "manito.session";
+
+function saveSession(session) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch {}
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch {}
+}
+
 let classCode = null;
 let student = null; // { id, name }
 let adminSession = null; // { code(관리자코드) }
@@ -127,7 +151,22 @@ let saCurrentCode = null;
 
 function resetClass() {
   classCode = null;
+  clearSession();
   $("#class-chip").classList.add("hidden");
+}
+
+function setClassChip(code) {
+  const chip = $("#class-chip");
+  chip.textContent = classLabel(code);
+  chip.classList.remove("hidden");
+}
+
+// 로그아웃: 세션만 지우고 학급코드는 유지 (같은 기기에서 다음 학생이 이어서 로그인)
+function logout() {
+  clearSession();
+  student = null;
+  adminSession = null;
+  showView("home");
 }
 
 // =============================================================
@@ -143,9 +182,7 @@ $("#class-gate-btn").addEventListener("click", () => {
     return;
   }
   classCode = code;
-  const chip = $("#class-chip");
-  chip.textContent = classLabel(code);
-  chip.classList.remove("hidden");
+  setClassChip(code);
   setHint("#class-gate-hint", "");
   codeInput.value = "";
   if (code === TEST_CODE) toast("테스트 모드로 진행합니다.");
@@ -216,8 +253,10 @@ $("#student-login-btn").addEventListener("click", async () => {
     }
     student = { id, name };
     if (id === SUPER_ADMIN.studentId) {
-      enterSuperAdmin();
+      saveSession({ classCode, role: "superadmin" });
+      await enterSuperAdmin();
     } else {
+      saveSession({ classCode, role: "student", studentId: id, studentName: name });
       await enterStudentHome();
     }
   } catch (e) {
@@ -235,18 +274,24 @@ async function enterStudentHome() {
 }
 
 async function refreshMyWish() {
-  const sec = await data.getSecret(classCode, student.id);
   const form = $("#my-wish-form");
   const display = $("#my-wish-display");
-  if (sec?.wishSetAt) {
-    form.classList.add("hidden");
-    display.classList.remove("hidden");
-    $("#my-wish-display-text").textContent = sec.wish || "";
-  } else {
+  try {
+    const sec = await data.getSecret(classCode, student.id);
+    if (sec?.wishSetAt) {
+      form.classList.add("hidden");
+      display.classList.remove("hidden");
+      $("#my-wish-display-text").textContent = sec.wish || "";
+    } else {
+      form.classList.remove("hidden");
+      display.classList.add("hidden");
+      $("#my-wish-text").value = "";
+      setHint("#my-wish-hint", "");
+    }
+  } catch (e) {
     form.classList.remove("hidden");
     display.classList.add("hidden");
-    $("#my-wish-text").value = "";
-    setHint("#my-wish-hint", "");
+    setHint("#my-wish-hint", "불러오기 실패: " + e.message);
   }
 }
 
@@ -331,6 +376,7 @@ $("#admin-login-btn").addEventListener("click", async () => {
       }
     }
     adminSession = { code };
+    saveSession({ classCode, role: "admin" });
     await enterAdminHome();
   } catch (e) {
     setHint("#admin-login-hint", "오류: " + e.message);
@@ -517,5 +563,34 @@ $("#sa-reassign-btn").addEventListener("click", async (e) => {
   }
 });
 
-// 시작
-showView("class-gate");
+// =============================================================
+//  시작: 저장된 세션이 있으면 로그인 상태로 바로 복원
+// =============================================================
+(async function init() {
+  const saved = loadSession();
+  if (saved && isValidClassCode(saved.classCode)) {
+    classCode = saved.classCode;
+    setClassChip(classCode);
+    try {
+      if (saved.role === "admin") {
+        adminSession = {};
+        await enterAdminHome();
+        return;
+      }
+      if (saved.role === "superadmin") {
+        student = { id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name };
+        await enterSuperAdmin();
+        return;
+      }
+      if (saved.role === "student" && saved.studentId) {
+        student = { id: saved.studentId, name: saved.studentName };
+        await enterStudentHome();
+        return;
+      }
+    } catch {
+      // 저장된 세션 복원 실패 시 조용히 초기 화면으로
+    }
+    clearSession();
+  }
+  showView("class-gate");
+})();
