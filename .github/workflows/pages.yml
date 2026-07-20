@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["claude/manito-github-firebase-jwjdyq"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
