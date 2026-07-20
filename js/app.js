@@ -28,11 +28,12 @@ function showView(name) {
   backBtn.classList.toggle("hidden", name === "class-gate");
   backBtn.textContent = LOGGED_IN_VIEWS.includes(name) ? "로그아웃" : "뒤로";
   window.scrollTo({ top: 0, behavior: "smooth" });
+  updateSpecialMode();
 }
 
-$("#btn-back").addEventListener("click", () => {
+$("#btn-back").addEventListener("click", async () => {
   if (LOGGED_IN_VIEWS.includes(currentView)) {
-    logout();
+    await logout();
     return;
   }
   const target = BACK_TARGET[currentView] || "class-gate";
@@ -41,6 +42,40 @@ $("#btn-back").addEventListener("click", () => {
   adminSession = null;
   showView(target);
 });
+
+// =============================================================
+//  확인 모달 (재사용) — window.confirm() 대신 리퀴드 글라스 모달 사용
+// =============================================================
+let confirmHideTimer = null;
+function confirmModal(message) {
+  return new Promise((resolve) => {
+    const overlay = $("#confirm-modal");
+    $("#confirm-modal-text").textContent = message;
+    const okBtn = $("#confirm-modal-ok");
+    const cancelBtn = $("#confirm-modal-cancel");
+    clearTimeout(confirmHideTimer); // 이전 모달이 남긴 지연 hidden 처리 취소 (연속 호출 대비)
+    overlay.classList.remove("hidden");
+    void overlay.offsetWidth;
+    overlay.classList.add("show");
+
+    function cleanup(result) {
+      overlay.classList.remove("show");
+      clearTimeout(confirmHideTimer);
+      confirmHideTimer = setTimeout(() => overlay.classList.add("hidden"), 200);
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      overlay.removeEventListener("click", onOverlay);
+      resolve(result);
+    }
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onOverlay(e) { if (e.target === overlay) cleanup(false); }
+
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    overlay.addEventListener("click", onOverlay);
+  });
+}
 
 // ---------- 토스트 ----------
 let toastTimer;
@@ -78,6 +113,20 @@ function escapeHtml(s) {
 }
 
 // =============================================================
+//  개발자 도구 접근 억제 (완전한 차단은 불가능하지만 진입 장벽을 둠)
+// =============================================================
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+document.addEventListener("keydown", (e) => {
+  const k = e.key;
+  const blocked =
+    k === "F12" ||
+    (e.ctrlKey && e.shiftKey && ["I", "J", "C", "i", "j", "c"].includes(k)) ||
+    (e.metaKey && e.altKey && ["I", "J", "C", "i", "j", "c"].includes(k)) ||
+    (e.ctrlKey && (k === "u" || k === "U"));
+  if (blocked) e.preventDefault();
+});
+
+// =============================================================
 //  마우스 커서 글로우 + 로컬 스포트라이트(볼록 효과)
 // =============================================================
 const glow = $("#cursor-glow");
@@ -94,34 +143,43 @@ document.addEventListener("mousemove", (e) => {
 document.addEventListener("mouseleave", () => glow.classList.remove("active"));
 
 // =============================================================
-//  소원이 통 안으로 빨려들어가는 애니메이션
+//  소원이 통 안으로 빨려들어가는 전체화면 연출
 // =============================================================
-function flyToJar(sourceEl, jarEl, text) {
-  const start = sourceEl.getBoundingClientRect();
-  const end = jarEl.getBoundingClientRect();
-  const clone = document.createElement("div");
-  clone.className = "wish-fly";
-  clone.textContent = text;
-  clone.style.left = start.left + "px";
-  clone.style.top = start.top + "px";
-  clone.style.width = start.width + "px";
-  document.body.appendChild(clone);
-  const dx = end.left + end.width / 2 - (start.left + start.width / 2);
-  const dy = end.top + end.height / 2 - (start.top + start.height / 2);
-  const anim = clone.animate(
-    [
-      { transform: "translate(0,0) scale(1)", opacity: 1 },
-      { transform: `translate(${dx * 0.6}px, ${dy * 0.6}px) scale(0.5)`, opacity: 0.85, offset: 0.6 },
-      { transform: `translate(${dx}px, ${dy}px) scale(0.05)`, opacity: 0 },
-    ],
-    { duration: 620, easing: "cubic-bezier(.4,0,.2,1)" }
-  );
-  jarEl.classList.add("bump");
-  if (navigator.vibrate) navigator.vibrate(28);
-  anim.onfinish = () => {
-    clone.remove();
-    jarEl.classList.remove("bump");
-  };
+function wishPortal(text) {
+  return new Promise((resolve) => {
+    const overlay = $("#wish-portal");
+    const textEl = $("#wish-portal-text");
+    const ring = $("#wish-portal-ring");
+    textEl.textContent = text;
+    overlay.classList.remove("hidden");
+    void overlay.offsetWidth;
+    overlay.classList.add("show");
+    if (navigator.vibrate) navigator.vibrate([15, 40, 15]);
+
+    ring.animate(
+      [
+        { transform: "scale(0.3)", opacity: 0 },
+        { transform: "scale(1)", opacity: 0.9, offset: 0.55 },
+        { transform: "scale(0.02)", opacity: 1 },
+      ],
+      { duration: 900, easing: "cubic-bezier(.4,0,.2,1)" }
+    );
+    const textAnim = textEl.animate(
+      [
+        { transform: "rotate(0deg) scale(1)", opacity: 1 },
+        { transform: "rotate(180deg) scale(0.7)", opacity: 1, offset: 0.55 },
+        { transform: "rotate(360deg) scale(0)", opacity: 0 },
+      ],
+      { duration: 900, easing: "cubic-bezier(.55,0,.55,1)" }
+    );
+    textAnim.onfinish = () => {
+      overlay.classList.remove("show");
+      setTimeout(() => {
+        overlay.classList.add("hidden");
+        resolve();
+      }, 220);
+    };
+  });
 }
 
 // =============================================================
@@ -161,13 +219,93 @@ function setClassChip(code) {
   chip.classList.remove("hidden");
 }
 
-// 로그아웃: 세션만 지우고 학급코드는 유지 (같은 기기에서 다음 학생이 이어서 로그인)
-function logout() {
+// 로그아웃: 이중 확인 후 세션만 지우고 학급코드는 유지 (같은 기기에서 다음 학생이 이어서 로그인)
+async function logout() {
+  if (!(await confirmModal("정말 로그아웃 하시겠어요?"))) return;
+  if (!(await confirmModal("한 번 더 확인할게요. 정말 나가시겠어요? 다시 로그인해야 해요."))) return;
   clearSession();
   student = null;
   adminSession = null;
   showView("home");
 }
+
+// =============================================================
+//  0603 학급 전용 이스터에그 (선생님/슈퍼관리자 화면 제외)
+// =============================================================
+const FLOURISH_VIEWS = ["home", "student-login", "student-home"];
+let sparklesRendered = false;
+
+function renderSparkles(active) {
+  const layer = $("#sparkle-layer");
+  if (active && !sparklesRendered) {
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < 24; i++) {
+      const s = document.createElement("span");
+      s.className = "sparkle";
+      s.style.left = Math.random() * 100 + "%";
+      s.style.top = Math.random() * 100 + "%";
+      s.style.animationDelay = Math.random() * 4 + "s";
+      s.style.setProperty("--sz", 3 + Math.random() * 4 + "px");
+      frag.appendChild(s);
+    }
+    layer.innerHTML = "";
+    layer.appendChild(frag);
+    sparklesRendered = true;
+  }
+  layer.classList.toggle("hidden", !active);
+  if (!active) sparklesRendered = false;
+}
+
+function updateSpecialMode() {
+  const active = classCode === SUPER_ADMIN.classCode && FLOURISH_VIEWS.includes(currentView);
+  document.body.classList.toggle("special-0603", active);
+  renderSparkles(active);
+}
+
+// =============================================================
+//  화려함 모드 (쓸데없이 화려한 옵트인 이펙트, 버튼으로 온/오프)
+// =============================================================
+const FLASHY_KEY = "manito.flashy";
+
+function setFlashy(on) {
+  document.body.classList.toggle("flashy", on);
+  const btn = $("#flashy-toggle");
+  btn.setAttribute("aria-pressed", String(on));
+  btn.textContent = on ? "화려함 모드 ON" : "화려함 모드";
+  try { localStorage.setItem(FLASHY_KEY, on ? "1" : "0"); } catch {}
+}
+
+$("#flashy-toggle").addEventListener("click", () => {
+  setFlashy(!document.body.classList.contains("flashy"));
+});
+
+const BURST_COLORS = ["#2e9e5b", "#ffd166", "#ef476f", "#06d6a0", "#4dabf7", "#cc5de8"];
+function spawnBurst(x, y) {
+  for (let i = 0; i < 10; i++) {
+    const s = document.createElement("span");
+    s.className = "burst-particle";
+    s.style.left = x + "px";
+    s.style.top = y + "px";
+    s.style.background = BURST_COLORS[i % BURST_COLORS.length];
+    document.body.appendChild(s);
+    const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.4;
+    const dist = 40 + Math.random() * 60;
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+    const anim = s.animate(
+      [
+        { transform: "translate(0,0) scale(1)", opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0)`, opacity: 0 },
+      ],
+      { duration: 500 + Math.random() * 300, easing: "cubic-bezier(.2,.8,.2,1)" }
+    );
+    anim.onfinish = () => s.remove();
+  }
+}
+document.addEventListener("click", (e) => {
+  if (!document.body.classList.contains("flashy")) return;
+  spawnBurst(e.clientX, e.clientY);
+});
 
 // =============================================================
 //  1) 학급코드 입력
@@ -302,17 +440,14 @@ $("#my-wish-submit").addEventListener("click", async () => {
   busy(btn, true, "등록 중…");
   try {
     const clean = await data.setMyWish(classCode, student.id, text);
-    flyToJar($("#my-wish-text"), $("#wish-jar-icon"), clean);
-    setTimeout(async () => {
-      await refreshMyWish();
-      toast("소원함에 추가되었습니다!");
-    }, 500);
+    busy(btn, false);
+    await wishPortal(clean);
+    await refreshMyWish();
+    toast("소원함에 추가되었습니다!");
   } catch (e) {
     setHint("#my-wish-hint", e.message);
     busy(btn, false);
-    return;
   }
-  busy(btn, false);
 });
 
 async function refreshCareTarget() {
@@ -439,7 +574,7 @@ async function doAssign(btn) {
 }
 $("#assign-btn").addEventListener("click", (e) => doAssign(e.currentTarget));
 $("#reshuffle-btn").addEventListener("click", async (e) => {
-  if (!confirm("재배정하면 기존 배정과 학생들이 등록한 소원이 초기화됩니다. 진행할까요?")) return;
+  if (!(await confirmModal("재배정하면 기존 배정과 학생들이 등록한 소원이 초기화됩니다. 진행할까요?"))) return;
   await doAssign(e.currentTarget);
 });
 
@@ -548,7 +683,7 @@ $("#sa-back-btn").addEventListener("click", () => {
 
 $("#sa-reassign-btn").addEventListener("click", async (e) => {
   if (!saCurrentCode) return;
-  if (!confirm(`${classLabel(saCurrentCode)}을(를) 재배정할까요? 기존 소원이 초기화됩니다.`)) return;
+  if (!(await confirmModal(`${classLabel(saCurrentCode)}을(를) 재배정할까요? 기존 소원이 초기화됩니다.`))) return;
   const btn = e.currentTarget;
   busy(btn, true, "배정 중…");
   try {
@@ -566,6 +701,10 @@ $("#sa-reassign-btn").addEventListener("click", async (e) => {
 // =============================================================
 //  시작: 저장된 세션이 있으면 로그인 상태로 바로 복원
 // =============================================================
+try {
+  setFlashy(localStorage.getItem(FLASHY_KEY) === "1");
+} catch {}
+
 (async function init() {
   const saved = loadSession();
   if (saved && isValidClassCode(saved.classCode)) {

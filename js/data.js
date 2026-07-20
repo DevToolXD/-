@@ -183,7 +183,7 @@ export async function setMyWish(code, id, text) {
   return clean;
 }
 
-// 내가 돌보는 친구(protege)의 이름 + 소원 조회
+// 내가 도와주는 친구(protege)의 이름 + 소원 조회
 export async function getCareTarget(code, guardianId) {
   const my = await getSecret(code, guardianId);
   if (!my?.caringForId) return null;

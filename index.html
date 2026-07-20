@@ -8,6 +8,7 @@
   </head>
   <body>
     <div id="cursor-glow" aria-hidden="true"></div>
+    <div id="sparkle-layer" class="hidden" aria-hidden="true"></div>
 
     <header class="topbar">
       <div class="brand">
@@ -15,6 +16,7 @@
         <span class="brand-name">마니또</span>
         <span id="class-chip" class="chip class-chip hidden"></span>
       </div>
+      <button id="flashy-toggle" class="flashy-toggle" aria-pressed="false">화려함 모드</button>
       <button id="btn-back" class="link-btn hidden">뒤로</button>
     </header>
 
@@ -67,7 +69,8 @@
         <div class="glass-card">
           <p class="eyebrow" id="student-greeting-eyebrow"></p>
           <h2>안녕하세요, <span id="student-greeting"></span>님</h2>
-          <p class="muted">내 마니또가 누구인지는 비밀이에요. 소원을 남기면 나를 돌봐주는 친구에게 전달돼요.</p>
+          <p class="muted">내 마니또가 누구인지는 비밀이에요. 소원을 남기면 나를 도와주는 친구에게 전달돼요.</p>
+          <p id="special-badge" class="special-badge">✦ 제작자 소속 학급 · 특별판</p>
         </div>
 
         <div class="glass-card">
@@ -75,16 +78,8 @@
           <p class="muted small">한 번 등록하면 다음 마니또 배정 전까지 수정할 수 없어요.</p>
 
           <div id="my-wish-form">
-            <div class="wish-lab">
-              <textarea id="my-wish-text" maxlength="300" rows="3"
-                placeholder="예) 다음 수학 시간에 짝지어 도와주면 좋겠어요"></textarea>
-              <div class="wish-jar" id="wish-jar-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <path d="M6 8h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8Z" />
-                  <path d="M9 8V6a3 3 0 0 1 6 0v2" />
-                </svg>
-              </div>
-            </div>
+            <textarea id="my-wish-text" maxlength="300" rows="3"
+              placeholder="예) 누군가 갑자기 나타나서 내 학원숙제 1974페이지 분량을 풀어주면 좋겠다…"></textarea>
             <button id="my-wish-submit" class="btn btn-primary">소원 등록하기</button>
             <p class="hint" id="my-wish-hint"></p>
           </div>
@@ -99,7 +94,7 @@
 
         <div class="glass-card">
           <div class="row-between">
-            <h3>내가 돌보는 친구</h3>
+            <h3>내가 도와주는 친구</h3>
             <button id="care-refresh" class="btn btn-ghost btn-sm">새로고침</button>
           </div>
           <div id="care-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
@@ -195,7 +190,7 @@
           <p class="hint" id="sa-detail-hint"></p>
           <div class="table-wrap">
             <table class="tbl">
-              <thead><tr><th>이름</th><th>돌보는 친구</th><th>소원</th><th></th></tr></thead>
+              <thead><tr><th>이름</th><th>도와주는 친구</th><th>소원</th><th></th></tr></thead>
               <tbody id="sa-detail-body"></tbody>
             </table>
           </div>
@@ -204,6 +199,23 @@
     </main>
 
     <div id="toast" class="toast hidden"></div>
+
+    <!-- ============ 확인 모달 (이중 확인 등에 재사용) ============ -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div class="modal glass-card">
+        <p id="confirm-modal-text"></p>
+        <div class="row modal-actions">
+          <button id="confirm-modal-cancel" class="btn btn-ghost">취소</button>
+          <button id="confirm-modal-ok" class="btn btn-primary">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 소원이 통 안으로 빨려들어가는 전체화면 연출 ============ -->
+    <div id="wish-portal" class="wish-portal hidden" aria-hidden="true">
+      <div id="wish-portal-ring" class="wish-portal-ring"></div>
+      <p id="wish-portal-text" class="wish-portal-text"></p>
+    </div>
 
     <footer class="foot">Made by 정후교</footer>
 
