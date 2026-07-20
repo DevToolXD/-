@@ -14,13 +14,37 @@ export const firebaseConfig = {
   measurementId: "G-SC5TY7PDN6",
 };
 
+// 6학년 1반 ~ 9반 학급코드: "0601" ~ "0609"
+export const CLASS_CODES = Array.from({ length: 9 }, (_, i) =>
+  "060" + (i + 1)
+);
+
+// 테스트 모드 진입 코드 (실제 학급 데이터와 완전히 분리된 공간 사용)
+export const TEST_CODE = "1889";
+
+// 학급코드 → 화면 표시 라벨
+export function classLabel(code) {
+  if (code === TEST_CODE) return "테스트 모드";
+  const m = /^06(0[1-9])$/.exec(code);
+  return m ? `6학년 ${parseInt(m[1], 10)}반` : code;
+}
+
+export function isValidClassCode(code) {
+  return CLASS_CODES.includes(code) || code === TEST_CODE;
+}
+
+// 슈퍼 관리자: 이 학급코드에서 이 이름으로 로그인하면 전체 학급을
+// 가로지르는 관리자 패널로 진입합니다. (실제 명단에 등록될 필요 없음)
+export const SUPER_ADMIN = {
+  name: "정후교",
+  classCode: "0603",
+  studentId: "__superadmin__",
+};
+
 // 앱 동작 관련 설정
 export const APP = {
-  // 메시지 최대 길이 (Firestore 보안 규칙과 반드시 동일하게 유지)
-  maxMessageLength: 500,
-  // 이름/비밀번호 최대 길이
+  maxWishLength: 300,
   maxNameLength: 40,
   maxPasswordLength: 64,
-  // Firebase SDK 버전 (CDN)
   firebaseVersion: "10.12.0",
 };

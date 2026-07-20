@@ -1,5 +1,6 @@
 // =============================================================
 //  데이터 계층 - Firestore 읽기/쓰기 + 마니또 배정 로직
+//  모든 데이터는 classes/{classCode} 아래에 격리되어 반별로 완전히 분리됩니다.
 // =============================================================
 import {
   db,
@@ -9,33 +10,34 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  addDoc,
   writeBatch,
-  query,
-  orderBy,
   serverTimestamp,
 } from "./firebase.js";
-import {
-  randomHex,
-  hashSecret,
-  encryptJSON,
-  decryptJSON,
-} from "./crypto.js";
+import { randomHex, hashSecret } from "./crypto.js";
 import { buildCycle } from "./assign.js";
-import { APP } from "../config.js";
+import { APP, CLASS_CODES, SUPER_ADMIN } from "../config.js";
+
+// ---------- 경로 헬퍼 ----------
+const studentsCol = (code) => collection(db, "classes", code, "students");
+const secretsDoc = (code, id) => doc(db, "classes", code, "secrets", id);
+const stateDoc = (code) => doc(db, "classes", code, "meta", "state");
+const classDoc = (code) => doc(db, "classes", code);
 
 // ---------- 학생 명단 ----------
-export async function listStudents() {
-  const snap = await getDocs(collection(db, "students"));
+export async function listStudents(code) {
+  const snap = await getDocs(studentsCol(code));
   const out = [];
   snap.forEach((d) => out.push({ id: d.id, name: d.data().name }));
   out.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  // 0603 반은 슈퍼 관리자(정후교)가 로그인 화면에 항상 보이도록 합성 추가
+  if (code === SUPER_ADMIN.classCode && !out.some((s) => s.name === SUPER_ADMIN.name)) {
+    out.unshift({ id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name, synthetic: true });
+  }
   return out;
 }
 
-// 이름 배열을 받아 학생 + 빈 secret 문서를 생성. 이미 있는 이름은 건너뜀.
-export async function addStudents(names) {
-  const existing = new Set((await listStudents()).map((s) => s.name));
+export async function addStudents(code, names) {
+  const existing = new Set((await listStudents(code)).map((s) => s.name));
   const toAdd = [];
   for (const raw of names) {
     const name = raw.trim();
@@ -46,12 +48,14 @@ export async function addStudents(names) {
   }
   const batch = writeBatch(db);
   for (const name of toAdd) {
-    const ref = doc(collection(db, "students"));
+    const ref = doc(studentsCol(code));
     batch.set(ref, { name, createdAt: serverTimestamp() });
-    batch.set(doc(db, "secrets", ref.id), {
+    batch.set(secretsDoc(code, ref.id), {
       hasPassword: false,
-      sendChannel: null,
-      readChannel: null,
+      wish: null,
+      wishSetAt: null,
+      caringForId: null,
+      caringForName: null,
     });
   }
   await batch.commit();
@@ -59,150 +63,175 @@ export async function addStudents(names) {
 }
 
 // ---------- 학생 인증 ----------
-export async function getSecret(id) {
-  const s = await getDoc(doc(db, "secrets", id));
+export async function getSecret(code, id) {
+  const s = await getDoc(secretsDoc(code, id));
   return s.exists() ? s.data() : null;
 }
 
-// 첫 로그인 시 비밀번호 설정
-export async function setStudentPassword(id, password) {
+async function ensureSecretDoc(code, id) {
+  const existing = await getSecret(code, id);
+  if (existing) return existing;
+  const fresh = {
+    hasPassword: false,
+    wish: null,
+    wishSetAt: null,
+    caringForId: null,
+    caringForName: null,
+  };
+  await setDoc(secretsDoc(code, id), fresh);
+  return fresh;
+}
+
+export async function setStudentPassword(code, id, password) {
   const salt = randomHex(16);
   const pwHash = await hashSecret(password, salt);
-  await updateDoc(doc(db, "secrets", id), {
-    salt,
-    pwHash,
-    hasPassword: true,
-  });
+  await updateDoc(secretsDoc(code, id), { salt, pwHash, hasPassword: true });
 }
 
 // 로그인 검증. 반환: 'ok' | 'wrong' | 'needSetup'
-export async function verifyStudentPassword(id, password) {
-  const sec = await getSecret(id);
-  if (!sec) return "wrong";
+export async function verifyStudentPassword(code, id, password) {
+  const sec = await ensureSecretDoc(code, id);
   if (!sec.hasPassword) return "needSetup";
   const h = await hashSecret(password, sec.salt);
   return h === sec.pwHash ? "ok" : "wrong";
 }
 
-// ---------- 관리자 ----------
-export async function adminConfigExists() {
-  const s = await getDoc(doc(db, "meta", "config"));
-  return s.exists();
+// ---------- 학급 관리자(선생님) ----------
+export async function adminConfigExists(code) {
+  const s = await getDoc(classDoc(code));
+  return s.exists() && !!s.data().adminHash;
 }
 
-// 최초 1회: 관리자 코드 등록
-export async function setupAdmin(code) {
+export async function setupAdmin(code, adminCode) {
   const adminSalt = randomHex(16);
-  const adminHash = await hashSecret(code, adminSalt);
-  await setDoc(doc(db, "meta", "config"), { adminSalt, adminHash });
+  const adminHash = await hashSecret(adminCode, adminSalt);
+  await setDoc(classDoc(code), { adminSalt, adminHash, createdAt: serverTimestamp() }, { merge: true });
 }
 
-// 관리자 코드 검증
-export async function verifyAdmin(code) {
-  const s = await getDoc(doc(db, "meta", "config"));
-  if (!s.exists()) return false;
+export async function verifyAdmin(code, adminCode) {
+  const s = await getDoc(classDoc(code));
+  if (!s.exists() || !s.data().adminHash) return false;
   const { adminSalt, adminHash } = s.data();
-  const h = await hashSecret(code, adminSalt);
+  const h = await hashSecret(adminCode, adminSalt);
   return h === adminHash;
 }
 
 // ---------- 마니또 배정 / 재배정 ----------
-// code: 관리자 코드 (매핑 암호화 키로 사용)
 export async function assignManito(code) {
-  const students = await listStudents();
+  const students = (await listStudents(code)).filter((s) => !s.synthetic);
   if (students.length < 2) {
     throw new Error("학생이 2명 이상 있어야 배정할 수 있습니다.");
   }
   const cycle = buildCycle(students.length);
 
-  // 학생별로 설정할 채널을 모은다 (한 학생당 update 1회 → 배치 제약 회피)
-  const updates = new Map(students.map((s) => [s.id, {}]));
-  const pairs = [];
+  const updates = new Map(
+    students.map((s) => [s.id, { caringForId: null, caringForName: null }])
+  );
   for (const { guardianIdx, protegeIdx } of cycle) {
     const guardian = students[guardianIdx];
     const protege = students[protegeIdx];
-    const channel = randomHex(16); // 이 수호자-대상 사이의 비밀 채널
-    updates.get(guardian.id).readChannel = channel; // 수호자는 여기서 읽는다
-    updates.get(protege.id).sendChannel = channel; // 대상은 여기로 보낸다
-    pairs.push({
-      guardianId: guardian.id,
-      guardianName: guardian.name,
-      protegeId: protege.id,
-      protegeName: protege.name,
-    });
+    updates.get(guardian.id).caringForId = protege.id;
+    updates.get(guardian.id).caringForName = protege.name;
   }
-
-  // 배정 결과는 관리자 코드로 암호화하여 저장 (학생은 복호화 불가)
-  const encrypted = await encryptJSON(
-    { assignedAt: new Date().toISOString(), pairs },
-    code
-  );
 
   const batch = writeBatch(db);
   for (const [id, fields] of updates) {
-    batch.update(doc(db, "secrets", id), fields);
+    batch.update(secretsDoc(code, id), {
+      caringForId: fields.caringForId,
+      caringForName: fields.caringForName,
+      wish: null,
+      wishSetAt: null,
+    });
   }
-  batch.set(doc(db, "meta", "mapping"), {
-    ...encrypted,
-    updatedAt: serverTimestamp(),
-  });
+  batch.set(stateDoc(code), { assignedAt: serverTimestamp(), studentCount: students.length });
   await batch.commit();
-  return pairs.length;
+  return students.length;
 }
 
-// 전체 마니또 관계 조회 (관리자 코드로 복호화). 코드 틀리면 예외.
-export async function revealMapping(code) {
-  const s = await getDoc(doc(db, "meta", "mapping"));
-  if (!s.exists()) return null;
-  const data = s.data();
-  const obj = await decryptJSON(
-    { salt: data.salt, iv: data.iv, ct: data.ct },
-    code
-  );
-  return obj; // { assignedAt, pairs: [...] }
-}
-
-export async function isAssigned() {
-  const s = await getDoc(doc(db, "meta", "mapping"));
+export async function isAssigned(code) {
+  const s = await getDoc(stateDoc(code));
   return s.exists();
 }
 
-// ---------- 메시지 ----------
-// 학생이 자기 마니또(수호자)에게 익명 소원 메시지 전송
-export async function sendWish(sendChannel, text) {
-  if (!sendChannel) throw new Error("아직 마니또가 배정되지 않았습니다.");
-  const clean = text.trim();
-  if (!clean) throw new Error("메시지를 입력해주세요.");
-  if (clean.length > APP.maxMessageLength) {
-    throw new Error(`메시지는 ${APP.maxMessageLength}자 이내로 작성해주세요.`);
+// 전체 마니또 관계 (guardian → protege). caringForId 를 모아 그래프를 재구성.
+export async function revealMapping(code) {
+  const students = (await listStudents(code)).filter((s) => !s.synthetic);
+  const pairs = [];
+  for (const s of students) {
+    const sec = await getSecret(code, s.id);
+    if (sec?.caringForId) {
+      pairs.push({
+        guardianName: s.name,
+        protegeName: sec.caringForName,
+      });
+    }
   }
-  await addDoc(collection(db, "channels", sendChannel, "messages"), {
-    text: clean,
-    createdAt: serverTimestamp(),
-  });
+  return pairs;
 }
 
-// 내가 돌보는 대상이 보낸 소원 메시지함 (익명)
-export async function getInbox(readChannel) {
-  if (!readChannel) return [];
-  const q = query(
-    collection(db, "channels", readChannel, "messages"),
-    orderBy("createdAt", "desc")
-  );
-  const snap = await getDocs(q);
+// ---------- 소원 ----------
+// 학생 본인의 소원 등록 (배정 주기당 1회)
+export async function setMyWish(code, id, text) {
+  const clean = text.trim();
+  if (!clean) throw new Error("소원을 입력해주세요.");
+  if (clean.length > APP.maxWishLength) {
+    throw new Error(`소원은 ${APP.maxWishLength}자 이내로 작성해주세요.`);
+  }
+  const sec = await ensureSecretDoc(code, id);
+  if (sec.wishSetAt) throw new Error("이미 이번 마니또 기간의 소원을 등록했어요.");
+  await updateDoc(secretsDoc(code, id), { wish: clean, wishSetAt: serverTimestamp() });
+  return clean;
+}
+
+// 내가 돌보는 친구(protege)의 이름 + 소원 조회
+export async function getCareTarget(code, guardianId) {
+  const my = await getSecret(code, guardianId);
+  if (!my?.caringForId) return null;
+  const target = await getSecret(code, my.caringForId);
+  return {
+    id: my.caringForId,
+    name: my.caringForName,
+    wish: target?.wish || null,
+    wishSetAt: target?.wishSetAt || null,
+  };
+}
+
+// ---------- 슈퍼 관리자 (전체 학급 열람/편집) ----------
+export async function superAdminOverview() {
   const out = [];
-  snap.forEach((d) => {
-    const m = d.data();
-    out.push({
-      id: d.id,
-      text: m.text,
-      createdAt: m.createdAt ? m.createdAt.toDate() : null,
-    });
-  });
+  for (const code of CLASS_CODES) {
+    const students = (await listStudents(code)).filter((s) => !s.synthetic);
+    const assigned = await isAssigned(code);
+    out.push({ code, count: students.length, assigned });
+  }
   return out;
 }
 
-// 내가 보낸 소원 메시지 (본인 확인용)
-export async function getSent(sendChannel) {
-  return getInbox(sendChannel);
+export async function superAdminClassDetail(code) {
+  const students = (await listStudents(code)).filter((s) => !s.synthetic);
+  const rows = [];
+  for (const s of students) {
+    const sec = await getSecret(code, s.id);
+    rows.push({
+      id: s.id,
+      name: s.name,
+      wish: sec?.wish || null,
+      wishSetAt: sec?.wishSetAt || null,
+      caringForId: sec?.caringForId || null,
+      caringForName: sec?.caringForName || null,
+    });
+  }
+  return rows;
+}
+
+// 슈퍼 관리자는 등록 여부와 상관없이 어떤 학생의 소원도 수정 가능
+export async function superAdminSetWish(code, id, text) {
+  const clean = text.trim();
+  if (clean.length > APP.maxWishLength) {
+    throw new Error(`소원은 ${APP.maxWishLength}자 이내로 작성해주세요.`);
+  }
+  await updateDoc(secretsDoc(code, id), {
+    wish: clean || null,
+    wishSetAt: clean ? serverTimestamp() : null,
+  });
 }
