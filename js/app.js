@@ -20,7 +20,10 @@ const BACK_TARGET = {
 const LOGGED_IN_VIEWS = ["student-home", "admin-home", "super-admin"];
 let currentView = "class-gate";
 
+let hasRenderedOnce = false;
 function showView(name) {
+  const shouldChaosTransition =
+    hasRenderedOnce && name !== currentView && document.body.classList.contains("flashy");
   currentView = name;
   $$("[data-view]").forEach((v) => v.classList.add("hidden"));
   $(`[data-view="${name}"]`).classList.remove("hidden");
@@ -29,6 +32,8 @@ function showView(name) {
   backBtn.textContent = LOGGED_IN_VIEWS.includes(name) ? "로그아웃" : "뒤로";
   window.scrollTo({ top: 0, behavior: "smooth" });
   updateSpecialMode();
+  if (shouldChaosTransition) playChaosTransition();
+  hasRenderedOnce = true;
 }
 
 $("#btn-back").addEventListener("click", async () => {
@@ -219,10 +224,32 @@ function setClassChip(code) {
   chip.classList.remove("hidden");
 }
 
-// 로그아웃: 이중 확인 후 세션만 지우고 학급코드는 유지 (같은 기기에서 다음 학생이 이어서 로그인)
+// 로그아웃: 이중 확인(쓸때없이 화려한 모드에서는 10단계 확인) 후 세션만 지우고
+// 학급코드는 유지 (같은 기기에서 다음 학생이 이어서 로그인)
+const NORMAL_LOGOUT_STEPS = [
+  "정말 로그아웃 하시겠어요?",
+  "한 번 더 확인할게요. 정말 나가시겠어요? 다시 로그인해야 해요.",
+];
+const CHAOS_LOGOUT_STEPS = [
+  "로그아웃 하시겠습니까?",
+  "정말요?",
+  "진짜요?",
+  "ㄹㅇ?",
+  "진짜로?",
+  "ㄹㅇ로?",
+  "진짜 진짜?",
+  "정말 정말?",
+  "진짜 정말 정말로?",
+  "진짜 정말 정말 정말로?",
+];
 async function logout() {
-  if (!(await confirmModal("정말 로그아웃 하시겠어요?"))) return;
-  if (!(await confirmModal("한 번 더 확인할게요. 정말 나가시겠어요? 다시 로그인해야 해요."))) return;
+  const chaos = document.body.classList.contains("flashy");
+  const steps = chaos ? CHAOS_LOGOUT_STEPS : NORMAL_LOGOUT_STEPS;
+  for (let i = 0; i < steps.length; i++) {
+    const remain = steps.length - i;
+    const msg = chaos ? `${steps[i]} (남은 확인: ${remain}/${steps.length})` : steps[i];
+    if (!(await confirmModal(msg))) return;
+  }
   clearSession();
   student = null;
   adminSession = null;
@@ -263,15 +290,62 @@ function updateSpecialMode() {
 }
 
 // =============================================================
-//  화려함 모드 (쓸데없이 화려한 옵트인 이펙트, 버튼으로 온/오프)
+//  쓸때없이 화려한 모드 — 인도/대만 B급 저예산 CG 감성
+//  (줌펀치 + 유리깨짐 + 만화 효과음 + 화면흔들림 + 어색한 번역투 문구)
 // =============================================================
 const FLASHY_KEY = "manito.flashy";
+
+// 정상 문구 -> 번역기를 돌린 것 같은 어색한 문구. 무조건 마침표로 끝남.
+const CHAOS_TEXT_MAP = [
+  ["#class-gate-btn", "입장을 하다."],
+  [".intro-card h1", "학급코드를 입력하는 것을 하다."],
+  [".intro-card .eyebrow", "시작하기 전에 하는 것."],
+  [".intro-card > p.muted", "6학년 1반은 0601을 넣는 것을 권장하다. 2반은 0602를 넣는 것을 권장하다."],
+  ['.role-btn[data-role="student"] .role-title', "학생이다."],
+  ['.role-btn[data-role="student"] .role-desc', "로그인을 계정에 접속하다. 그리고 소원을 남기는 것을 하다."],
+  ['.role-btn[data-role="admin"] .role-title', "선생님이다."],
+  ['.role-btn[data-role="admin"] .role-desc', "명단을 관리하는 것과 마니또를 배정하는 것을 하다."],
+  ['[data-view="student-login"] h2', "학생이 로그인을 계정에 접속하다."],
+  ['[data-view="student-login"] label:nth-of-type(1)', "이름을 입력하는 것."],
+  ['[data-view="student-login"] label:nth-of-type(2)', "비밀번호를 입력하는 것."],
+  ["#student-login-btn", "로그인을 계정에 접속하다."],
+  ['[data-view="student-home"] .muted:not(.small)', "마니또를 나의 도와줄 학생. 소원을 남기면 전달되는 것을 하다."],
+  ['[data-view="student-home"] h3:nth-of-type(1)', "나의 소원인 것."],
+  ["#my-wish-submit", "소원을 저장하는 것을 하다."],
+  ['[data-view="student-home"] .row-between h3', "내가 도와주는 친구인 것."],
+  ["#care-refresh", "새로고침을 하는 것."],
+  ['[data-view="admin-login"] h2', "선생님이 로그인을 계정에 접속하다."],
+  ["#admin-login-btn", "입장을 하다."],
+  ['[data-view="admin-home"] h2', "관리자인 것."],
+  ["#roster-add-btn", "명단에 추가를 하다."],
+  ["#assign-btn", "마니또를 배정하는 것을 하다."],
+  ["#reshuffle-btn", "재배정을 하는 것."],
+  ["#reveal-btn", "전체 공개를 보는 것을 하다."],
+  ['[data-view="super-admin"] h2', "전체 관리자인 것."],
+];
+let chaosTextApplied = false;
+
+function applyChaosText(on) {
+  if (on === chaosTextApplied) return;
+  for (const [sel, chaosStr] of CHAOS_TEXT_MAP) {
+    const el = $(sel);
+    if (!el) continue;
+    if (on) {
+      if (el.dataset.normalText === undefined) el.dataset.normalText = el.textContent;
+      el.textContent = chaosStr;
+    } else if (el.dataset.normalText !== undefined) {
+      el.textContent = el.dataset.normalText;
+    }
+  }
+  chaosTextApplied = on;
+}
 
 function setFlashy(on) {
   document.body.classList.toggle("flashy", on);
   const btn = $("#flashy-toggle");
   btn.setAttribute("aria-pressed", String(on));
-  btn.textContent = on ? "화려함 모드 ON" : "화려함 모드";
+  btn.textContent = on ? "쓸때없이 화려한 모드 ON" : "쓸때없이 화려한 모드";
+  applyChaosText(on);
   try { localStorage.setItem(FLASHY_KEY, on ? "1" : "0"); } catch {}
 }
 
@@ -279,33 +353,103 @@ $("#flashy-toggle").addEventListener("click", () => {
   setFlashy(!document.body.classList.contains("flashy"));
 });
 
-const BURST_COLORS = ["#2e9e5b", "#ffd166", "#ef476f", "#06d6a0", "#4dabf7", "#cc5de8"];
-function spawnBurst(x, y) {
-  for (let i = 0; i < 10; i++) {
-    const s = document.createElement("span");
-    s.className = "burst-particle";
+// ---- 화면 흔들림 ----
+let shakeTimer;
+function screenShake() {
+  document.body.classList.add("chaos-shake");
+  clearTimeout(shakeTimer);
+  shakeTimer = setTimeout(() => document.body.classList.remove("chaos-shake"), 350);
+}
+
+// ---- 만화 효과음 텍스트 (퍼버벙!!) ----
+const BOOM_WORDS = ["퍼버벙!!", "펑!!!", "콰과광!!", "빠직!!", "슈웅퍽!!"];
+function spawnBoomText(x, y) {
+  const el = document.createElement("div");
+  el.className = "chaos-boom";
+  el.textContent = BOOM_WORDS[Math.floor(Math.random() * BOOM_WORDS.length)];
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  el.style.color = ["#ffcc00", "#ff2fa0", "#00e5ff"][Math.floor(Math.random() * 3)];
+  document.body.appendChild(el);
+  const anim = el.animate(
+    [
+      { transform: "translate(-50%,-50%) scale(0.3) rotate(-8deg)", opacity: 0 },
+      { transform: "translate(-50%,-50%) scale(1.3) rotate(4deg)", opacity: 1, offset: 0.35 },
+      { transform: "translate(-50%,-50%) scale(1) rotate(-2deg)", opacity: 1, offset: 0.6 },
+      { transform: "translate(-50%,-58%) scale(0.9) rotate(0deg)", opacity: 0 },
+    ],
+    { duration: 650, easing: "cubic-bezier(.2,.8,.2,1)" }
+  );
+  anim.onfinish = () => el.remove();
+}
+
+// ---- 유리 깨짐 이펙트 ----
+function spawnShatter(x, y) {
+  const lines = 8;
+  for (let i = 0; i < lines; i++) {
+    const s = document.createElement("div");
+    s.className = "chaos-crack";
     s.style.left = x + "px";
     s.style.top = y + "px";
-    s.style.background = BURST_COLORS[i % BURST_COLORS.length];
+    const angle = (360 / lines) * i + (Math.random() * 20 - 10);
+    const len = 30 + Math.random() * 50;
+    s.style.transform = `rotate(${angle}deg) scaleX(${len / 60})`;
     document.body.appendChild(s);
-    const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.4;
-    const dist = 40 + Math.random() * 60;
-    const dx = Math.cos(angle) * dist;
-    const dy = Math.sin(angle) * dist;
     const anim = s.animate(
       [
-        { transform: "translate(0,0) scale(1)", opacity: 1 },
-        { transform: `translate(${dx}px, ${dy}px) scale(0)`, opacity: 0 },
+        { opacity: 1 },
+        { opacity: 0 },
       ],
-      { duration: 500 + Math.random() * 300, easing: "cubic-bezier(.2,.8,.2,1)" }
+      { duration: 400 + Math.random() * 200, easing: "ease-out" }
     );
     anim.onfinish = () => s.remove();
   }
 }
+
+// ---- 클릭된 요소 줌인/줌아웃 펀치 ----
+function punchElement(el) {
+  el.classList.remove("chaos-punch");
+  void el.offsetWidth;
+  el.classList.add("chaos-punch");
+  setTimeout(() => el.classList.remove("chaos-punch"), 420);
+}
+
+function chaosClickEffect(e) {
+  screenShake();
+  spawnBoomText(e.clientX, e.clientY);
+  spawnShatter(e.clientX, e.clientY);
+  const target = e.target.closest(".btn, .glass-card, .role-btn");
+  if (target) punchElement(target);
+  if (navigator.vibrate) navigator.vibrate([10, 20, 30]);
+}
 document.addEventListener("click", (e) => {
   if (!document.body.classList.contains("flashy")) return;
-  spawnBurst(e.clientX, e.clientY);
+  chaosClickEffect(e);
 });
+
+// ---- 영화 예고편 같은 화면 전환 ----
+const CHAOS_TRANSITION_WORDS = ["슈우우우우숙", "부아아아앙", "콰과과광", "삐리리링", "두구두구두구"];
+function playChaosTransition() {
+  screenShake();
+  const overlay = $("#chaos-transition");
+  const text = $("#chaos-transition-text");
+  text.textContent = CHAOS_TRANSITION_WORDS[Math.floor(Math.random() * CHAOS_TRANSITION_WORDS.length)] + "... 빠바!!";
+  overlay.classList.remove("hidden");
+  overlay.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], {
+    duration: 550,
+    easing: "ease",
+  });
+  text.animate(
+    [
+      { transform: "scale(2.4)", opacity: 0 },
+      { transform: "scale(1)", opacity: 1, offset: 0.35 },
+      { transform: "scale(1)", opacity: 1, offset: 0.7 },
+      { transform: "scale(0.8)", opacity: 0 },
+    ],
+    { duration: 550, easing: "cubic-bezier(.2,.8,.2,1)" }
+  );
+  setTimeout(() => overlay.classList.add("hidden"), 560);
+}
 
 // =============================================================
 //  1) 학급코드 입력

@@ -501,7 +501,8 @@ body.special-0603 #special-badge {
 }
 
 /* =============================================================
-   화려함 모드 (쓸데없이 화려한 옵트인 이펙트)
+   쓸때없이 화려한 모드 — 인도/대만 B급 저예산 CG 감성
+   (리퀴드 글라스를 걷어내고, 촌스러운 배색 + 뻑적지근한 이펙트로 전환)
    ============================================================= */
 .flashy-toggle {
   margin-left: 8px;
@@ -518,45 +519,133 @@ body.special-0603 #special-badge {
 .flashy-toggle:hover { color: var(--ink); }
 .flashy-toggle:active { transform: scale(0.94); }
 .flashy-toggle[aria-pressed="true"] {
-  background: linear-gradient(90deg, #ff6b6b, #ffd166, #06d6a0, #4dabf7, #ff6b6b);
-  background-size: 400% 100%;
-  color: #fff;
-  border-color: transparent;
-  animation: shimmer-text 3s linear infinite;
+  background: repeating-linear-gradient(45deg, #ff2fa0, #ff2fa0 10px, #ffcc00 10px, #ffcc00 20px);
+  color: #1a0e05;
+  border: 2px solid #000;
+  text-shadow: 1px 1px 0 #fff;
+  animation: chaos-jiggle 0.4s ease-in-out infinite;
+}
+@keyframes chaos-jiggle {
+  0%, 100% { transform: rotate(-1.5deg) scale(1); }
+  50% { transform: rotate(1.5deg) scale(1.04); }
 }
 
+/* ---- 촌스러운 배색으로 통째로 스킨 교체 ---- */
+body.flashy {
+  --ink: #1a0e05;
+  --muted: #5a2a12;
+  --bg-base: #3a1c1c;
+  --glass-bg: #ffe9a8;
+  --glass-bg-strong: #fff3c9;
+  --glass-border: #000;
+  --card-shadow: 4px 4px 0 #000;
+  --ok: #0b7a3e;
+  --err: #d4145a;
+}
 body.flashy::before, body.flashy::after {
-  animation-duration: 7s;
-  filter: blur(70px) saturate(220%);
+  background: conic-gradient(from 0deg, #ff2fa0, #ffcc00, #00e5ff, #ff2fa0);
+  filter: blur(50px) saturate(300%);
+  animation-duration: 3.5s;
+  opacity: 0.75;
 }
-body.flashy .glass-card { position: relative; }
-body.flashy .glass-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 2px;
-  background: linear-gradient(120deg, #ff6b6b, #ffd166, #06d6a0, #4dabf7, #cc5de8, #ff6b6b);
-  background-size: 300% 300%;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: rainbow-shift 4s linear infinite;
-  pointer-events: none;
+/* 글라스(블러) 효과 제거 → 저퀄 편집 프로그램 느낌 */
+body.flashy .glass-card,
+body.flashy input, body.flashy select, body.flashy textarea,
+body.flashy .toast, body.flashy .modal {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 3px solid #000;
+  box-shadow: 5px 5px 0 #000;
+  border-radius: 8px;
 }
-@keyframes rainbow-shift { to { background-position: 300% 0; } }
-body.flashy .btn-primary { box-shadow: 0 0 26px 5px rgba(46, 158, 91, 0.55); }
-body.flashy .role-btn:hover { box-shadow: 0 0 30px 6px rgba(255, 209, 102, 0.35); }
+body.flashy .glass-card::before { display: none; }
+body.flashy .btn { border-radius: 6px; border: 2px solid #000; }
+body.flashy .btn-primary {
+  background: repeating-linear-gradient(-45deg, #ff2fa0, #ff2fa0 8px, #ffcc00 8px, #ffcc00 16px);
+  color: #1a0e05;
+  text-shadow: 1px 1px 0 #fff;
+  box-shadow: 4px 4px 0 #000;
+}
+body.flashy .code-input,
+body.flashy h1, body.flashy h2, body.flashy h3,
+body.flashy .role-title, body.flashy .brand-name {
+  font-family: Impact, "Arial Black", "Malgun Gothic", sans-serif;
+  text-shadow: 2px 2px 0 #000, -1px -1px 0 #fff;
+  letter-spacing: 0.02em;
+}
+body.flashy #cursor-glow {
+  background: radial-gradient(circle, rgba(255, 47, 160, 0.3), rgba(255, 47, 160, 0) 65%);
+}
+body.flashy .role-btn:hover { box-shadow: 6px 6px 0 #000; }
 
-.burst-particle {
+/* ---- 화면 흔들림 ---- */
+@keyframes chaos-shake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  20% { transform: translate(-7px, 5px) rotate(-1deg); }
+  40% { transform: translate(7px, -5px) rotate(1deg); }
+  60% { transform: translate(-5px, -4px) rotate(-0.6deg); }
+  80% { transform: translate(5px, 4px) rotate(0.6deg); }
+}
+body.chaos-shake #app, body.chaos-shake .topbar {
+  animation: chaos-shake 0.35s ease;
+}
+
+/* ---- 클릭할 때마다: 줌인/줌아웃 펀치 ---- */
+@keyframes chaos-punch {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.35) rotate(-2deg); }
+  55% { transform: scale(0.88) rotate(2deg); }
+  80% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.chaos-punch { animation: chaos-punch 0.4s cubic-bezier(.36,.07,.19,.97); }
+
+/* ---- 만화체 효과음 텍스트 (퍼버벙!!) ---- */
+.chaos-boom {
   position: fixed;
-  width: 8px;
-  height: 8px;
-  margin-left: -4px;
-  margin-top: -4px;
-  border-radius: 50%;
+  z-index: 650;
   pointer-events: none;
-  z-index: 600;
+  font-family: Impact, "Arial Black", sans-serif;
+  font-size: 2.2rem;
+  color: #ffcc00;
+  -webkit-text-stroke: 2px #000;
+  text-shadow: 3px 3px 0 #ff2fa0;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+/* ---- 유리 깨짐 이펙트 ---- */
+.chaos-crack {
+  position: fixed;
+  z-index: 640;
+  pointer-events: none;
+  height: 2px;
+  width: 60px;
+  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0));
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.8);
+  transform-origin: left center;
+}
+
+/* ---- 영화 예고편 같은 전체화면 전환 ---- */
+.chaos-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, #fff, #ffcc00 55%, #ff2fa0 100%);
+  pointer-events: none;
+}
+.chaos-transition.hidden { display: none; }
+.chaos-transition-text {
+  font-family: Impact, "Arial Black", sans-serif;
+  font-size: clamp(2rem, 8vw, 5rem);
+  color: #fff;
+  text-align: center;
+  text-shadow: 4px 4px 0 #000, -2px -2px 0 #000;
+  letter-spacing: 0.04em;
+  padding: 0 20px;
 }
 
 @media (max-width: 720px) {
