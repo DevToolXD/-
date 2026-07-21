@@ -676,19 +676,17 @@ async function enterStudentHome() {
   await refreshMyWish();
 }
 
+// 사이드바는 클로드 코드처럼 항상 고정: 클릭해도 화면(뷰) 자체는 절대
+// 벗어나지 않고, 오른쪽 내용 영역만 바뀐다. "투표"도 예외 없이 동일하게
+// student-page 중 하나로 취급한다 (별도 뷰로 이동하지 않음).
 $$(".student-page-nav").forEach((b) =>
   b.addEventListener("click", async () => {
-    if (b.dataset.page === "vote") {
-      viewBeforeVote = currentView;
-      showView("mode-vote");
-      await refreshVoteCandidates();
-      return;
-    }
     $$(".student-page-nav").forEach((x) => x.classList.remove("active"));
     b.classList.add("active");
     $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== b.dataset.page));
     if (b.dataset.page === "friend") await refreshFriendTarget();
     if (b.dataset.page === "scratch") await refreshScratchTarget();
+    if (b.dataset.page === "vote") await refreshVoteCandidates("#student-vote-candidates", "#student-vote-hint");
   })
 );
 
@@ -1282,10 +1280,10 @@ $("#vote-nav-btn").addEventListener("click", async () => {
   await refreshVoteCandidates();
 });
 
-async function refreshVoteCandidates() {
-  const wrap = $("#vote-candidates");
+async function refreshVoteCandidates(wrapSel = "#vote-candidates", hintSel = "#vote-hint") {
+  const wrap = $(wrapSel);
   wrap.innerHTML = `<p class="muted small">불러오는 중…</p>`;
-  setHint("#vote-hint", "");
+  setHint(hintSel, "");
   let alreadyVoted = null;
   try { alreadyVoted = localStorage.getItem(VOTED_MODE_KEY); } catch {}
   try {
@@ -1299,9 +1297,9 @@ async function refreshVoteCandidates() {
       )
       .join("");
     if (alreadyVoted) {
-      setHint("#vote-hint", "이미 투표하셨어요. 결과는 위에서 실시간으로 볼 수 있어요.", true);
+      setHint(hintSel, "이미 투표하셨어요. 결과는 위에서 실시간으로 볼 수 있어요.", true);
     }
-    $$(".vote-item").forEach((b) =>
+    wrap.querySelectorAll(".vote-item").forEach((b) =>
       b.addEventListener("click", async () => {
         if (alreadyVoted) return;
         busy(b, true, "투표 중…");
@@ -1309,7 +1307,7 @@ async function refreshVoteCandidates() {
           await data.voteForMode(b.dataset.id);
           try { localStorage.setItem(VOTED_MODE_KEY, b.dataset.id); } catch {}
           toast("투표 완료! 감사합니다.");
-          await refreshVoteCandidates();
+          await refreshVoteCandidates(wrapSel, hintSel);
         } catch (e) {
           toast("투표 실패: " + e.message, false);
           busy(b, false);
