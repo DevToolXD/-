@@ -809,32 +809,37 @@ function setupScratchCard() {
   const ctx = canvas.getContext("2d");
 
   requestAnimationFrame(() => {
-    const nameRect = nameEl.getBoundingClientRect();
+    // 카드 전체(이름 글자만이 아니라 큰 박스 전체)를 긁는 영역으로 삼는다
     const wrapRect = wrap.getBoundingClientRect();
-    const w = Math.max(nameRect.width, 40);
-    const h = Math.max(nameRect.height, 24);
+    const w = Math.max(wrapRect.width, 40);
+    const h = Math.max(wrapRect.height, 40);
     canvas.width = w;
     canvas.height = h;
     canvas.style.width = w + "px";
     canvas.style.height = h + "px";
-    canvas.style.top = nameRect.top - wrapRect.top + "px";
-    canvas.style.left = nameRect.left - wrapRect.left + "px";
+    canvas.style.top = "0px";
+    canvas.style.left = "0px";
     canvas.classList.remove("scratched-away");
     canvas.style.opacity = "1";
     canvas.style.pointerEvents = "auto";
 
-    const big = w > 150;
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = "#b9c2bd";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#5b6b62";
-    ctx.font = (big ? 16 : 11) + "px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("긁어서 확인", w / 2, h / 2);
+    const hintLabel = "긁어서 확인";
+    let fontSize = Math.round(Math.min(w, h) * 0.14);
+    ctx.font = "bold " + fontSize + "px sans-serif";
+    while (ctx.measureText(hintLabel).width > w * 0.82 && fontSize > 10) {
+      fontSize -= 2;
+      ctx.font = "bold " + fontSize + "px sans-serif";
+    }
+    ctx.fillText(hintLabel, w / 2, h / 2);
 
     let scratching = false;
-    const brushRadius = big ? 24 : 13;
+    const brushRadius = Math.max(36, Math.min(w, h) * 0.14);
     function scratchAt(x, y) {
       ctx.globalCompositeOperation = "destination-out";
       ctx.beginPath();

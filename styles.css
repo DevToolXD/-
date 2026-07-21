@@ -829,15 +829,28 @@ body.student-mode #app { z-index: 4; }
   padding: 30px 26px;
 }
 .wish-readonly-big p { font-size: 1.35rem; font-weight: 600; }
-.scratch-wrap-big { margin-top: 32px; display: block; }
+.scratch-wrap-big {
+  margin-top: 28px;
+  width: 100%;
+  max-width: 560px;
+  height: min(52vh, 420px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .care-name-big {
-  font-size: 1.5rem;
+  font-size: clamp(2.4rem, 7vw, 4.2rem);
   font-weight: 800;
   color: var(--ink);
-  padding: 4px 2px;
+  padding: 4px 16px;
+  word-break: keep-all;
 }
-.scratch-canvas-big { border-radius: 14px; }
-.scratch-hint-big { margin-top: 16px; font-size: 0.95rem; }
+.scratch-canvas-big { border-radius: 28px; box-shadow: var(--card-shadow); }
+.scratch-hint-big { margin-top: 20px; font-size: 1.05rem; }
+
+@media (max-width: 640px) {
+  .scratch-wrap-big { height: min(46vh, 300px); }
+}
 
 @media (max-width: 720px) {
   .role-grid { grid-template-columns: 1fr; }
