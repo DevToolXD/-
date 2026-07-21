@@ -688,6 +688,36 @@ body.chaos-shake #app, body.chaos-shake .topbar {
   padding: 0 20px;
 }
 
+/* ---- 상단바 추가 버튼 ---- */
+.free-tag { background: var(--green-500); color: #fff; }
+.admin-quick-btn { color: var(--green-600); font-weight: 700; }
+
+/* ---- 학생 명단 삭제 가능한 칩 ---- */
+.chip-removable { display: inline-flex; align-items: center; gap: 6px; }
+.chip-del {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.6;
+}
+.chip-del:hover { opacity: 1; }
+
+/* ---- 복권처럼 긁어서 확인하는 스크래치 카드 ---- */
+.scratch-wrap { position: relative; margin-top: 10px; display: inline-block; }
+.scratch-canvas {
+  position: absolute;
+  border-radius: 6px;
+  cursor: pointer;
+  touch-action: none;
+  transition: opacity 0.4s ease;
+}
+.scratch-canvas.scratched-away { opacity: 0; }
+.scratch-hint { margin: 6px 0 0; font-size: 0.78rem; color: var(--muted); }
+
 @media (max-width: 720px) {
   .role-grid { grid-template-columns: 1fr; }
   .two-col { grid-template-columns: 1fr; }

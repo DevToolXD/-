@@ -32,11 +32,18 @@ function showView(name) {
   backBtn.textContent = LOGGED_IN_VIEWS.includes(name) ? "로그아웃" : "뒤로";
   window.scrollTo({ top: 0, behavior: "smooth" });
   updateSpecialMode();
+  updateAdminQuickBtn();
   if (shouldChaosTransition) playChaosTransition();
   hasRenderedOnce = true;
 }
 
+let viewBeforeVote = null;
 $("#btn-back").addEventListener("click", async () => {
+  if (currentView === "mode-vote") {
+    showView(viewBeforeVote || "class-gate");
+    viewBeforeVote = null;
+    return;
+  }
   if (LOGGED_IN_VIEWS.includes(currentView)) {
     await logout();
     return;
@@ -288,6 +295,8 @@ function updateSpecialMode() {
   const active = classCode === SUPER_ADMIN.classCode && FLOURISH_VIEWS.includes(currentView);
   document.body.classList.toggle("special-0603", active);
   renderSparkles(active);
+  $("#brand-name").textContent = active ? "광고문의(정후교에게)" : "마니또";
+  $("#brand-free-tag").classList.toggle("hidden", !active);
 }
 
 // =============================================================
@@ -391,7 +400,6 @@ const CHAOS_TEXT_MAP = [
   [".landing-main .eyebrow", "시작하기 전에 하는 것."],
   [".landing-main > p.muted", "왼쪽 목록을 누르는 것을 권장하다."],
   [".side-nav-item:nth-of-type(1) .side-nav-label", "육학년 삼반인 것."],
-  [".side-nav-item:nth-of-type(2) .side-nav-label", "테스트를 하는 모드인 것."],
   ["#other-code-toggle", "다른 학급코드를 입력하는 것."],
   ['.role-btn[data-role="student"] .role-title', "학생이다."],
   ['.role-btn[data-role="student"] .role-desc', "로그인을 계정에 접속하다. 그리고 소원을 남기는 것을 하다."],
@@ -643,6 +651,7 @@ $("#student-login-btn").addEventListener("click", async () => {
     student = { id, name };
     if (id === SUPER_ADMIN.studentId) {
       saveSession({ classCode, role: "superadmin" });
+      markSuperAdminAuthed();
       await enterSuperAdmin();
     } else {
       saveSession({ classCode, role: "student", studentId: id, studentName: name });
@@ -665,8 +674,15 @@ async function enterStudentHome() {
 async function refreshMyWish() {
   const form = $("#my-wish-form");
   const display = $("#my-wish-display");
+  const noteEl = $("#my-wish-rewrite-note");
   try {
     const sec = await data.getSecret(classCode, student.id);
+    if (sec?.wishRewriteNote) {
+      noteEl.textContent = "다시 써주세요: " + sec.wishRewriteNote;
+      noteEl.classList.remove("hidden");
+    } else {
+      noteEl.classList.add("hidden");
+    }
     if (sec?.wishSetAt) {
       form.classList.add("hidden");
       display.classList.remove("hidden");
@@ -717,6 +733,7 @@ async function refreshCareTarget() {
     $("#care-wish").textContent = target.wish
       ? target.wish
       : "아직 소원을 등록하지 않았어요. 조금 뒤에 다시 확인해보세요.";
+    setupScratchCard();
   } catch (e) {
     empty.classList.remove("hidden");
     content.classList.add("hidden");
@@ -724,6 +741,68 @@ async function refreshCareTarget() {
   }
 }
 $("#care-refresh").addEventListener("click", refreshCareTarget);
+
+// ---- 복권처럼 긁어서 마니또 대상 이름을 확인하는 스크래치 카드 ----
+function setupScratchCard() {
+  const wrap = $("#care-content .scratch-wrap");
+  const nameEl = $("#care-name");
+  const canvas = $("#care-scratch-canvas");
+  if (!wrap || !canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  requestAnimationFrame(() => {
+    const nameRect = nameEl.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const w = Math.max(nameRect.width, 40);
+    const h = Math.max(nameRect.height, 24);
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    canvas.style.top = nameRect.top - wrapRect.top + "px";
+    canvas.style.left = nameRect.left - wrapRect.left + "px";
+    canvas.classList.remove("scratched-away");
+    canvas.style.opacity = "1";
+    canvas.style.pointerEvents = "auto";
+
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#b9c2bd";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#5b6b62";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("긁기", w / 2, h / 2);
+
+    let scratching = false;
+    function scratchAt(x, y) {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.beginPath();
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function pointFromEvent(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+    function checkRevealed() {
+      const data = ctx.getImageData(0, 0, w, h).data;
+      let cleared = 0, total = 0;
+      for (let i = 3; i < data.length; i += 4 * 6) {
+        total++;
+        if (data[i] === 0) cleared++;
+      }
+      if (total > 0 && cleared / total > 0.45) {
+        canvas.classList.add("scratched-away");
+        setTimeout(() => { canvas.style.pointerEvents = "none"; }, 400);
+      }
+    }
+    canvas.onpointerdown = (e) => { scratching = true; const p = pointFromEvent(e); scratchAt(p.x, p.y); };
+    canvas.onpointermove = (e) => { if (!scratching) return; const p = pointFromEvent(e); scratchAt(p.x, p.y); };
+    window.addEventListener("pointerup", () => { if (scratching) { scratching = false; checkRevealed(); } });
+    canvas.onpointerleave = () => { if (scratching) checkRevealed(); };
+  });
+}
 
 // =============================================================
 //  4) 선생님(학급 관리자)
@@ -774,7 +853,7 @@ $("#admin-login-btn").addEventListener("click", async () => {
 async function enterAdminHome() {
   showView("admin-home");
   $("#reveal-wrap").classList.add("hidden");
-  await refreshRoster();
+  await Promise.all([refreshRoster(), refreshAdminWishlist(), refreshTeacherParticipation()]);
 }
 
 async function refreshRoster() {
@@ -786,7 +865,28 @@ async function refreshRoster() {
     $("#admin-status").textContent =
       `${classLabel(classCode)} · 학생 ${students.length}명 등록됨 · ` +
       (assigned ? "마니또 배정 완료" : "아직 배정 전");
-    ul.innerHTML = students.map((s) => `<li class="chip">${escapeHtml(s.name)}</li>`).join("");
+    ul.innerHTML = students
+      .map(
+        (s) => `<li class="chip chip-removable" data-id="${s.id}">
+          ${escapeHtml(s.name)}<button class="chip-del" data-id="${s.id}" title="삭제">×</button>
+        </li>`
+      )
+      .join("");
+    $$(".chip-del").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const s = students.find((x) => x.id === b.dataset.id);
+        if (!s) return;
+        if (!(await confirmModal(`${s.name} 학생을 명단에서 삭제할까요?`))) return;
+        try {
+          await data.deleteStudent(classCode, s.id);
+          toast("학생을 삭제했습니다.");
+          await refreshRoster();
+          await refreshAdminWishlist();
+        } catch (e) {
+          toast("삭제 실패: " + e.message, false);
+        }
+      })
+    );
   } catch (e) {
     $("#admin-status").textContent = "상태 불러오기 실패: " + e.message;
   }
@@ -816,7 +916,7 @@ async function doAssign(btn) {
     setHint("#assign-hint", `${n}명 마니또 배정 완료!`, true);
     toast("마니또 배정 완료!");
     $("#reveal-wrap").classList.add("hidden");
-    await refreshRoster();
+    await Promise.all([refreshRoster(), refreshAdminWishlist(), refreshTeacherParticipation()]);
   } catch (e) {
     setHint("#assign-hint", "오류: " + e.message);
   } finally {
@@ -850,6 +950,101 @@ $("#reveal-btn").addEventListener("click", async (e) => {
   }
 });
 
+// ---- 우리 반 학생 소원 열람 + 다시 쓰기 요청 ----
+async function refreshAdminWishlist() {
+  const tbody = $("#admin-wishlist-body");
+  tbody.innerHTML = `<tr><td colspan="3" class="muted small">불러오는 중…</td></tr>`;
+  try {
+    const rows = (await data.classDetail(classCode)).filter((r) => r.id !== data.TEACHER_ID);
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="muted small">등록된 학생이 없어요.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows
+      .map(
+        (r) => `<tr data-id="${r.id}" data-name="${escapeHtml(r.name)}">
+          <td>${escapeHtml(r.name)}</td>
+          <td>${r.wish ? escapeHtml(r.wish) : "<span class='muted small'>아직 없음</span>"}</td>
+          <td>${r.wish ? '<button class="btn btn-ghost btn-sm wishlist-rewrite-btn">다시 쓰기 요청</button>' : ""}</td>
+        </tr>`
+      )
+      .join("");
+    $$(".wishlist-rewrite-btn").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const tr = b.closest("tr");
+        const id = tr.dataset.id;
+        const name = tr.dataset.name;
+        if (!(await confirmModal(`${name} 학생에게 소원을 다시 쓰도록 요청할까요?`))) return;
+        busy(b, true, "요청 중…");
+        try {
+          await data.requestWishRewrite(classCode, id, "부적절하거나 잘못 쓴 내용은 피해서 다시 써주세요.");
+          toast("다시 쓰기를 요청했습니다.");
+          await refreshAdminWishlist();
+        } catch (e) {
+          toast("요청 실패: " + e.message, false);
+          busy(b, false);
+        }
+      })
+    );
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="3" class="err">불러오기 실패: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+$("#admin-wishlist-refresh").addEventListener("click", refreshAdminWishlist);
+
+// ---- 학생 수가 홀수라서 선생님도 마니또에 참여했을 때 ----
+async function refreshTeacherParticipation() {
+  const card = $("#teacher-participate-card");
+  try {
+    const participating = await data.isTeacherParticipating(classCode);
+    card.classList.toggle("hidden", !participating);
+    if (!participating) return;
+
+    const sec = await data.getSecret(classCode, data.TEACHER_ID);
+    const form = $("#teacher-wish-form");
+    const display = $("#teacher-wish-display");
+    if (sec?.wishSetAt) {
+      form.classList.add("hidden");
+      display.classList.remove("hidden");
+      $("#teacher-wish-display-text").textContent = sec.wish || "";
+    } else {
+      form.classList.remove("hidden");
+      display.classList.add("hidden");
+    }
+
+    const target = await data.getCareTarget(classCode, data.TEACHER_ID);
+    const careEmpty = $("#teacher-care-empty");
+    const careContent = $("#teacher-care-content");
+    if (!target) {
+      careEmpty.classList.remove("hidden");
+      careContent.classList.add("hidden");
+    } else {
+      careEmpty.classList.add("hidden");
+      careContent.classList.remove("hidden");
+      $("#teacher-care-name").textContent = target.name;
+      $("#teacher-care-wish").textContent = target.wish || "아직 소원을 등록하지 않았어요.";
+    }
+  } catch (e) {
+    setHint("#teacher-wish-hint", "불러오기 실패: " + e.message);
+  }
+}
+
+$("#teacher-wish-submit").addEventListener("click", async () => {
+  const text = $("#teacher-wish-text").value;
+  if (!text.trim()) return setHint("#teacher-wish-hint", "소원을 입력해주세요.");
+  const btn = $("#teacher-wish-submit");
+  busy(btn, true, "등록 중…");
+  try {
+    await data.setMyWish(classCode, data.TEACHER_ID, text);
+    toast("소원을 등록했습니다.");
+    await refreshTeacherParticipation();
+  } catch (e) {
+    setHint("#teacher-wish-hint", e.message);
+  } finally {
+    busy(btn, false);
+  }
+});
+
 // =============================================================
 //  5) 슈퍼 관리자 (전체 학급)
 // =============================================================
@@ -857,7 +1052,7 @@ async function enterSuperAdmin() {
   showView("super-admin");
   $("#sa-detail").classList.add("hidden");
   saCurrentCode = null;
-  await refreshOverview();
+  await Promise.all([refreshOverview(), refreshSaVotes()]);
 }
 
 async function refreshOverview() {
@@ -891,21 +1086,56 @@ async function loadClassDetail(code) {
   const tbody = $("#sa-detail-body");
   tbody.innerHTML = `<tr><td colspan="4" class="muted small">불러오는 중…</td></tr>`;
   try {
-    const rows = await data.superAdminClassDetail(code);
+    const rows = await data.classDetail(code);
     if (!rows.length) {
       tbody.innerHTML = `<tr><td colspan="4" class="muted small">등록된 학생이 없어요.</td></tr>`;
       return;
     }
+    const optionsFor = (selfId) =>
+      rows
+        .filter((r) => r.id !== selfId)
+        .map((r) => `<option value="${r.id}">${escapeHtml(r.name)}</option>`)
+        .join("");
     tbody.innerHTML = rows
       .map(
         (r) => `<tr data-id="${r.id}">
           <td>${escapeHtml(r.name)}</td>
-          <td>${r.caringForName ? escapeHtml(r.caringForName) : "-"}</td>
+          <td>
+            <select class="sa-care-select">
+              <option value="">- 없음 -</option>
+              ${optionsFor(r.id)}
+            </select>
+          </td>
           <td><textarea rows="2" class="sa-wish-input">${escapeHtml(r.wish || "")}</textarea></td>
-          <td><button class="btn btn-ghost btn-sm sa-save-btn">저장</button></td>
+          <td>
+            <button class="btn btn-ghost btn-sm sa-care-save-btn">배정 저장</button>
+            <button class="btn btn-ghost btn-sm sa-save-btn">소원 저장</button>
+          </td>
         </tr>`
       )
       .join("");
+    $$(".sa-care-select").forEach((sel) => {
+      const tr = sel.closest("tr");
+      const row = rows.find((r) => r.id === tr.dataset.id);
+      if (row?.caringForId) sel.value = row.caringForId;
+    });
+    $$(".sa-care-save-btn").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const tr = b.closest("tr");
+        const guardianId = tr.dataset.id;
+        const protegeId = tr.querySelector(".sa-care-select").value;
+        if (!protegeId) return toast("돌볼 대상을 선택해주세요.", false);
+        busy(b, true, "저장…");
+        try {
+          await data.superAdminSetCare(code, guardianId, protegeId);
+          toast("다음 배정을 지정했습니다.");
+        } catch (e) {
+          toast("저장 실패: " + e.message, false);
+        } finally {
+          busy(b, false);
+        }
+      })
+    );
     $$(".sa-save-btn").forEach((b) =>
       b.addEventListener("click", async () => {
         const tr = b.closest("tr");
@@ -949,6 +1179,105 @@ $("#sa-reassign-btn").addEventListener("click", async (e) => {
   }
 });
 
+// ---- 모드 투표 관리 (슈퍼 관리자) ----
+async function refreshSaVotes() {
+  const tbody = $("#sa-votes-body");
+  tbody.innerHTML = `<tr><td colspan="2" class="muted small">불러오는 중…</td></tr>`;
+  try {
+    const votes = await data.getModeVotes();
+    tbody.innerHTML = votes
+      .map((v) => `<tr><td>${escapeHtml(v.label)}</td><td>${v.count}</td></tr>`)
+      .join("");
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="2" class="err">불러오기 실패: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+$("#sa-votes-refresh").addEventListener("click", refreshSaVotes);
+$("#sa-votes-reset").addEventListener("click", async (e) => {
+  if (!(await confirmModal("모드 투표 결과를 모두 초기화할까요?"))) return;
+  const btn = e.currentTarget;
+  busy(btn, true, "초기화…");
+  try {
+    await data.resetModeVotes();
+    toast("투표를 초기화했습니다.");
+    await refreshSaVotes();
+  } catch (e) {
+    toast("초기화 실패: " + e.message, false);
+  } finally {
+    busy(btn, false);
+  }
+});
+
+// =============================================================
+//  6) 정후교 전용 "관리자" 바로가기 버튼
+//  한 번이라도 슈퍼 관리자로 인증하면 이 기기에서는 어느 화면에 있든
+//  버튼 하나로 바로 전체 관리자 패널로 점프할 수 있음.
+// =============================================================
+const SUPERADMIN_AUTHED_KEY = "manito.superadminAuthed";
+
+function markSuperAdminAuthed() {
+  try { localStorage.setItem(SUPERADMIN_AUTHED_KEY, "1"); } catch {}
+  updateAdminQuickBtn();
+}
+function updateAdminQuickBtn() {
+  let authed = false;
+  try { authed = localStorage.getItem(SUPERADMIN_AUTHED_KEY) === "1"; } catch {}
+  $("#admin-quick-btn").classList.toggle("hidden", !authed || currentView === "super-admin");
+}
+$("#admin-quick-btn").addEventListener("click", async () => {
+  await enterSuperAdmin();
+});
+
+// =============================================================
+//  7) 모드 투표 (뽀로로 모드 / 하츄핑 모드)
+// =============================================================
+const VOTED_MODE_KEY = "manito.votedMode";
+
+$("#vote-nav-btn").addEventListener("click", async () => {
+  viewBeforeVote = currentView;
+  showView("mode-vote");
+  await refreshVoteCandidates();
+});
+
+async function refreshVoteCandidates() {
+  const wrap = $("#vote-candidates");
+  wrap.innerHTML = `<p class="muted small">불러오는 중…</p>`;
+  setHint("#vote-hint", "");
+  let alreadyVoted = null;
+  try { alreadyVoted = localStorage.getItem(VOTED_MODE_KEY); } catch {}
+  try {
+    const votes = await data.getModeVotes();
+    wrap.innerHTML = votes
+      .map(
+        (v) => `<button class="role-btn glass-card vote-item" data-id="${v.id}" ${alreadyVoted ? "disabled" : ""}>
+          <span class="role-title">${escapeHtml(v.label)}</span>
+          <span class="role-desc">${v.count}표</span>
+        </button>`
+      )
+      .join("");
+    if (alreadyVoted) {
+      setHint("#vote-hint", "이미 투표하셨어요. 결과는 위에서 실시간으로 볼 수 있어요.", true);
+    }
+    $$(".vote-item").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (alreadyVoted) return;
+        busy(b, true, "투표 중…");
+        try {
+          await data.voteForMode(b.dataset.id);
+          try { localStorage.setItem(VOTED_MODE_KEY, b.dataset.id); } catch {}
+          toast("투표 완료! 감사합니다.");
+          await refreshVoteCandidates();
+        } catch (e) {
+          toast("투표 실패: " + e.message, false);
+          busy(b, false);
+        }
+      })
+    );
+  } catch (e) {
+    wrap.innerHTML = `<p class="err">불러오기 실패: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
 // =============================================================
 //  시작: 저장된 세션이 있으면 로그인 상태로 바로 복원
 // =============================================================
@@ -969,6 +1298,7 @@ try {
       }
       if (saved.role === "superadmin") {
         student = { id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name };
+        markSuperAdminAuthed();
         await enterSuperAdmin();
         return;
       }

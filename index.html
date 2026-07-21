@@ -13,9 +13,12 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-name">마니또</span>
+        <span id="brand-name" class="brand-name">마니또</span>
+        <span id="brand-free-tag" class="chip free-tag hidden">무료</span>
         <span id="class-chip" class="chip class-chip hidden"></span>
       </div>
+      <button id="admin-quick-btn" class="link-btn admin-quick-btn hidden">관리자</button>
+      <button id="vote-nav-btn" class="link-btn">모드 투표하기</button>
       <button id="flashy-toggle" class="flashy-toggle" aria-pressed="false">쓸때없이 화려한 모드</button>
       <button id="btn-back" class="link-btn hidden">뒤로</button>
     </header>
@@ -30,10 +33,6 @@
               <button class="side-nav-item" data-code="0603">
                 <span class="side-nav-code">0603</span>
                 <span class="side-nav-label">6학년 3반</span>
-              </button>
-              <button class="side-nav-item" data-code="1889">
-                <span class="side-nav-code">1889</span>
-                <span class="side-nav-label">테스트 모드</span>
               </button>
             </nav>
             <button id="other-code-toggle" class="link-btn side-other-toggle">다른 학급코드 입력</button>
@@ -97,6 +96,7 @@
           <h3>나의 소원</h3>
           <p class="muted small">한 번 등록하면 다음 마니또 배정 전까지 수정할 수 없어요.</p>
 
+          <p id="my-wish-rewrite-note" class="hint err hidden"></p>
           <div id="my-wish-form">
             <textarea id="my-wish-text" maxlength="300" rows="3"
               placeholder="예) 누군가 갑자기 나타나서 내 학원숙제 1974페이지 분량을 풀어주면 좋겠다…"></textarea>
@@ -119,9 +119,13 @@
           </div>
           <div id="care-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
           <div id="care-content" class="hidden">
-            <p class="care-name" id="care-name"></p>
             <div class="wish-readonly">
               <p id="care-wish"></p>
+            </div>
+            <div class="scratch-wrap">
+              <p class="care-name" id="care-name"></p>
+              <canvas id="care-scratch-canvas" class="scratch-canvas"></canvas>
+              <p class="scratch-hint">긁어서 누군지 확인하세요</p>
             </div>
           </div>
         </div>
@@ -180,6 +184,38 @@
           </div>
           <p class="hint" id="reveal-hint"></p>
         </div>
+
+        <div id="teacher-participate-card" class="glass-card hidden">
+          <h3>선생님도 참여 중이에요</h3>
+          <p class="muted small">학생 수가 홀수라서 선생님도 마니또에 자동으로 포함됐어요.</p>
+          <div id="teacher-wish-form">
+            <textarea id="teacher-wish-text" maxlength="300" rows="2" placeholder="선생님의 소원을 적어주세요"></textarea>
+            <button id="teacher-wish-submit" class="btn btn-primary btn-sm">소원 등록하기</button>
+            <p class="hint" id="teacher-wish-hint"></p>
+          </div>
+          <div id="teacher-wish-display" class="hidden">
+            <div class="wish-readonly"><p id="teacher-wish-display-text"></p></div>
+          </div>
+          <div id="teacher-care-empty" class="muted small hidden">아직 배정 전이에요.</div>
+          <div id="teacher-care-content" class="hidden">
+            <p class="care-name" id="teacher-care-name"></p>
+            <div class="wish-readonly"><p id="teacher-care-wish"></p></div>
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="row-between">
+            <h3>우리 반 학생 소원</h3>
+            <button id="admin-wishlist-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <p class="muted small">부적절하거나 잘못 쓴 소원은 다시 쓰도록 요청할 수 있어요.</p>
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead><tr><th>이름</th><th>소원</th><th></th></tr></thead>
+              <tbody id="admin-wishlist-body"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- ============ 슈퍼 관리자 패널 ============ -->
@@ -207,6 +243,7 @@
               <button id="sa-back-btn" class="btn btn-ghost btn-sm">학급 현황으로</button>
             </div>
           </div>
+          <p class="muted small">"도와주는 친구"를 직접 바꾸면 다음 배정을 몰래 지정할 수 있어요.</p>
           <p class="hint" id="sa-detail-hint"></p>
           <div class="table-wrap">
             <table class="tbl">
@@ -215,6 +252,32 @@
             </table>
           </div>
         </div>
+
+        <div class="glass-card">
+          <div class="row-between">
+            <h3>모드 투표 관리</h3>
+            <button id="sa-votes-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <p class="muted small">학생들이 다음에 추가할 모드에 투표한 결과예요.</p>
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead><tr><th>후보</th><th>득표수</th></tr></thead>
+              <tbody id="sa-votes-body"></tbody>
+            </table>
+          </div>
+          <button id="sa-votes-reset" class="btn btn-ghost btn-sm">투표 초기화</button>
+        </div>
+      </section>
+
+      <!-- ============ 모드 투표 ============ -->
+      <section data-view="mode-vote" class="view hidden">
+        <div class="glass-card">
+          <p class="eyebrow">다음에 추가할 모드</p>
+          <h2>모드 투표하기</h2>
+          <p class="muted">마음에 드는 모드에 투표해주세요. 한 기기당 한 번만 투표할 수 있어요.</p>
+        </div>
+        <div class="role-grid" id="vote-candidates"></div>
+        <p class="hint" id="vote-hint"></p>
       </section>
     </main>
 

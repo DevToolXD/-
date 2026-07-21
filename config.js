@@ -38,7 +38,9 @@ export function isValidClassCode(code) {
 export const SUPER_ADMIN = {
   name: "정후교",
   classCode: "0603",
-  studentId: "__superadmin__",
+  // 주의: Firestore는 "__로 시작하고 끝나는" 문서 ID를 내부 예약어로 취급해
+  // 거부합니다(써보면 400 오류). 반드시 밑줄 1개 패턴만 사용하세요.
+  studentId: "_superadmin_",
 };
 
 // 앱 동작 관련 설정

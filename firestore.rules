@@ -38,11 +38,12 @@ service cloud.firestore {
         && nonEmptyStr(request.resource.data.adminSalt, 200);
       allow delete: if false;
 
-      // ---- 학생 명단: 이름만 저장 ----
+      // ---- 학생 명단: 이름만 저장. 선생님이 삭제도 할 수 있음 ----
       match /students/{id} {
         allow get, list: if validClassCode(code);
         allow create: if validClassCode(code) && nonEmptyStr(request.resource.data.name, 40);
-        allow update, delete: if false;
+        allow update: if false;
+        allow delete: if validClassCode(code);
       }
 
       // ---- 시크릿: 비밀번호 해시 + 소원 + 배정 정보 ----
@@ -50,14 +51,15 @@ service cloud.firestore {
         allow get: if validClassCode(code);
         allow list: if false;
         allow create: if validClassCode(code) && request.resource.data.keys().hasOnly(
-          ['hasPassword','wish','wishSetAt','caringForId','caringForName']);
+          ['hasPassword','wish','wishSetAt','wishRewriteNote','caringForId','caringForName']);
         allow update: if validClassCode(code)
           && request.resource.data.keys().hasOnly(
-               ['hasPassword','wish','wishSetAt','caringForId','caringForName','salt','pwHash'])
+               ['hasPassword','wish','wishSetAt','wishRewriteNote','caringForId','caringForName','salt','pwHash'])
           && nullableStr(request.resource.data.get('wish', null), 300)
+          && nullableStr(request.resource.data.get('wishRewriteNote', null), 300)
           && nullableStr(request.resource.data.get('caringForId', null), 200)
           && nullableStr(request.resource.data.get('caringForName', null), 40);
-        allow delete: if false;
+        allow delete: if validClassCode(code);
       }
 
       // ---- meta: 관리자 코드 검증 이력이 필요없는 배정 상태만 ----
@@ -65,8 +67,18 @@ service cloud.firestore {
         allow get: if validClassCode(code) && docId == 'state';
         allow list: if false;
         allow write: if validClassCode(code) && docId == 'state'
-          && request.resource.data.keys().hasOnly(['assignedAt','studentCount']);
+          && request.resource.data.keys().hasOnly(['assignedAt','studentCount','teacherIncluded']);
       }
+    }
+
+    // ---- 모드 투표 (뽀로로 모드 / 하츄핑 모드) ----
+    match /modeVotes/{id} {
+      allow get, list: if true;
+      allow create, update: if id in ['pororo', 'hachuping']
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0;
+      allow delete: if false;
     }
 
     // ---- 그 외 모든 경로 거부 ----
