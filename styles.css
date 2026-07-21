@@ -150,6 +150,10 @@ body::after {
 
 .view { animation: fade 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes fade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* 학생 홈은 transform 없이 페이드만: 조상에 transform이 걸리면 그 순간
+   position:fixed 사이드바가 뷰포트가 아니라 섹션 기준으로 배치되어 튄다. */
+[data-view="student-home"].view { animation-name: fade-flat; }
+@keyframes fade-flat { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---- 글라스 카드 (리퀴드 글라스) ---- */
 .glass-card {
@@ -713,13 +717,89 @@ body.chaos-shake #app, body.chaos-shake .topbar {
 }
 .chip-del:hover { opacity: 1; }
 
-/* ---- 학생 홈: 사이드바 + 페이지 전환 ---- */
-.student-shell {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 20px;
-  align-items: start;
+/* ---- 학생 홈: 클로드 코드처럼 화면 왼쪽에 고정된 진짜 사이드바 ---- */
+.hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 40px;
+  height: 40px;
+  padding: 11px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-bg-strong);
+  cursor: pointer;
+  flex-shrink: 0;
 }
+.hamburger span {
+  display: block;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink);
+  transition: transform 0.2s ease;
+}
+.hamburger:hover { border-color: var(--green-500); }
+.hamburger.hidden { display: none; }
+
+.app-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 250px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 16px;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border-right: 1px solid var(--glass-border);
+  box-shadow: var(--card-shadow);
+  overflow-y: auto;
+  transform: translateX(0);
+  transition: transform 0.28s ease;
+}
+body.sidebar-collapsed .app-sidebar { transform: translateX(-105%); }
+.app-sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 14px;
+}
+.app-sidebar-title { font-weight: 800; font-size: 1.05rem; letter-spacing: -0.01em; }
+.app-sidebar-eyebrow { padding-left: 6px; margin: 0 0 4px; }
+.app-sidebar-foot {
+  margin-top: auto;
+  padding: 12px 6px 2px;
+  border-top: 1px solid var(--glass-border);
+}
+
+/* 사이드바가 열려 있으면 본문 전체(상단바 포함)가 오른쪽으로 밀림 */
+body.student-mode { padding-left: 250px; transition: padding-left 0.28s ease; }
+body.student-mode.sidebar-collapsed { padding-left: 0; }
+/* #app이 만든 스태킹 컨텍스트(z-index:2)가 상단바(z-index:3)보다 낮아
+   사이드바(z-index:40)가 #app 안에 갇혀 상단바 밑에 깔린다 — 학생 모드에선 #app을 위로 */
+body.student-mode #app { z-index: 4; }
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: rgba(10, 20, 14, 0.4);
+}
+@media (max-width: 900px) {
+  body.student-mode { padding-left: 0; }
+  body.student-mode:not(.sidebar-collapsed) .sidebar-backdrop { display: block; }
+  /* 오버레이 모드에서는 반투명 유리 뒤로 본문 글자가 비쳐 보이므로 불투명하게 */
+  .app-sidebar { background: var(--bg-base); }
+}
+
+.student-content { display: flex; flex-direction: column; gap: 20px; }
 .student-page-area { min-width: 0; }
 .student-page.hidden { display: none; }
 
@@ -758,10 +838,6 @@ body.chaos-shake #app, body.chaos-shake .topbar {
 }
 .scratch-canvas-big { border-radius: 14px; }
 .scratch-hint-big { margin-top: 16px; font-size: 0.95rem; }
-
-@media (max-width: 640px) {
-  .student-shell { grid-template-columns: 1fr; }
-}
 
 @media (max-width: 720px) {
   .role-grid { grid-template-columns: 1fr; }

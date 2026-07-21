@@ -11,6 +11,9 @@
     <div id="sparkle-layer" class="hidden" aria-hidden="true"></div>
 
     <header class="topbar">
+      <button id="sidebar-toggle" class="hamburger hidden" aria-label="메뉴 열기/닫기" aria-expanded="true">
+        <span></span><span></span><span></span>
+      </button>
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
         <span id="brand-name" class="brand-name">마니또</span>
@@ -85,35 +88,45 @@
 
       <!-- ============ 학생 대시보드 ============ -->
       <section data-view="student-home" class="view hidden">
-        <div class="glass-card">
-          <p class="eyebrow" id="student-greeting-eyebrow"></p>
-          <h2>안녕하세요, <span id="student-greeting"></span>님</h2>
-          <p class="muted">내 마니또가 누구인지는 비밀이에요. 소원을 남기면 나를 도와주는 친구에게 전달돼요.</p>
-          <p id="special-badge" class="special-badge">✦ 제작자 소속 학급 · 특별판</p>
-        </div>
+        <!-- 클로드 코드처럼 화면 왼쪽에 항상 고정된 진짜 사이드바.
+             상단의 줄 3개(햄버거) 버튼으로 열고 닫는다. -->
+        <aside id="student-sidebar" class="app-sidebar">
+          <div class="app-sidebar-head">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="app-sidebar-title">마니또</span>
+          </div>
+          <p class="eyebrow app-sidebar-eyebrow">메뉴</p>
+          <nav class="side-nav">
+            <button class="student-page-nav active" data-page="wish">
+              <span class="side-nav-code">1</span>
+              <span class="side-nav-label">나의 소원</span>
+            </button>
+            <button class="student-page-nav" data-page="friend">
+              <span class="side-nav-code">2</span>
+              <span class="side-nav-label">내가 도와주는 친구</span>
+            </button>
+            <button class="student-page-nav" data-page="scratch">
+              <span class="side-nav-code">3</span>
+              <span class="side-nav-label">긁어서 확인하기</span>
+            </button>
+            <button class="student-page-nav" data-page="vote">
+              <span class="side-nav-code">4</span>
+              <span class="side-nav-label">투표</span>
+            </button>
+          </nav>
+          <div class="app-sidebar-foot">
+            <span id="sidebar-student-name" class="muted small"></span>
+          </div>
+        </aside>
+        <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
-        <div class="student-shell">
-          <aside class="sidebar glass-card">
-            <p class="eyebrow">메뉴</p>
-            <nav class="side-nav">
-              <button class="student-page-nav active" data-page="wish">
-                <span class="side-nav-code">1</span>
-                <span class="side-nav-label">나의 소원</span>
-              </button>
-              <button class="student-page-nav" data-page="friend">
-                <span class="side-nav-code">2</span>
-                <span class="side-nav-label">내가 도와주는 친구</span>
-              </button>
-              <button class="student-page-nav" data-page="scratch">
-                <span class="side-nav-code">3</span>
-                <span class="side-nav-label">긁어서 확인하기</span>
-              </button>
-              <button class="student-page-nav" data-page="vote">
-                <span class="side-nav-code">4</span>
-                <span class="side-nav-label">투표</span>
-              </button>
-            </nav>
-          </aside>
+        <div class="student-content">
+          <div class="glass-card">
+            <p class="eyebrow" id="student-greeting-eyebrow"></p>
+            <h2>안녕하세요, <span id="student-greeting"></span>님</h2>
+            <p class="muted">내 마니또가 누구인지는 비밀이에요. 소원을 남기면 나를 도와주는 친구에게 전달돼요.</p>
+            <p id="special-badge" class="special-badge">✦ 제작자 소속 학급 · 특별판</p>
+          </div>
 
           <div class="student-page-area">
             <!-- 페이지 1: 나의 소원 -->

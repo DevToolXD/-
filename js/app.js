@@ -30,6 +30,10 @@ function showView(name) {
   const backBtn = $("#btn-back");
   backBtn.classList.toggle("hidden", name === "class-gate");
   backBtn.textContent = LOGGED_IN_VIEWS.includes(name) ? "로그아웃" : "뒤로";
+  // 학생 홈에서만 고정 사이드바 + 햄버거 버튼 활성화
+  document.body.classList.toggle("student-mode", name === "student-home");
+  $("#sidebar-toggle").classList.toggle("hidden", name !== "student-home");
+  if (name !== "student-home") document.body.classList.remove("sidebar-collapsed");
   window.scrollTo({ top: 0, behavior: "smooth" });
   updateSpecialMode();
   updateAdminQuickBtn();
@@ -665,10 +669,23 @@ $("#student-login-btn").addEventListener("click", async () => {
   }
 });
 
+// 줄 3개(햄버거) 버튼으로 사이드바 열기/닫기
+$("#sidebar-toggle").addEventListener("click", () => {
+  const collapsed = document.body.classList.toggle("sidebar-collapsed");
+  $("#sidebar-toggle").setAttribute("aria-expanded", String(!collapsed));
+});
+$("#sidebar-backdrop").addEventListener("click", () => {
+  document.body.classList.add("sidebar-collapsed");
+  $("#sidebar-toggle").setAttribute("aria-expanded", "false");
+});
+
 async function enterStudentHome() {
   showView("student-home");
+  // 데스크톱은 펼친 채로 시작, 좁은 화면(모바일)은 접힌 채로 시작
+  document.body.classList.toggle("sidebar-collapsed", window.innerWidth < 900);
   $("#student-greeting").textContent = student.name;
   $("#student-greeting-eyebrow").textContent = classLabel(classCode);
+  $("#sidebar-student-name").textContent = `${classLabel(classCode)} · ${student.name}`;
   // 페이지1(나의 소원)을 기본으로 보여줌. 페이지2(긁어서 확인하기)는
   // 사이드바에서 눌렀을 때만 불러온다 (독립된 큰 페이지로 분리).
   $$(".student-page-nav").forEach((b) => b.classList.toggle("active", b.dataset.page === "wish"));
@@ -684,6 +701,8 @@ $$(".student-page-nav").forEach((b) =>
     $$(".student-page-nav").forEach((x) => x.classList.remove("active"));
     b.classList.add("active");
     $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== b.dataset.page));
+    // 모바일(오버레이 모드)에서는 항목을 고르면 사이드바를 접어 내용을 보여줌
+    if (window.innerWidth < 900) document.body.classList.add("sidebar-collapsed");
     if (b.dataset.page === "friend") await refreshFriendTarget();
     if (b.dataset.page === "scratch") await refreshScratchTarget();
     if (b.dataset.page === "vote") await refreshVoteCandidates("#student-vote-candidates", "#student-vote-hint");
