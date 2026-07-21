@@ -414,7 +414,8 @@ const CHAOS_TEXT_MAP = [
   ['[data-view="student-home"] h3:nth-of-type(1)', "나의 소원인 것."],
   ["#my-wish-submit", "소원을 저장하는 것을 하다."],
   ['[data-view="student-home"] .row-between h3', "내가 도와주는 친구인 것."],
-  ["#care-refresh", "새로고침을 하는 것."],
+  ["#friend-refresh", "새로고침을 하는 것."],
+  ["#scratch-refresh", "새로고침을 하는 것."],
   ['[data-view="admin-login"] h2', "선생님이 로그인을 계정에 접속하다."],
   ["#admin-login-btn", "입장을 하다."],
   ['[data-view="admin-home"] h2', "관리자인 것."],
@@ -677,10 +678,17 @@ async function enterStudentHome() {
 
 $$(".student-page-nav").forEach((b) =>
   b.addEventListener("click", async () => {
+    if (b.dataset.page === "vote") {
+      viewBeforeVote = currentView;
+      showView("mode-vote");
+      await refreshVoteCandidates();
+      return;
+    }
     $$(".student-page-nav").forEach((x) => x.classList.remove("active"));
     b.classList.add("active");
     $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== b.dataset.page));
-    if (b.dataset.page === "care") await refreshCareTarget();
+    if (b.dataset.page === "friend") await refreshFriendTarget();
+    if (b.dataset.page === "scratch") await refreshScratchTarget();
   })
 );
 
@@ -730,9 +738,9 @@ $("#my-wish-submit").addEventListener("click", async () => {
   }
 });
 
-async function refreshCareTarget() {
-  const empty = $("#care-empty");
-  const content = $("#care-content");
+async function refreshFriendTarget() {
+  const empty = $("#friend-empty");
+  const content = $("#friend-content");
   try {
     const target = await data.getCareTarget(classCode, student.id);
     if (!target) {
@@ -742,10 +750,30 @@ async function refreshCareTarget() {
     }
     empty.classList.add("hidden");
     content.classList.remove("hidden");
-    $("#care-name").textContent = target.name;
-    $("#care-wish").textContent = target.wish
+    $("#friend-wish").textContent = target.wish
       ? target.wish
       : "아직 소원을 등록하지 않았어요. 조금 뒤에 다시 확인해보세요.";
+  } catch (e) {
+    empty.classList.remove("hidden");
+    content.classList.add("hidden");
+    empty.textContent = "불러오기 실패: " + e.message;
+  }
+}
+$("#friend-refresh").addEventListener("click", refreshFriendTarget);
+
+async function refreshScratchTarget() {
+  const empty = $("#scratch-empty");
+  const content = $("#scratch-content");
+  try {
+    const target = await data.getCareTarget(classCode, student.id);
+    if (!target) {
+      empty.classList.remove("hidden");
+      content.classList.add("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+    content.classList.remove("hidden");
+    $("#scratch-name").textContent = target.name;
     setupScratchCard();
   } catch (e) {
     empty.classList.remove("hidden");
@@ -753,13 +781,13 @@ async function refreshCareTarget() {
     empty.textContent = "불러오기 실패: " + e.message;
   }
 }
-$("#care-refresh").addEventListener("click", refreshCareTarget);
+$("#scratch-refresh").addEventListener("click", refreshScratchTarget);
 
 // ---- 복권처럼 긁어서 마니또 대상 이름을 확인하는 스크래치 카드 ----
 function setupScratchCard() {
-  const wrap = $("#care-content .scratch-wrap");
-  const nameEl = $("#care-name");
-  const canvas = $("#care-scratch-canvas");
+  const wrap = $("#scratch-content .scratch-wrap");
+  const nameEl = $("#scratch-name");
+  const canvas = $("#scratch-canvas");
   if (!wrap || !canvas) return;
   const ctx = canvas.getContext("2d");
 

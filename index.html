@@ -100,9 +100,17 @@
                 <span class="side-nav-code">1</span>
                 <span class="side-nav-label">나의 소원</span>
               </button>
-              <button class="student-page-nav" data-page="care">
+              <button class="student-page-nav" data-page="friend">
                 <span class="side-nav-code">2</span>
+                <span class="side-nav-label">내가 도와주는 친구</span>
+              </button>
+              <button class="student-page-nav" data-page="scratch">
+                <span class="side-nav-code">3</span>
                 <span class="side-nav-label">긁어서 확인하기</span>
+              </button>
+              <button class="student-page-nav" data-page="vote">
+                <span class="side-nav-code">4</span>
+                <span class="side-nav-label">투표</span>
               </button>
             </nav>
           </aside>
@@ -129,20 +137,32 @@
               </div>
             </div>
 
-            <!-- 페이지 2: 긁어서 확인하기 (크게, 별도 페이지) -->
-            <div class="glass-card student-page hidden" data-page="care">
+            <!-- 페이지 2: 내가 도와주는 친구 (소원 보기 전용, 별도 페이지) -->
+            <div class="glass-card student-page hidden" data-page="friend">
               <div class="row-between">
                 <h3>내가 도와주는 친구</h3>
-                <button id="care-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+                <button id="friend-refresh" class="btn btn-ghost btn-sm">새로고침</button>
               </div>
-              <div id="care-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
-              <div id="care-content" class="hidden care-big">
+              <div id="friend-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
+              <div id="friend-content" class="hidden care-big">
+                <p class="muted small">이 친구가 남긴 소원이에요. 몰래 이뤄주세요.</p>
                 <div class="wish-readonly wish-readonly-big">
-                  <p id="care-wish"></p>
+                  <p id="friend-wish"></p>
                 </div>
+              </div>
+            </div>
+
+            <!-- 페이지 3: 긁어서 확인하기 (이름 공개 전용, 별도 페이지) -->
+            <div class="glass-card student-page hidden" data-page="scratch">
+              <div class="row-between">
+                <h3>긁어서 확인하기</h3>
+                <button id="scratch-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+              </div>
+              <div id="scratch-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
+              <div id="scratch-content" class="hidden care-big">
                 <div class="scratch-wrap scratch-wrap-big">
-                  <p class="care-name care-name-big" id="care-name"></p>
-                  <canvas id="care-scratch-canvas" class="scratch-canvas scratch-canvas-big"></canvas>
+                  <p class="care-name care-name-big" id="scratch-name"></p>
+                  <canvas id="scratch-canvas" class="scratch-canvas scratch-canvas-big"></canvas>
                 </div>
                 <p class="scratch-hint scratch-hint-big">긁어서 누군지 확인하세요</p>
               </div>
