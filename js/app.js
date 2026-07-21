@@ -668,8 +668,21 @@ async function enterStudentHome() {
   showView("student-home");
   $("#student-greeting").textContent = student.name;
   $("#student-greeting-eyebrow").textContent = classLabel(classCode);
-  await Promise.all([refreshMyWish(), refreshCareTarget()]);
+  // 페이지1(나의 소원)을 기본으로 보여줌. 페이지2(긁어서 확인하기)는
+  // 사이드바에서 눌렀을 때만 불러온다 (독립된 큰 페이지로 분리).
+  $$(".student-page-nav").forEach((b) => b.classList.toggle("active", b.dataset.page === "wish"));
+  $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== "wish"));
+  await refreshMyWish();
 }
+
+$$(".student-page-nav").forEach((b) =>
+  b.addEventListener("click", async () => {
+    $$(".student-page-nav").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== b.dataset.page));
+    if (b.dataset.page === "care") await refreshCareTarget();
+  })
+);
 
 async function refreshMyWish() {
   const form = $("#my-wish-form");
@@ -765,20 +778,22 @@ function setupScratchCard() {
     canvas.style.opacity = "1";
     canvas.style.pointerEvents = "auto";
 
+    const big = w > 150;
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = "#b9c2bd";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#5b6b62";
-    ctx.font = "11px sans-serif";
+    ctx.font = (big ? 16 : 11) + "px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("긁기", w / 2, h / 2);
+    ctx.fillText("긁어서 확인", w / 2, h / 2);
 
     let scratching = false;
+    const brushRadius = big ? 24 : 13;
     function scratchAt(x, y) {
       ctx.globalCompositeOperation = "destination-out";
       ctx.beginPath();
-      ctx.arc(x, y, 13, 0, Math.PI * 2);
+      ctx.arc(x, y, brushRadius, 0, Math.PI * 2);
       ctx.fill();
     }
     function pointFromEvent(e) {

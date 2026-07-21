@@ -92,40 +92,60 @@
           <p id="special-badge" class="special-badge">✦ 제작자 소속 학급 · 특별판</p>
         </div>
 
-        <div class="glass-card">
-          <h3>나의 소원</h3>
-          <p class="muted small">한 번 등록하면 다음 마니또 배정 전까지 수정할 수 없어요.</p>
+        <div class="student-shell">
+          <aside class="sidebar glass-card">
+            <p class="eyebrow">메뉴</p>
+            <nav class="side-nav">
+              <button class="student-page-nav active" data-page="wish">
+                <span class="side-nav-code">1</span>
+                <span class="side-nav-label">나의 소원</span>
+              </button>
+              <button class="student-page-nav" data-page="care">
+                <span class="side-nav-code">2</span>
+                <span class="side-nav-label">긁어서 확인하기</span>
+              </button>
+            </nav>
+          </aside>
 
-          <p id="my-wish-rewrite-note" class="hint err hidden"></p>
-          <div id="my-wish-form">
-            <textarea id="my-wish-text" maxlength="300" rows="3"
-              placeholder="예) 누군가 갑자기 나타나서 내 학원숙제 1974페이지 분량을 풀어주면 좋겠다…"></textarea>
-            <button id="my-wish-submit" class="btn btn-primary">소원 등록하기</button>
-            <p class="hint" id="my-wish-hint"></p>
-          </div>
+          <div class="student-page-area">
+            <!-- 페이지 1: 나의 소원 -->
+            <div class="glass-card student-page" data-page="wish">
+              <h3>나의 소원</h3>
+              <p class="muted small">한 번 등록하면 다음 마니또 배정 전까지 수정할 수 없어요.</p>
 
-          <div id="my-wish-display" class="hidden">
-            <div class="wish-readonly">
-              <p id="my-wish-display-text"></p>
+              <p id="my-wish-rewrite-note" class="hint err hidden"></p>
+              <div id="my-wish-form">
+                <textarea id="my-wish-text" maxlength="300" rows="3"
+                  placeholder="예) 누군가 갑자기 나타나서 내 학원숙제 1974페이지 분량을 풀어주면 좋겠다…"></textarea>
+                <button id="my-wish-submit" class="btn btn-primary">소원 등록하기</button>
+                <p class="hint" id="my-wish-hint"></p>
+              </div>
+
+              <div id="my-wish-display" class="hidden">
+                <div class="wish-readonly">
+                  <p id="my-wish-display-text"></p>
+                </div>
+                <p class="muted small">등록 완료. 다음 배정 때 새로 쓸 수 있어요.</p>
+              </div>
             </div>
-            <p class="muted small">등록 완료. 다음 배정 때 새로 쓸 수 있어요.</p>
-          </div>
-        </div>
 
-        <div class="glass-card">
-          <div class="row-between">
-            <h3>내가 도와주는 친구</h3>
-            <button id="care-refresh" class="btn btn-ghost btn-sm">새로고침</button>
-          </div>
-          <div id="care-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
-          <div id="care-content" class="hidden">
-            <div class="wish-readonly">
-              <p id="care-wish"></p>
-            </div>
-            <div class="scratch-wrap">
-              <p class="care-name" id="care-name"></p>
-              <canvas id="care-scratch-canvas" class="scratch-canvas"></canvas>
-              <p class="scratch-hint">긁어서 누군지 확인하세요</p>
+            <!-- 페이지 2: 긁어서 확인하기 (크게, 별도 페이지) -->
+            <div class="glass-card student-page hidden" data-page="care">
+              <div class="row-between">
+                <h3>내가 도와주는 친구</h3>
+                <button id="care-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+              </div>
+              <div id="care-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
+              <div id="care-content" class="hidden care-big">
+                <div class="wish-readonly wish-readonly-big">
+                  <p id="care-wish"></p>
+                </div>
+                <div class="scratch-wrap scratch-wrap-big">
+                  <p class="care-name care-name-big" id="care-name"></p>
+                  <canvas id="care-scratch-canvas" class="scratch-canvas scratch-canvas-big"></canvas>
+                </div>
+                <p class="scratch-hint scratch-hint-big">긁어서 누군지 확인하세요</p>
+              </div>
             </div>
           </div>
         </div>
