@@ -81,6 +81,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---- 피드백 게시판: 반 구분 없이 전체 공용, 누구나 읽고 씀 ----
+    match /feedback/{id} {
+      allow get, list: if true;
+      allow create: if request.resource.data.keys().hasOnly(['name','roleTag','message','createdAt'])
+        && nonEmptyStr(request.resource.data.name, 40)
+        && nullableStr(request.resource.data.get('roleTag', null), 60)
+        && nonEmptyStr(request.resource.data.message, 500);
+      allow update: if false;
+      // 삭제는 전체 관리자만 노출되는 버튼으로만 호출됨(다른 컬렉션과 동일한 신뢰 모델)
+      allow delete: if true;
+    }
+
     // ---- 그 외 모든 경로 거부 ----
     match /{document=**} {
       allow read, write: if false;

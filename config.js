@@ -48,5 +48,6 @@ export const APP = {
   maxWishLength: 300,
   maxNameLength: 40,
   maxPasswordLength: 64,
+  maxFeedbackLength: 500,
   firebaseVersion: "10.12.0",
 };

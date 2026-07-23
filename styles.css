@@ -365,6 +365,26 @@ input:focus, select:focus, textarea:focus {
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-list .chip { background: var(--green-100); color: var(--green-700); font-weight: 600; }
 
+/* ---- 피드백 게시판 ---- */
+.feedback-list {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.feedback-item {
+  padding: 14px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg-strong);
+}
+.feedback-author { font-weight: 700; font-size: 0.92rem; }
+.feedback-time { color: var(--muted); font-size: 0.78rem; }
+.feedback-message { margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; }
+.feedback-del-btn { color: var(--err); font-size: 0.8rem; }
+
 /* ---- 소원 카드 ---- */
 .wish-readonly {
   background: var(--glass-bg-strong);

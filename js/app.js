@@ -42,10 +42,16 @@ function showView(name) {
 }
 
 let viewBeforeVote = null;
+let viewBeforeFeedback = null;
 $("#btn-back").addEventListener("click", async () => {
   if (currentView === "mode-vote") {
     showView(viewBeforeVote || "class-gate");
     viewBeforeVote = null;
+    return;
+  }
+  if (currentView === "feedback-board") {
+    showView(viewBeforeFeedback || "class-gate");
+    viewBeforeFeedback = null;
     return;
   }
   if (LOGGED_IN_VIEWS.includes(currentView)) {
@@ -706,6 +712,7 @@ $$(".student-page-nav").forEach((b) =>
     if (b.dataset.page === "friend") await refreshFriendTarget();
     if (b.dataset.page === "scratch") await refreshScratchTarget();
     if (b.dataset.page === "vote") await refreshVoteCandidates("#student-vote-candidates", "#student-vote-hint");
+    if (b.dataset.page === "feedback") await refreshFeedbackBoard("#student-feedback-list");
   })
 );
 
@@ -1342,6 +1349,119 @@ async function refreshVoteCandidates(wrapSel = "#vote-candidates", hintSel = "#v
     wrap.innerHTML = `<p class="err">불러오기 실패: ${escapeHtml(e.message)}</p>`;
   }
 }
+
+// =============================================================
+//  8) 피드백 게시판 (반 구분 없이 전체 공용, 누구나 남기고 볼 수 있음)
+// =============================================================
+// 현재 로그인 상태에서 이름/역할 태그를 뽑아낸다. 로그인 전(홈/로그인
+// 화면)에는 null을 반환하고, 그때는 사용자가 직접 이름을 입력한다.
+function currentIdentity() {
+  if (currentView === "student-home" && student) {
+    return { name: student.name, roleTag: `학생 · ${classLabel(classCode)}` };
+  }
+  if (currentView === "super-admin") {
+    return { name: SUPER_ADMIN.name, roleTag: "전체 관리자" };
+  }
+  if (currentView === "admin-home" && adminSession) {
+    return { name: "선생님", roleTag: `선생님 · ${classLabel(classCode)}` };
+  }
+  return null;
+}
+
+function formatFeedbackTime(createdAt) {
+  try {
+    if (createdAt?.toDate) {
+      return createdAt.toDate().toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    }
+  } catch {}
+  return "방금 전";
+}
+
+function isSuperAdminAuthed() {
+  try { return localStorage.getItem(SUPERADMIN_AUTHED_KEY) === "1"; } catch { return false; }
+}
+
+function feedbackItemHtml(p) {
+  const delBtn = isSuperAdminAuthed()
+    ? `<button class="link-btn feedback-del-btn" data-id="${p.id}">삭제</button>`
+    : "";
+  return `<li class="feedback-item" data-id="${p.id}">
+    <div class="row-between">
+      <span class="feedback-author">${escapeHtml(p.name)}${p.roleTag ? ` <span class="feedback-time">· ${escapeHtml(p.roleTag)}</span>` : ""}</span>
+      ${delBtn}
+    </div>
+    <p class="feedback-message">${escapeHtml(p.message)}</p>
+    <span class="feedback-time">${formatFeedbackTime(p.createdAt)}</span>
+  </li>`;
+}
+
+async function refreshFeedbackBoard(listSel) {
+  const list = $(listSel);
+  list.innerHTML = `<p class="muted small">불러오는 중…</p>`;
+  try {
+    const posts = await data.listFeedback();
+    list.innerHTML = posts.length
+      ? posts.map(feedbackItemHtml).join("")
+      : `<p class="muted small">아직 등록된 피드백이 없어요. 첫 피드백을 남겨보세요!</p>`;
+    list.querySelectorAll(".feedback-del-btn").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (!(await confirmModal("이 피드백을 삭제할까요?"))) return;
+        try {
+          await data.deleteFeedback(b.dataset.id);
+          await refreshFeedbackBoard(listSel);
+        } catch (e) {
+          toast("삭제 실패: " + e.message, false);
+        }
+      })
+    );
+  } catch (e) {
+    list.innerHTML = `<p class="err">불러오기 실패: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// identity를 인자로 받는다 — currentView는 "피드백" 화면 자체로 이미
+// 바뀐 뒤일 수 있어서(별도 뷰로 이동하는 topbar 진입 경로), 제출 시점에
+// currentIdentity()를 다시 부르면 로그인 여부를 잘못 판단하게 된다.
+async function submitFeedback(btnSel, textareaSel, hintSel, listSel, identity, nameInputSel) {
+  const textEl = $(textareaSel);
+  const text = textEl.value;
+  if (!text.trim()) return setHint(hintSel, "내용을 입력해주세요.");
+  const btn = $(btnSel);
+  const name = identity ? identity.name : ($(nameInputSel)?.value || "").trim() || "익명";
+  const roleTag = identity ? identity.roleTag : "";
+  busy(btn, true, "등록 중…");
+  try {
+    await data.postFeedback(name, roleTag, text);
+    textEl.value = "";
+    setHint(hintSel, "");
+    toast("피드백을 남겼어요. 감사합니다!");
+    await refreshFeedbackBoard(listSel);
+  } catch (e) {
+    setHint(hintSel, e.message);
+  } finally {
+    busy(btn, false);
+  }
+}
+
+// topbar에서 진입할 때의 로그인 상태를 스냅샷으로 저장(진입 시점 기준)
+let feedbackBoardIdentity = null;
+$("#feedback-nav-btn").addEventListener("click", async () => {
+  viewBeforeFeedback = currentView;
+  feedbackBoardIdentity = currentIdentity();
+  $("#feedback-name-field").classList.toggle("hidden", !!feedbackBoardIdentity);
+  showView("feedback-board");
+  await refreshFeedbackBoard("#feedback-list");
+});
+$("#feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#feedback-list"));
+$("#feedback-submit").addEventListener("click", () =>
+  submitFeedback("#feedback-submit", "#feedback-text", "#feedback-hint", "#feedback-list", feedbackBoardIdentity, "#feedback-name")
+);
+$("#student-feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#student-feedback-list"));
+$("#student-feedback-submit").addEventListener("click", () =>
+  // 학생 홈은 사이드바 항목을 눌러도 currentView가 계속 "student-home"이라
+  // 제출 시점에 바로 currentIdentity()를 불러도 항상 정확하다.
+  submitFeedback("#student-feedback-submit", "#student-feedback-text", "#student-feedback-hint", "#student-feedback-list", currentIdentity())
+);
 
 // =============================================================
 //  시작: 저장된 세션이 있으면 로그인 상태로 바로 복원

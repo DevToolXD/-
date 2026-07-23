@@ -46,4 +46,5 @@ export const deleteDoc = need("deleteDoc");
 export const writeBatch = need("writeBatch");
 export const query = need("query");
 export const orderBy = need("orderBy");
+export const limit = need("limit");
 export const serverTimestamp = need("serverTimestamp");

@@ -22,6 +22,7 @@
       </div>
       <button id="admin-quick-btn" class="link-btn admin-quick-btn hidden">관리자</button>
       <button id="vote-nav-btn" class="link-btn">모드 투표하기</button>
+      <button id="feedback-nav-btn" class="link-btn">피드백</button>
       <button id="flashy-toggle" class="flashy-toggle" aria-pressed="false">쓸때없이 화려한 모드</button>
       <button id="btn-back" class="link-btn hidden">뒤로</button>
     </header>
@@ -113,6 +114,10 @@
               <span class="side-nav-code">4</span>
               <span class="side-nav-label">투표</span>
             </button>
+            <button class="student-page-nav" data-page="feedback">
+              <span class="side-nav-code">5</span>
+              <span class="side-nav-label">피드백</span>
+            </button>
           </nav>
           <div class="app-sidebar-foot">
             <span id="sidebar-student-name" class="muted small"></span>
@@ -187,6 +192,20 @@
               <p class="muted small">다음에 추가할 테마에 투표하세요. 기기당 1회만 투표할 수 있어요.</p>
               <div class="role-grid" id="student-vote-candidates"></div>
               <p class="hint" id="student-vote-hint"></p>
+            </div>
+
+            <!-- 페이지 5: 피드백 게시판 -->
+            <div class="glass-card student-page hidden" data-page="feedback">
+              <h3>피드백</h3>
+              <p class="muted small">앱에 대한 의견을 자유롭게 남겨주세요. 누구나 볼 수 있는 게시판이에요.</p>
+              <textarea id="student-feedback-text" maxlength="500" rows="3" placeholder="좋았던 점, 불편했던 점, 추가되면 좋을 기능을 알려주세요…"></textarea>
+              <button id="student-feedback-submit" class="btn btn-primary">피드백 남기기</button>
+              <p class="hint" id="student-feedback-hint"></p>
+              <div class="row-between" style="margin-top: 18px;">
+                <h4 style="margin: 0;">모두의 피드백</h4>
+                <button id="student-feedback-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+              </div>
+              <ul class="feedback-list" id="student-feedback-list"></ul>
             </div>
           </div>
         </div>
@@ -339,6 +358,32 @@
         </div>
         <div class="role-grid" id="vote-candidates"></div>
         <p class="hint" id="vote-hint"></p>
+      </section>
+
+      <!-- ============ 피드백 게시판 (반 구분 없이 전체 공용) ============ -->
+      <section data-view="feedback-board" class="view hidden">
+        <div class="glass-card">
+          <p class="eyebrow">누구나 남기고 볼 수 있어요</p>
+          <h2>피드백</h2>
+          <p class="muted">앱에 대한 의견이나 건의사항을 자유롭게 남겨주세요. 게시판처럼 누구나 볼 수 있어요.</p>
+        </div>
+
+        <div class="glass-card">
+          <label id="feedback-name-field"><span class="label-text">이름(선택)</span>
+            <input id="feedback-name" type="text" maxlength="40" placeholder="비워두면 '익명'으로 남아요" />
+          </label>
+          <textarea id="feedback-text" maxlength="500" rows="3" placeholder="이 앱에서 좋았던 점, 불편했던 점, 추가되면 좋을 기능을 알려주세요…"></textarea>
+          <button id="feedback-submit" class="btn btn-primary">피드백 남기기</button>
+          <p class="hint" id="feedback-hint"></p>
+        </div>
+
+        <div class="glass-card">
+          <div class="row-between">
+            <h3>모두의 피드백</h3>
+            <button id="feedback-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <ul class="feedback-list" id="feedback-list"></ul>
+        </div>
       </section>
     </main>
 

@@ -10,8 +10,12 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  addDoc,
   deleteDoc,
   writeBatch,
+  query,
+  orderBy,
+  limit,
   serverTimestamp,
 } from "./firebase.js";
 import { randomHex, hashSecret } from "./crypto.js";
@@ -28,6 +32,8 @@ const secretsDoc = (code, id) => doc(db, "classes", code, "secrets", id);
 const stateDoc = (code) => doc(db, "classes", code, "meta", "state");
 const classDoc = (code) => doc(db, "classes", code);
 const votesDoc = (id) => doc(db, "modeVotes", id);
+const feedbackCol = () => collection(db, "feedback");
+const feedbackDoc = (id) => doc(db, "feedback", id);
 
 // ---------- 학생 명단 ----------
 export async function listStudents(code) {
@@ -326,4 +332,32 @@ export async function resetModeVotes() {
   for (const c of MODE_CANDIDATES) {
     await setDoc(votesDoc(c.id), { count: 0 }, { merge: true });
   }
+}
+
+// ---------- 피드백 게시판 (반 구분 없이 전체 공용, 최신순) ----------
+export async function listFeedback() {
+  const q = query(feedbackCol(), orderBy("createdAt", "desc"), limit(100));
+  const snap = await getDocs(q);
+  const out = [];
+  snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+  return out;
+}
+
+export async function postFeedback(name, roleTag, message) {
+  const clean = message.trim();
+  if (!clean) throw new Error("내용을 입력해주세요.");
+  if (clean.length > APP.maxFeedbackLength) {
+    throw new Error(`피드백은 ${APP.maxFeedbackLength}자 이내로 작성해주세요.`);
+  }
+  await addDoc(feedbackCol(), {
+    name: (name || "익명").trim().slice(0, APP.maxNameLength) || "익명",
+    roleTag: (roleTag || "").slice(0, 60),
+    message: clean,
+    createdAt: serverTimestamp(),
+  });
+}
+
+// 슈퍼 관리자 전용: 부적절한 게시글 삭제 (다른 컬렉션과 동일하게 클라이언트 UI에서만 제한)
+export async function deleteFeedback(id) {
+  await deleteDoc(feedbackDoc(id));
 }
