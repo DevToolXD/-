@@ -1,8 +1,8 @@
 // =============================================================
 //  UI / 라우팅 / 인터랙션 글루 코드
 // =============================================================
-import * as data from "./data.js";
-import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN } from "../config.js";
+import * as data from "./data.js?v=DEV";
+import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN } from "../config.js?v=DEV";
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);

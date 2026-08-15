@@ -166,11 +166,13 @@ async function main() {
   console.log("\n[6] 모드 투표 (뽀로로 모드 / 하츄핑 모드)");
   {
     const before = await get(`modeVotes/pororo`);
-    const beforeCount = before.error ? 0 : fromFields(before).count || 0;
+    // Firestore REST는 integerValue를 "1" 같은 문자열로 돌려준다. Number()로
+    // 감싸지 않으면 "1" + 1 === "11" 로 문자열이 이어붙고, 그 값이 stringValue로
+    // 전송돼 보안 규칙의 count is int 검사에 걸려 403이 난다.
+    const beforeCount = before.error ? 0 : Number(fromFields(before).count || 0);
     const next = beforeCount + 1;
     await patch(`modeVotes/pororo`, { count: next }, ["count"]);
     const after = fromFields(await get(`modeVotes/pororo`));
-    // Firestore REST의 integerValue는 문자열로 내려오므로 숫자로 변환 후 비교
     check("뽀로로 모드 투표 수가 1 증가", Number(after.count) === next);
     // 정리: 되돌리기 (원래 없었다면 삭제, 있었다면 원래 값으로)
     if (before.error) await del(`modeVotes/pororo`);

@@ -29,6 +29,16 @@ jobs:
         with:
           enablement: true
 
+      # 배포마다 정적 파일 URL에 커밋 해시를 박아 캐시를 무효화한다.
+      # 이게 없으면 브라우저가 새 index.html + 캐시된 옛 app.js 를 섞어 로드해
+      # 사라진 요소를 참조하다 모듈이 통째로 죽고 UI 전체가 먹통이 된다.
+      - name: Stamp asset version (cache busting)
+        run: |
+          V="${GITHUB_SHA:0:12}"
+          grep -rl '?v=DEV' index.html js | xargs sed -i "s/?v=DEV/?v=$V/g"
+          echo "Stamped assets with version $V"
+          grep -rn "?v=$V" index.html js
+
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:

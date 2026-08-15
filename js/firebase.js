@@ -4,7 +4,7 @@
 //  정상적으로 로드됩니다 — 그래야 앱의 나머지 UI(버튼 등)가 죽지 않고,
 //  실제 Firestore 호출 시점에만 사용자에게 친절한 에러를 보여줄 수 있습니다.
 // =============================================================
-import { firebaseConfig, APP } from "../config.js";
+import { firebaseConfig, APP } from "../config.js?v=DEV";
 
 const FRIENDLY_MSG = "Firebase 연결에 실패했어요. 네트워크 상태를 확인하고 새로고침 해주세요.";
 

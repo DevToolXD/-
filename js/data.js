@@ -17,10 +17,10 @@ import {
   orderBy,
   limit,
   serverTimestamp,
-} from "./firebase.js";
-import { randomHex, hashSecret } from "./crypto.js";
-import { buildCycle } from "./assign.js";
-import { APP, CLASS_CODES, SUPER_ADMIN } from "../config.js";
+} from "./firebase.js?v=DEV";
+import { randomHex, hashSecret } from "./crypto.js?v=DEV";
+import { buildCycle } from "./assign.js?v=DEV";
+import { APP, CLASS_CODES, SUPER_ADMIN } from "../config.js?v=DEV";
 
 // 주의: Firestore는 "__로 시작하고 끝나는" 문서 ID를 예약어로 취급해 거부합니다.
 export const TEACHER_ID = "_teacher_";
