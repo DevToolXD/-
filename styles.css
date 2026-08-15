@@ -572,10 +572,10 @@ body.special-0603 #special-badge {
 }
 
 /* =============================================================
-   쓸때없이 화려한 모드 — 인도/대만 B급 저예산 CG 감성
-   (리퀴드 글라스를 걷어내고, 촌스러운 배색 + 뻑적지근한 이펙트로 전환)
+   뽀로로 모드 (테무산) — 어디서 본 듯한 짝퉁 펭귄 겨울 테마
+   (쨍한 원색 배색 + 굵은 검은 테두리 스티커 카드 + 삐뚤빼뚤 마스코트)
    ============================================================= */
-.flashy-toggle {
+.pororo-toggle {
   margin-left: 8px;
   padding: 7px 16px;
   font-size: 0.8rem;
@@ -587,136 +587,126 @@ body.special-0603 #special-badge {
   cursor: pointer;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
 }
-.flashy-toggle:hover { color: var(--ink); }
-.flashy-toggle:active { transform: scale(0.94); }
-.flashy-toggle[aria-pressed="true"] {
-  background: repeating-linear-gradient(45deg, #ff2fa0, #ff2fa0 10px, #ffcc00 10px, #ffcc00 20px);
-  color: #1a0e05;
+.pororo-toggle:hover { color: var(--ink); }
+.pororo-toggle:active { transform: scale(0.94); }
+.pororo-toggle[aria-pressed="true"] {
+  background: repeating-linear-gradient(50deg, #1e8cf0, #1e8cf0 9px, #ffe15a 9px, #ffe15a 18px);
+  color: #0b2d4a;
   border: 2px solid #000;
   text-shadow: 1px 1px 0 #fff;
-  animation: chaos-jiggle 0.4s ease-in-out infinite;
-}
-@keyframes chaos-jiggle {
-  0%, 100% { transform: rotate(-1.5deg) scale(1); }
-  50% { transform: rotate(1.5deg) scale(1.04); }
+  box-shadow: 3px 3px 0 #000;
 }
 
-/* ---- 촌스러운 배색으로 통째로 스킨 교체 ---- */
-body.flashy {
-  --ink: #1a0e05;
-  --muted: #5a2a12;
-  --bg-base: #3a1c1c;
-  --glass-bg: #ffe9a8;
-  --glass-bg-strong: #fff3c9;
+/* ---- 쨍한 원색 짝퉁 배색으로 스킨 교체 ---- */
+body.pororo {
+  --green-50: #dff2ff;
+  --green-100: #b9e3ff;
+  --green-200: #7fcaff;
+  --green-500: #1e8cf0;
+  --green-600: #106fcc;
+  --green-700: #0a4f94;
+  --ink: #0b2d4a;
+  --muted: #3d6f96;
+  --bg-base: #bfe6ff;
+  --glass-bg: #eaf7ff;
+  --glass-bg-strong: #ffffff;
   --glass-border: #000;
   --card-shadow: 4px 4px 0 #000;
-  --ok: #0b7a3e;
-  --err: #d4145a;
+  --ok: #0a8f4d;
+  --err: #e0433f;
 }
-body.flashy::before, body.flashy::after {
-  background: conic-gradient(from 0deg, #ff2fa0, #ffcc00, #00e5ff, #ff2fa0);
-  filter: blur(50px) saturate(300%);
-  animation-duration: 3.5s;
-  opacity: 0.75;
+body.pororo::before, body.pororo::after {
+  background: radial-gradient(circle, #ffe15a, rgba(255, 225, 90, 0) 70%);
+  filter: blur(60px) saturate(220%);
+  opacity: 0.6;
 }
-/* 글라스(블러) 효과 제거 → 저퀄 편집 프로그램 느낌 */
-body.flashy .glass-card,
-body.flashy input, body.flashy select, body.flashy textarea,
-body.flashy .toast, body.flashy .modal {
+/* 유리 블러 대신 굵은 검은 테두리 + 뚝뚝 떨어지는 그림자, 살짝 삐뚤어진
+   스티커 낱장 느낌(카드마다 미세하게 다른 각도) */
+body.pororo .glass-card,
+body.pororo input, body.pororo select, body.pororo textarea,
+body.pororo .toast, body.pororo .modal {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   border: 3px solid #000;
-  box-shadow: 5px 5px 0 #000;
-  border-radius: 8px;
-}
-body.flashy .glass-card::before { display: none; }
-body.flashy .btn { border-radius: 6px; border: 2px solid #000; }
-body.flashy .btn-primary {
-  background: repeating-linear-gradient(-45deg, #ff2fa0, #ff2fa0 8px, #ffcc00 8px, #ffcc00 16px);
-  color: #1a0e05;
-  text-shadow: 1px 1px 0 #fff;
   box-shadow: 4px 4px 0 #000;
+  border-radius: 12px;
 }
-body.flashy .code-input,
-body.flashy h1, body.flashy h2, body.flashy h3,
-body.flashy .role-title, body.flashy .brand-name {
+body.pororo .glass-card::before { display: none; }
+body.pororo .glass-card:nth-of-type(odd) { transform: rotate(-0.4deg); }
+body.pororo .glass-card:nth-of-type(even) { transform: rotate(0.4deg); }
+body.pororo .btn { border-radius: 8px; border: 2px solid #000; }
+body.pororo .btn-primary {
+  background: repeating-linear-gradient(-45deg, #ffe15a, #ffe15a 8px, #ff8a3d 8px, #ff8a3d 16px);
+  color: #0b2d4a;
+  text-shadow: 1px 1px 0 #fff;
+  box-shadow: 3px 3px 0 #000;
+}
+body.pororo h1, body.pororo h2, body.pororo h3, body.pororo .role-title, body.pororo .brand-name {
   font-family: Impact, "Arial Black", "Malgun Gothic", sans-serif;
-  text-shadow: 2px 2px 0 #000, -1px -1px 0 #fff;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  text-shadow: 2px 2px 0 #ffe15a, -1px -1px 0 #000;
 }
-body.flashy #cursor-glow {
-  background: radial-gradient(circle, rgba(255, 47, 160, 0.3), rgba(255, 47, 160, 0) 65%);
+body.pororo .brand-mark {
+  background: linear-gradient(135deg, #1e8cf0, #0a4f94);
 }
-body.flashy .role-btn:hover { box-shadow: 6px 6px 0 #000; }
-
-/* ---- 화면 흔들림 ---- */
-@keyframes chaos-shake {
-  0%, 100% { transform: translate(0, 0) rotate(0); }
-  20% { transform: translate(-7px, 5px) rotate(-1deg); }
-  40% { transform: translate(7px, -5px) rotate(1deg); }
-  60% { transform: translate(-5px, -4px) rotate(-0.6deg); }
-  80% { transform: translate(5px, 4px) rotate(0.6deg); }
-}
-body.chaos-shake #app, body.chaos-shake .topbar {
-  animation: chaos-shake 0.35s ease;
+body.pororo .free-tag { background: #ff8a3d; border: 2px solid #000; }
+body.pororo #cursor-glow {
+  background: radial-gradient(circle, rgba(30, 140, 240, 0.25), rgba(30, 140, 240, 0) 65%);
 }
 
-/* ---- 클릭할 때마다: 줌인/줌아웃 펀치 ---- */
-@keyframes chaos-punch {
-  0% { transform: scale(1); }
-  30% { transform: scale(1.35) rotate(-2deg); }
-  55% { transform: scale(0.88) rotate(2deg); }
-  80% { transform: scale(1.06); }
-  100% { transform: scale(1); }
-}
-.chaos-punch { animation: chaos-punch 0.4s cubic-bezier(.36,.07,.19,.97); }
-
-/* ---- 만화체 효과음 텍스트 (퍼버벙!!) ---- */
-.chaos-boom {
-  position: fixed;
-  z-index: 650;
-  pointer-events: none;
-  font-family: Impact, "Arial Black", sans-serif;
-  font-size: 2.2rem;
-  color: #ffcc00;
-  -webkit-text-stroke: 2px #000;
-  text-shadow: 3px 3px 0 #ff2fa0;
-  transform: translate(-50%, -50%);
-  white-space: nowrap;
-}
-
-/* ---- 유리 깨짐 이펙트 ---- */
-.chaos-crack {
-  position: fixed;
-  z-index: 640;
-  pointer-events: none;
-  height: 2px;
-  width: 60px;
-  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0));
-  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.8);
-  transform-origin: left center;
-}
-
-/* ---- 영화 예고편 같은 전체화면 전환 ---- */
-.chaos-transition {
+/* ---- 내리는 눈(짝퉁 반짝이 별 섞임) ---- */
+#pororo-layer {
   position: fixed;
   inset: 0;
-  z-index: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle, #fff, #ffcc00 55%, #ff2fa0 100%);
   pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
 }
-.chaos-transition.hidden { display: none; }
-.chaos-transition-text {
-  font-family: Impact, "Arial Black", sans-serif;
-  font-size: clamp(2rem, 8vw, 5rem);
-  color: #fff;
-  text-align: center;
-  text-shadow: 4px 4px 0 #000, -2px -2px 0 #000;
-  letter-spacing: 0.04em;
-  padding: 0 20px;
+#pororo-layer.hidden { display: none; }
+.pororo-snow {
+  position: absolute;
+  top: -14px;
+  width: var(--sz, 6px);
+  height: var(--sz, 6px);
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.95;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+  animation: pororo-snowfall var(--dur, 9s) linear infinite, pororo-flicker 0.6s ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0s), 0s;
+}
+.pororo-snow:nth-child(4n) {
+  border-radius: 0;
+  background: #ffe15a;
+  box-shadow: 0 0 5px rgba(255, 225, 90, 0.95);
+  transform: rotate(45deg);
+}
+@keyframes pororo-snowfall {
+  0% { transform: translate3d(0, -6vh, 0); }
+  100% { transform: translate3d(var(--drift, 30px), 110vh, 0); }
+}
+@keyframes pororo-flicker {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+/* ---- 짝퉁 펭귄 마스코트 (화면 오른쪽 아래에서 어설프게 둥실둥실) ---- */
+.pororo-mascot {
+  position: fixed;
+  right: 18px;
+  bottom: 44px;
+  width: clamp(90px, 13vw, 150px);
+  height: auto;
+  pointer-events: none;
+  filter: drop-shadow(3px 5px 0 rgba(0, 0, 0, 0.35));
+  animation: pororo-bob 2.4s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+@keyframes pororo-bob {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-14px) rotate(5deg); }
+}
+@media (max-width: 640px) {
+  .pororo-mascot { width: 72px; bottom: 24px; right: 10px; }
 }
 
 /* ---- 상단바 추가 버튼 ---- */

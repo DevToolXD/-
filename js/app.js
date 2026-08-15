@@ -20,10 +20,7 @@ const BACK_TARGET = {
 const LOGGED_IN_VIEWS = ["student-home", "admin-home", "super-admin"];
 let currentView = "class-gate";
 
-let hasRenderedOnce = false;
 function showView(name) {
-  const shouldChaosTransition =
-    hasRenderedOnce && name !== currentView && document.body.classList.contains("flashy");
   currentView = name;
   $$("[data-view]").forEach((v) => v.classList.add("hidden"));
   $(`[data-view="${name}"]`).classList.remove("hidden");
@@ -37,8 +34,6 @@ function showView(name) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   updateSpecialMode();
   updateAdminQuickBtn();
-  if (shouldChaosTransition) playChaosTransition();
-  hasRenderedOnce = true;
 }
 
 let viewBeforeVote = null;
@@ -241,31 +236,14 @@ function setClassChip(code) {
   chip.classList.remove("hidden");
 }
 
-// 로그아웃: 이중 확인(쓸때없이 화려한 모드에서는 10단계 확인) 후 세션만 지우고
+// 로그아웃: 이중 확인 후 세션만 지우고
 // 학급코드는 유지 (같은 기기에서 다음 학생이 이어서 로그인)
-const NORMAL_LOGOUT_STEPS = [
+const LOGOUT_STEPS = [
   "정말 로그아웃 하시겠어요?",
   "한 번 더 확인할게요. 정말 나가시겠어요? 다시 로그인해야 해요.",
 ];
-const CHAOS_LOGOUT_STEPS = [
-  "로그아웃 하시겠습니까?",
-  "정말요?",
-  "진짜요?",
-  "ㄹㅇ?",
-  "진짜로?",
-  "ㄹㅇ로?",
-  "진짜 진짜?",
-  "정말 정말?",
-  "진짜 정말 정말로?",
-  "진짜 정말 정말 정말로?",
-];
 async function logout() {
-  const chaos = document.body.classList.contains("flashy");
-  const steps = chaos ? CHAOS_LOGOUT_STEPS : NORMAL_LOGOUT_STEPS;
-  for (let i = 0; i < steps.length; i++) {
-    const remain = steps.length - i;
-    const msg = chaos ? `${steps[i]} (남은 확인: ${remain}/${steps.length})` : steps[i];
-    if (chaos) playBlipSound();
+  for (const msg of LOGOUT_STEPS) {
     if (!(await confirmModal(msg))) return;
   }
   clearSession();
@@ -310,260 +288,85 @@ function updateSpecialMode() {
 }
 
 // =============================================================
-//  쓸때없이 화려한 모드용 효과음 (외부 파일 없이 Web Audio API로 즉석 합성)
+//  뽀로로 모드 — 눈 내리는 하늘색 겨울 테마 + 펭귄 마스코트
+//  (외부 이미지 없이 인라인 SVG로 직접 그린 원본 마스코트 사용)
 // =============================================================
-let audioCtx = null;
-function getAudioCtx() {
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return null;
-  if (!audioCtx) audioCtx = new Ctx();
-  if (audioCtx.state === "suspended") audioCtx.resume();
-  return audioCtx;
-}
+const PORORO_KEY = "manito.pororo";
 
-function makeNoiseBuffer(ctx, seconds) {
-  const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-  return buffer;
-}
+// 조종사 모자 + 왕눈 고글을 쓴 아기 펭귄 (뽀로로 감성, 직접 그린 그림)
+// "정품 아닌 느낌"의 테무산 짝퉁 뽀로로: 좌우 비대칭, 짝짝이 고글·눈,
+// 삐뚤어진 모자, 어긋난 굵은 스티커 테두리, 싸구려 금색 별 스티커.
+const PORORO_MASCOT_SVG = `
+<svg class="pororo-mascot" viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- 몸통 (살짝 비뚤어짐) -->
+  <ellipse cx="102" cy="151" rx="64" ry="56" fill="#1e78c9" stroke="#000" stroke-width="4" transform="rotate(-3 102 151)"/>
+  <ellipse cx="98" cy="162" rx="40" ry="42" fill="#f4faff" stroke="#000" stroke-width="3" transform="rotate(-3 98 162)"/>
+  <!-- 날개 (짝짝이 크기) -->
+  <ellipse cx="32" cy="152" rx="15" ry="30" fill="#14588f" stroke="#000" stroke-width="3" transform="rotate(24 32 152)"/>
+  <ellipse cx="170" cy="148" rx="19" ry="36" fill="#14588f" stroke="#000" stroke-width="3" transform="rotate(-14 170 148)"/>
+  <!-- 머리 (몸통 중심에서 살짝 어긋남) -->
+  <circle cx="96" cy="77" r="53" fill="#2382d4" stroke="#000" stroke-width="4"/>
+  <!-- 삐딱한 조종사 모자 -->
+  <g transform="rotate(-9 96 60)">
+    <path d="M 42 76 A 54 54 0 0 1 150 76 L 150 60 A 54 46 0 0 0 42 60 Z" fill="#f0b23e" stroke="#000" stroke-width="3"/>
+    <path d="M 42 76 Q 96 42 150 76 L 150 58 Q 96 24 42 58 Z" fill="#e29a1f" stroke="#000" stroke-width="3"/>
+    <ellipse cx="96" cy="28" rx="15" ry="9" fill="#e29a1f" stroke="#000" stroke-width="2.5"/>
+  </g>
+  <!-- 짝짝이 고글 (왼쪽이 더 큼, 오른쪽으로 미끄러짐) -->
+  <circle cx="70" cy="84" r="27" fill="#fff" stroke="#e8632b" stroke-width="8"/>
+  <circle cx="128" cy="80" r="21" fill="#fff" stroke="#ff8a3d" stroke-width="7"/>
+  <rect x="94" y="76" width="10" height="7" fill="#e8632b" transform="rotate(6 99 80)"/>
+  <!-- 짝짝이 눈 (사시 느낌) -->
+  <circle cx="66" cy="88" r="8.5" fill="#123a55"/>
+  <circle cx="129" cy="78" r="5.5" fill="#123a55"/>
+  <circle cx="69" cy="85" r="2.6" fill="#fff"/>
+  <circle cx="130.5" cy="76" r="1.8" fill="#fff"/>
+  <!-- 부리 (비대칭) -->
+  <path d="M 78 108 Q 98 98 122 112 Q 104 128 78 108 Z" fill="#f7bd4a" stroke="#000" stroke-width="2.5"/>
+  <!-- 싸구려 금색 별 스티커 -->
+  <path d="M100 138 l4.4 9.3 10.2 1.3-7.4 7.2 1.8 10.1-9-4.9-9 4.9 1.8-10.1-7.4-7.2 10.2-1.3z"
+        fill="#ffd23f" stroke="#000" stroke-width="2" transform="rotate(-8 100 150)"/>
+  <!-- 발 (짝짝이) -->
+  <ellipse cx="70" cy="205" rx="19" ry="9" fill="#e8632b" stroke="#000" stroke-width="2.5" transform="rotate(-6 70 205)"/>
+  <ellipse cx="132" cy="207" rx="23" ry="10" fill="#e8632b" stroke="#000" stroke-width="2.5" transform="rotate(8 132 207)"/>
+</svg>`;
 
-// "퍼버벙!!" 폭발음: 저음 쿵 + 감쇠하는 노이즈
-function playBoomSound() {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  const now = ctx.currentTime;
-
-  const noise = ctx.createBufferSource();
-  noise.buffer = makeNoiseBuffer(ctx, 0.35);
-  const filter = ctx.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.setValueAtTime(1800, now);
-  filter.frequency.exponentialRampToValueAtTime(120, now + 0.3);
-  const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.45, now);
-  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-  noise.connect(filter).connect(noiseGain).connect(ctx.destination);
-  noise.start(now);
-  noise.stop(now + 0.35);
-
-  const osc = ctx.createOscillator();
-  osc.type = "sine";
-  osc.frequency.setValueAtTime(150, now);
-  osc.frequency.exponentialRampToValueAtTime(40, now + 0.25);
-  const oscGain = ctx.createGain();
-  oscGain.gain.setValueAtTime(0.55, now);
-  oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-  osc.connect(oscGain).connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.25);
-}
-
-// 화면 전환용 "슈우우웅" 효과음
-function playWhooshSound() {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  const now = ctx.currentTime;
-  const noise = ctx.createBufferSource();
-  noise.buffer = makeNoiseBuffer(ctx, 0.5);
-  const filter = ctx.createBiquadFilter();
-  filter.type = "bandpass";
-  filter.Q.value = 0.8;
-  filter.frequency.setValueAtTime(300, now);
-  filter.frequency.exponentialRampToValueAtTime(3500, now + 0.35);
-  filter.frequency.exponentialRampToValueAtTime(500, now + 0.5);
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.32, now + 0.15);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-  noise.connect(filter).connect(gain).connect(ctx.destination);
-  noise.start(now);
-  noise.stop(now + 0.5);
-}
-
-// 로그아웃 단계마다 삑 소리
-function playBlipSound() {
-  const ctx = getAudioCtx();
-  if (!ctx) return;
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  osc.type = "square";
-  osc.frequency.setValueAtTime(880, now);
-  const gain = ctx.createGain();
-  gain.gain.setValueAtTime(0.15, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-  osc.connect(gain).connect(ctx.destination);
-  osc.start(now);
-  osc.stop(now + 0.12);
-}
-
-// =============================================================
-//  쓸때없이 화려한 모드 — 인도/대만 B급 저예산 CG 감성
-//  (줌펀치 + 유리깨짐 + 만화 효과음 + 화면흔들림 + 어색한 번역투 문구)
-// =============================================================
-const FLASHY_KEY = "manito.flashy";
-
-// 정상 문구 -> 번역기를 돌린 것 같은 어색한 문구. 무조건 마침표로 끝남.
-const CHAOS_TEXT_MAP = [
-  ["#class-gate-btn", "입장을 하다."],
-  [".landing-main h1", "학급을 선택하는 것을 하다."],
-  [".landing-main .eyebrow", "시작하기 전에 하는 것."],
-  [".landing-main > p.muted", "왼쪽 목록을 누르는 것을 권장하다."],
-  [".side-nav-item:nth-of-type(1) .side-nav-label", "육학년 삼반인 것."],
-  ["#other-code-toggle", "다른 학급코드를 입력하는 것."],
-  ['.role-btn[data-role="student"] .role-title', "학생이다."],
-  ['.role-btn[data-role="student"] .role-desc', "로그인을 계정에 접속하다. 그리고 소원을 남기는 것을 하다."],
-  ['.role-btn[data-role="admin"] .role-title', "선생님이다."],
-  ['.role-btn[data-role="admin"] .role-desc', "명단을 관리하는 것과 마니또를 배정하는 것을 하다."],
-  ['[data-view="student-login"] h2', "학생이 로그인을 계정에 접속하다."],
-  ['[data-view="student-login"] label:nth-of-type(1) .label-text', "이름을 입력하는 것."],
-  ['[data-view="student-login"] label:nth-of-type(2) .label-text', "비밀번호를 입력하는 것."],
-  ['[data-view="admin-login"] label .label-text', "관리자 코드를 입력하는 것."],
-  ["#student-login-btn", "로그인을 계정에 접속하다."],
-  ['[data-view="student-home"] .muted:not(.small)', "마니또를 나의 도와줄 학생. 소원을 남기면 전달되는 것을 하다."],
-  ['[data-view="student-home"] h3:nth-of-type(1)', "나의 소원인 것."],
-  ["#my-wish-submit", "소원을 저장하는 것을 하다."],
-  ['[data-view="student-home"] .row-between h3', "내가 도와주는 친구인 것."],
-  ["#friend-refresh", "새로고침을 하는 것."],
-  ["#scratch-refresh", "새로고침을 하는 것."],
-  ['[data-view="admin-login"] h2', "선생님이 로그인을 계정에 접속하다."],
-  ["#admin-login-btn", "입장을 하다."],
-  ['[data-view="admin-home"] h2', "관리자인 것."],
-  ["#roster-add-btn", "명단에 추가를 하다."],
-  ["#assign-btn", "마니또를 배정하는 것을 하다."],
-  ["#reshuffle-btn", "재배정을 하는 것."],
-  ["#reveal-btn", "전체 공개를 보는 것을 하다."],
-  ['[data-view="super-admin"] h2', "전체 관리자인 것."],
-];
-let chaosTextApplied = false;
-
-function applyChaosText(on) {
-  if (on === chaosTextApplied) return;
-  for (const [sel, chaosStr] of CHAOS_TEXT_MAP) {
-    const el = $(sel);
-    if (!el) continue;
-    if (on) {
-      if (el.dataset.normalText === undefined) el.dataset.normalText = el.textContent;
-      el.textContent = chaosStr;
-    } else if (el.dataset.normalText !== undefined) {
-      el.textContent = el.dataset.normalText;
+let pororoLayerRendered = false;
+function renderPororoLayer(on) {
+  const layer = $("#pororo-layer");
+  if (on && !pororoLayerRendered) {
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < 36; i++) {
+      const s = document.createElement("span");
+      s.className = "pororo-snow";
+      s.style.left = Math.random() * 100 + "%";
+      s.style.setProperty("--sz", 3 + Math.random() * 6 + "px");
+      s.style.setProperty("--dur", 6 + Math.random() * 8 + "s");
+      s.style.setProperty("--delay", -Math.random() * 12 + "s");
+      s.style.setProperty("--drift", Math.random() * 80 - 40 + "px");
+      frag.appendChild(s);
     }
+    layer.innerHTML = "";
+    layer.appendChild(frag);
+    layer.insertAdjacentHTML("beforeend", PORORO_MASCOT_SVG);
+    pororoLayerRendered = true;
   }
-  chaosTextApplied = on;
+  layer.classList.toggle("hidden", !on);
+  if (!on) pororoLayerRendered = false;
 }
 
-function setFlashy(on) {
-  document.body.classList.toggle("flashy", on);
-  const btn = $("#flashy-toggle");
+function setPororo(on) {
+  document.body.classList.toggle("pororo", on);
+  const btn = $("#pororo-toggle");
   btn.setAttribute("aria-pressed", String(on));
-  btn.textContent = on ? "쓸때없이 화려한 모드 ON" : "쓸때없이 화려한 모드";
-  applyChaosText(on);
-  try { localStorage.setItem(FLASHY_KEY, on ? "1" : "0"); } catch {}
+  btn.textContent = on ? "뽀로로 모드 ON" : "뽀로로 모드";
+  renderPororoLayer(on);
+  try { localStorage.setItem(PORORO_KEY, on ? "1" : "0"); } catch {}
 }
 
-$("#flashy-toggle").addEventListener("click", () => {
-  setFlashy(!document.body.classList.contains("flashy"));
+$("#pororo-toggle").addEventListener("click", () => {
+  setPororo(!document.body.classList.contains("pororo"));
 });
-
-// ---- 화면 흔들림 ----
-let shakeTimer;
-function screenShake() {
-  document.body.classList.add("chaos-shake");
-  clearTimeout(shakeTimer);
-  shakeTimer = setTimeout(() => document.body.classList.remove("chaos-shake"), 350);
-}
-
-// ---- 만화 효과음 텍스트 (퍼버벙!!) ----
-const BOOM_WORDS = ["퍼버벙!!", "펑!!!", "콰과광!!", "빠직!!", "슈웅퍽!!"];
-function spawnBoomText(x, y) {
-  const el = document.createElement("div");
-  el.className = "chaos-boom";
-  el.textContent = BOOM_WORDS[Math.floor(Math.random() * BOOM_WORDS.length)];
-  el.style.left = x + "px";
-  el.style.top = y + "px";
-  el.style.color = ["#ffcc00", "#ff2fa0", "#00e5ff"][Math.floor(Math.random() * 3)];
-  document.body.appendChild(el);
-  const anim = el.animate(
-    [
-      { transform: "translate(-50%,-50%) scale(0.3) rotate(-8deg)", opacity: 0 },
-      { transform: "translate(-50%,-50%) scale(1.3) rotate(4deg)", opacity: 1, offset: 0.35 },
-      { transform: "translate(-50%,-50%) scale(1) rotate(-2deg)", opacity: 1, offset: 0.6 },
-      { transform: "translate(-50%,-58%) scale(0.9) rotate(0deg)", opacity: 0 },
-    ],
-    { duration: 650, easing: "cubic-bezier(.2,.8,.2,1)" }
-  );
-  anim.onfinish = () => el.remove();
-}
-
-// ---- 유리 깨짐 이펙트 ----
-function spawnShatter(x, y) {
-  const lines = 8;
-  for (let i = 0; i < lines; i++) {
-    const s = document.createElement("div");
-    s.className = "chaos-crack";
-    s.style.left = x + "px";
-    s.style.top = y + "px";
-    const angle = (360 / lines) * i + (Math.random() * 20 - 10);
-    const len = 30 + Math.random() * 50;
-    s.style.transform = `rotate(${angle}deg) scaleX(${len / 60})`;
-    document.body.appendChild(s);
-    const anim = s.animate(
-      [
-        { opacity: 1 },
-        { opacity: 0 },
-      ],
-      { duration: 400 + Math.random() * 200, easing: "ease-out" }
-    );
-    anim.onfinish = () => s.remove();
-  }
-}
-
-// ---- 클릭된 요소 줌인/줌아웃 펀치 ----
-function punchElement(el) {
-  el.classList.remove("chaos-punch");
-  void el.offsetWidth;
-  el.classList.add("chaos-punch");
-  setTimeout(() => el.classList.remove("chaos-punch"), 420);
-}
-
-function chaosClickEffect(e) {
-  screenShake();
-  spawnBoomText(e.clientX, e.clientY);
-  spawnShatter(e.clientX, e.clientY);
-  playBoomSound();
-  const target = e.target.closest(".btn, .glass-card, .role-btn");
-  if (target) punchElement(target);
-  if (navigator.vibrate) navigator.vibrate([10, 20, 30]);
-}
-document.addEventListener("click", (e) => {
-  if (!document.body.classList.contains("flashy")) return;
-  chaosClickEffect(e);
-});
-
-// ---- 영화 예고편 같은 화면 전환 ----
-const CHAOS_TRANSITION_WORDS = ["슈우우우우숙", "부아아아앙", "콰과과광", "삐리리링", "두구두구두구"];
-function playChaosTransition() {
-  screenShake();
-  playWhooshSound();
-  const overlay = $("#chaos-transition");
-  const text = $("#chaos-transition-text");
-  text.textContent = CHAOS_TRANSITION_WORDS[Math.floor(Math.random() * CHAOS_TRANSITION_WORDS.length)] + "... 빠바!!";
-  overlay.classList.remove("hidden");
-  overlay.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], {
-    duration: 550,
-    easing: "ease",
-  });
-  text.animate(
-    [
-      { transform: "scale(2.4)", opacity: 0 },
-      { transform: "scale(1)", opacity: 1, offset: 0.35 },
-      { transform: "scale(1)", opacity: 1, offset: 0.7 },
-      { transform: "scale(0.8)", opacity: 0 },
-    ],
-    { duration: 550, easing: "cubic-bezier(.2,.8,.2,1)" }
-  );
-  setTimeout(() => overlay.classList.add("hidden"), 560);
-}
 
 // =============================================================
 //  1) 홈 (사이드바 바로가기 / 다른 학급코드 입력)
@@ -1467,7 +1270,8 @@ $("#student-feedback-submit").addEventListener("click", () =>
 //  시작: 저장된 세션이 있으면 로그인 상태로 바로 복원
 // =============================================================
 try {
-  setFlashy(localStorage.getItem(FLASHY_KEY) === "1");
+  setPororo(localStorage.getItem(PORORO_KEY) === "1");
+  localStorage.removeItem("manito.flashy"); // 예전 "쓸때없이 화려한 모드" 설정 정리
 } catch {}
 
 (async function init() {
