@@ -601,6 +601,8 @@ async function enterStudentHome() {
   // 데스크톱은 펼친 채로 시작, 좁은 화면(모바일)은 접힌 채로 시작
   document.body.classList.toggle("sidebar-collapsed", window.innerWidth < 900);
   $("#student-greeting").textContent = student.name;
+  delete $("#student-greeting").dataset.btText; // 학생이 바뀌면 새 이름으로 다시 연출
+  blurTextIn($("#student-greeting"), 60);
   $("#student-greeting-eyebrow").textContent = classLabel(classCode);
   $("#sidebar-student-name").textContent = `${classLabel(classCode)} · ${student.name}`;
   // 페이지1(나의 소원)을 기본으로 보여줌. 페이지2(긁어서 확인하기)는
@@ -1537,6 +1539,99 @@ function attachTilt(selector, amplitude = 14, hoverScale = 1.05) {
   });
 }
 attachTilt(".role-btn");
+
+// ClickSpark: 클릭 지점에서 8가닥의 짧은 선이 사방으로 튄다
+document.addEventListener("pointerdown", (e) => {
+  if (reduceMotion() || e.pointerType === "touch") return;
+  for (let i = 0; i < 8; i++) {
+    const sp = document.createElement("span");
+    sp.className = "click-spark";
+    sp.style.left = e.clientX - 1.5 + "px";
+    sp.style.top = e.clientY + "px";
+    sp.style.transform = `rotate(${i * 45}deg)`;
+    document.body.appendChild(sp);
+    const anim = sp.animate(
+      [
+        { transform: `rotate(${i * 45}deg) translateY(6px) scaleY(1)`, opacity: 1 },
+        { transform: `rotate(${i * 45}deg) translateY(22px) scaleY(0.25)`, opacity: 0 },
+      ],
+      { duration: 420, easing: "cubic-bezier(0.2, 0.8, 0.4, 1)" }
+    );
+    const kill = () => sp.remove();
+    anim.onfinish = kill;
+    setTimeout(kill, 600);
+  }
+});
+
+// Magnet: 상단바 버튼이 가까이 온 커서 쪽으로 살짝 끌려온다
+(function setupMagnet() {
+  const topbar = document.querySelector(".topbar");
+  const RANGE = 70, PULL = 0.22;
+  topbar.addEventListener("mousemove", (e) => {
+    if (reduceMotion()) return;
+    topbar.querySelectorAll(".link-btn, .pororo-toggle").forEach((b) => {
+      if (b.classList.contains("hidden")) return;
+      const r = b.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + r.height / 2);
+      const d = Math.hypot(dx, dy);
+      b.style.transform = d < RANGE
+        ? `translate(${dx * PULL * (1 - d / RANGE)}px, ${dy * PULL * (1 - d / RANGE)}px)`
+        : "";
+    });
+  });
+  topbar.addEventListener("mouseleave", () => {
+    topbar.querySelectorAll(".link-btn, .pororo-toggle").forEach((b) => { b.style.transform = ""; });
+  });
+})();
+
+// Dock 확대: 학생 사이드바 항목이 커서와의 거리에 따라 부풀어오름 (macOS 독의 세로판)
+(function setupDock() {
+  const nav = document.querySelector("#student-sidebar .side-nav");
+  if (!nav) return;
+  nav.addEventListener("mousemove", (e) => {
+    if (reduceMotion()) return;
+    nav.querySelectorAll(".student-page-nav").forEach((b) => {
+      const r = b.getBoundingClientRect();
+      const d = Math.abs(e.clientY - (r.top + r.height / 2));
+      const k = Math.max(0, 1 - d / 130);
+      b.style.transform = k > 0.01 ? `scale(${1 + 0.07 * k}) translateX(${5 * k}px)` : "";
+    });
+  });
+  nav.addEventListener("mouseleave", () => {
+    nav.querySelectorAll(".student-page-nav").forEach((b) => { b.style.transform = ""; });
+  });
+})();
+
+// ScrollProgress: 상단의 얇은 진행 바
+(function setupScrollProgress() {
+  const bar = document.createElement("div");
+  bar.id = "scroll-progress";
+  document.body.appendChild(bar);
+  function update() {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.transform = `scaleX(${max > 40 ? Math.min(1, scrollY / max) : 0})`;
+  }
+  addEventListener("scroll", update, { passive: true });
+  addEventListener("resize", update);
+  update();
+})();
+
+// BlurText: 요소의 글자를 한 자씩 흐릿→또렷하게 등장시킨다
+function blurTextIn(el, step = 34) {
+  if (!el) return;
+  const text = el.dataset.btText ?? (el.dataset.btText = el.textContent);
+  if (reduceMotion()) { el.textContent = text; return; }
+  el.textContent = "";
+  [...text].forEach((ch, i) => {
+    const sp = document.createElement("span");
+    sp.className = "bt-char";
+    sp.style.setProperty("--d", i * step + "ms");
+    sp.textContent = ch;
+    el.appendChild(sp);
+  });
+}
+blurTextIn(document.querySelector(".landing-main h1"));
 
 // =============================================================
 //  9) 이스터에그 + 도감

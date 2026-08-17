@@ -56,7 +56,7 @@
 
 ```
 index.html            # 화면 (홈/역할선택/학생/관리자/전체관리자/모드투표)
-styles.css             # 리퀴드 글라스 · 클로버 그린 디자인 시스템
+styles.css             # 애플 스타일 리퀴드 글라스 디자인 시스템
 config.js              # 학급코드, 슈퍼 관리자, Firebase 설정 (여기만 수정)
 js/
   firebase.js         # Firebase 초기화 (CDN import, 실패해도 앱이 죽지 않게 처리)
@@ -162,5 +162,9 @@ node tests/e2e_new_features.mjs
 - **테두리를 도는 빛(border beam)** 과 **유리 표면 광택(shine)** 은
   [Magic UI](https://github.com/magicuidesign/magicui) (MIT License,
   Copyright (c) Magic UI)의 기법을 참고해 순수 CSS로 다시 구현했습니다.
+- 이후 두 저장소의 컴포넌트 244종(React Bits 166 + Magic UI 78)을 전수
+  검토해 GradientText·ShinyText·BlurText·Magnet·ClickSpark·Dock 확대·
+  ScrollProgress를 추가로 포팅해 적용했습니다. 모두 위와 같은 방식(순수
+  JS/CSS 재구현 + 앱의 일부로 포함)입니다.
 
 Made by 정후교

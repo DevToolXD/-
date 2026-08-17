@@ -1,44 +1,46 @@
 /* =============================================================
-   마니또 웹앱 스타일 - 리퀴드 글라스 / 클로버 그린
+   마니또 웹앱 스타일 - 애플 스타일 리퀴드 글라스
+   (변수 이름은 초록 시절 그대로지만 값은 애플 블루/그레이 —
+    이름까지 바꾸면 참조 수백 곳을 건드려야 해서 값만 교체)
    ============================================================= */
 :root {
-  --green-50: #eaf8ef;
-  --green-100: #d2f0dd;
-  --green-200: #a9e2bf;
-  --green-500: #2e9e5b;
-  --green-600: #23844b;
-  --green-700: #196838;
-  --ink: #16231c;
-  --muted: #5b6b62;
-  --bg-base: #f2f8f3;
-  --glass-bg: rgba(255, 255, 255, 0.55);
-  --glass-bg-strong: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.65);
-  --card-shadow: 0 8px 30px rgba(22, 60, 38, 0.1), 0 1px 2px rgba(22, 60, 38, 0.06);
-  --err: #c94b4b;
+  --green-50: #f2f7ff;
+  --green-100: #e3efff;
+  --green-200: #b8d8ff;
+  --green-500: #0a84ff;
+  --green-600: #0071e3;
+  --green-700: #0058b0;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --bg-base: #f5f5f7;
+  --glass-bg: rgba(255, 255, 255, 0.58);
+  --glass-bg-strong: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --err: #ff3b30;
   --ok: var(--green-600);
   --radius: 22px;
   --radius-sm: 14px;
   /* 유리 표면의 정반사(specular): 위 테두리는 빛나고 아래는 살짝 가라앉는다 */
   --glass-spec: rgba(255, 255, 255, 0.75);
-  --glass-spec-low: rgba(16, 40, 26, 0.06);
+  --glass-spec-low: rgba(20, 40, 70, 0.07);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --green-50: #12241a;
-    --green-100: #163521;
-    --green-200: #1f4a2c;
-    --green-500: #45c47d;
-    --green-600: #59d491;
-    --green-700: #7fe3ab;
-    --ink: #e9f5ec;
-    --muted: #93a89c;
-    --bg-base: #0c1310;
-    --glass-bg: rgba(24, 34, 28, 0.55);
-    --glass-bg-strong: rgba(24, 34, 28, 0.72);
-    --glass-border: rgba(255, 255, 255, 0.08);
+    --green-50: #0d1a2b;
+    --green-100: #12233a;
+    --green-200: #1e3a5f;
+    --green-500: #0a84ff;
+    --green-600: #409cff;
+    --green-700: #6fb5ff;
+    --ink: #f5f5f7;
+    --muted: #86868b;
+    --bg-base: #161617;
+    --glass-bg: rgba(28, 28, 30, 0.55);
+    --glass-bg-strong: rgba(28, 28, 30, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.1);
     --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
-    --err: #e08080;
+    --err: #ff6961;
     --glass-spec: rgba(255, 255, 255, 0.12);
     --glass-spec-low: rgba(0, 0, 0, 0.28);
   }
@@ -50,7 +52,7 @@ html { color-scheme: light dark; }
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard",
     "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
   color: var(--ink);
   line-height: 1.6;
@@ -91,7 +93,7 @@ body::after {
   width: 420px; height: 420px;
   margin-left: -210px; margin-top: -210px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(46, 158, 91, 0.16), rgba(46, 158, 91, 0) 65%);
+  background: radial-gradient(circle, rgba(10, 132, 255, 0.14), rgba(10, 132, 255, 0) 65%);
   transform: translate3d(-9999px, -9999px, 0);
   transition: opacity 0.3s ease;
   pointer-events: none;
@@ -100,7 +102,7 @@ body::after {
 }
 #cursor-glow.active { opacity: 1; }
 @media (prefers-color-scheme: dark) {
-  #cursor-glow { background: radial-gradient(circle, rgba(89, 212, 145, 0.14), rgba(89, 212, 145, 0) 65%); }
+  #cursor-glow { background: radial-gradient(circle, rgba(10, 132, 255, 0.16), rgba(10, 132, 255, 0) 65%); }
 }
 @media (hover: none) { #cursor-glow { display: none; } }
 
@@ -299,7 +301,7 @@ textarea { resize: vertical; }
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--green-500);
-  box-shadow: 0 0 0 4px rgba(46, 158, 91, 0.16);
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.18);
 }
 
 .code-input {
@@ -340,7 +342,7 @@ input:focus, select:focus, textarea:focus {
 .btn-primary {
   background: linear-gradient(135deg, var(--green-500), var(--green-600));
   color: #fff;
-  box-shadow: 0 6px 18px rgba(46, 158, 91, 0.32);
+  box-shadow: 0 6px 18px rgba(10, 132, 255, 0.35);
 }
 .btn-primary:hover { filter: brightness(1.06); }
 .btn-ghost {
@@ -374,7 +376,7 @@ input:focus, select:focus, textarea:focus {
   font-family: inherit;
   transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s ease;
 }
-.role-btn:hover { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(22, 60, 38, 0.14); }
+.role-btn:hover { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.12); }
 .role-btn:active { transform: translateY(-1px) scale(0.98); }
 .role-title { font-size: 1.16rem; font-weight: 800; }
 .role-desc { color: var(--muted); font-size: 0.88rem; }
@@ -583,7 +585,7 @@ body.special-0603 #special-badge {
   border-radius: 50%;
   background: var(--green-500);
   opacity: 0;
-  box-shadow: 0 0 6px 1px rgba(46, 158, 91, 0.6);
+  box-shadow: 0 0 6px 1px rgba(10, 132, 255, 0.6);
   animation: sparkle-twinkle 3.4s ease-in-out infinite;
 }
 @keyframes sparkle-twinkle {
@@ -1105,8 +1107,8 @@ body.student-mode .topbar { z-index: 50; }
   box-shadow:
     inset 0 0 0 1.5px rgba(255, 255, 255, 0.55),
     inset 8px 12px 20px rgba(255, 255, 255, 0.32),
-    inset -10px -12px 22px rgba(18, 60, 40, 0.12),
-    0 16px 38px rgba(22, 60, 38, 0.22);
+    inset -10px -12px 22px rgba(20, 40, 70, 0.12),
+    0 16px 38px rgba(0, 0, 0, 0.2);
 }
 /* 크로미움: 뒤 내용을 실제로 굴절시키는 변위 필터 */
 body.lens-refract #glass-lens {
@@ -1142,4 +1144,88 @@ body.lens-on #cursor-glow { display: none; }
   filter: blur(6px);
   user-select: none;
   opacity: 0.7;
+}
+
+/* =============================================================
+   컴포넌트 확장 2차 — React Bits 166종 + Magic UI 78종을 전수 검토 후
+   애플 스타일에 맞는 것만 추가 채택.
+   GradientText / ShinyText / BlurText / Magnet / ClickSpark /
+   Dock 확대 / ScrollProgress
+   ============================================================= */
+
+/* ---- GradientText: 브랜드 로고에 애플 인텔리전스풍 그라디언트 ---- */
+.brand-name {
+  background: linear-gradient(100deg, #0a84ff, #7d5cff, #f56ca9, #ff9f0a, #0a84ff);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-flow 9s linear infinite;
+}
+@keyframes gradient-flow { to { background-position: 300% 0; } }
+/* 특별 테마들은 자기 브랜드 스타일을 유지 */
+body.pororo .brand-name,
+body.special-0603 .brand-name {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  animation: none;
+}
+
+/* ---- ShinyText: 눈썹 라벨 위를 훑고 지나가는 은은한 광 ---- */
+.eyebrow {
+  background: linear-gradient(110deg, var(--green-600) 42%, var(--green-200) 50%, var(--green-600) 58%);
+  background-size: 260% 100%;
+  -webkit-background-clip: text;
+          background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shiny-sweep 4.5s linear infinite;
+}
+@keyframes shiny-sweep { to { background-position: -260% 0; } }
+body.pororo .eyebrow { background: none; -webkit-text-fill-color: currentColor; animation: none; }
+
+/* ---- BlurText: 글자가 한 자씩 흐릿하다 또렷해지는 제목 ---- */
+.bt-char {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(7px);
+  transform: translateY(0.35em);
+  animation: bt-char-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0ms);
+  white-space: pre;
+}
+@keyframes bt-char-in { to { opacity: 1; filter: blur(0); transform: none; } }
+
+/* ---- ClickSpark: 클릭 지점에서 퍼지는 짧은 선 ---- */
+.click-spark {
+  position: fixed;
+  width: 3px; height: 12px;
+  border-radius: 2px;
+  background: var(--green-500);
+  pointer-events: none;
+  z-index: 250;
+  transform-origin: center -8px;
+}
+
+/* ---- Magnet: 상단바 버튼이 커서 쪽으로 살짝 끌려옴 ---- */
+.topbar .link-btn, .pororo-toggle { will-change: transform; }
+
+/* ---- ScrollProgress: 페이지 상단의 얇은 진행 바 ---- */
+#scroll-progress {
+  position: fixed;
+  top: 0; left: 0;
+  height: 3px;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: linear-gradient(90deg, #0a84ff, #7d5cff);
+  z-index: 210;
+  pointer-events: none;
+}
+
+/* ---- Dock 확대: 학생 사이드바 항목이 커서 근처에서 부풀어오름 ---- */
+.side-nav .student-page-nav { transform-origin: left center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-name, .eyebrow { animation: none; }
+  .bt-char { animation: none; opacity: 1; filter: none; transform: none; }
 }
