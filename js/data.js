@@ -305,8 +305,10 @@ export async function superAdminSetCare(code, guardianId, protegeId) {
 }
 
 // ---------- 모드 투표 (뽀로로 모드 / 하츄핑 모드) ----------
+// 투표로 뽑는 뽀로로는 "정품"(한국산)이라는 농담. 상단 토글로 켜는
+// 뽀로로 모드는 짝퉁(테무산)이라 라벨이 다르다.
 export const MODE_CANDIDATES = [
-  { id: "pororo", label: "뽀로로 모드" },
+  { id: "pororo", label: "뽀로로 모드 (한국산)" },
   { id: "hachuping", label: "하츄핑 모드" },
 ];
 const VOTED_KEY_PREFIX = "vote-"; // Firestore 문서 id 접두사 용도는 아니고 참고용

@@ -355,12 +355,99 @@ function renderPororoLayer(on) {
   if (!on) pororoLayerRendered = false;
 }
 
+// 같은 펭귄 그림을 다른 클래스로 재사용 (큰 마스코트 / 작은 방해꾼)
+function pororoSvg(cls) {
+  return PORORO_MASCOT_SVG.replace('class="pororo-mascot"', `class="${cls}"`);
+}
+
+// ---- 매 순간 거슬리게 끼어드는 짝퉁 뽀로로 ----
+const PORORO_NAGS = [
+  "뽀롱뽀롱!",
+  "안녕! 나는 정품 아니야.",
+  "뽀로로 모드 좋아요?",
+  "여기도 뽀로로!",
+  "정품은 투표하러 가세요.",
+  "뽀! 뽀! 뽀!",
+  "나 좀 봐줘!",
+  "이거 진짜 뽀로로 맞아요.",
+  "친구를 도와주는 것을 하다.",
+  "뽀로로가 보고 있다.",
+];
+const PORORO_POPS = ["뽀!", "뽀롱!", "펭!", "뽀뽀!", "뽀롱뽀롱!"];
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+let pororoNagTimer = null;
+
+// 화면 옆에서 미끄러져 들어와 말풍선을 띄우고 사라지는 방해꾼
+function spawnPororoNag() {
+  if (!document.body.classList.contains("pororo")) return;
+  const fromLeft = Math.random() < 0.5;
+  const wrap = document.createElement("div");
+  wrap.className = "pororo-nag " + (fromLeft ? "from-left" : "from-right");
+  wrap.style.top = 12 + Math.random() * 66 + "vh";
+  wrap.innerHTML =
+    `<div class="pororo-nag-bubble">${escapeHtml(pick(PORORO_NAGS))}</div>` +
+    pororoSvg("pororo-nag-peng");
+  document.body.appendChild(wrap);
+  const outX = fromLeft ? "-115%" : "115%";
+  const anim = wrap.animate(
+    [
+      { transform: `translateX(${outX})`, opacity: 0 },
+      { transform: "translateX(0)", opacity: 1, offset: 0.18 },
+      { transform: "translateX(0)", opacity: 1, offset: 0.72 },
+      { transform: `translateX(${outX})`, opacity: 0 },
+    ],
+    { duration: 3400, easing: "cubic-bezier(.3,1.4,.4,1)" }
+  );
+  anim.onfinish = () => wrap.remove();
+  anim.oncancel = () => wrap.remove();
+}
+
+// 클릭할 때마다 커서 위치에서 튀어나오는 작은 펭귄 + 의성어
+function spawnPororoPop(x, y) {
+  const el = document.createElement("div");
+  el.className = "pororo-pop";
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  el.innerHTML = pororoSvg("pororo-pop-peng") + `<span>${escapeHtml(pick(PORORO_POPS))}</span>`;
+  document.body.appendChild(el);
+  const anim = el.animate(
+    [
+      { transform: "translate(-50%,-50%) scale(0.2) rotate(-14deg)", opacity: 0 },
+      { transform: "translate(-50%,-70%) scale(1.15) rotate(8deg)", opacity: 1, offset: 0.4 },
+      { transform: "translate(-50%,-115%) scale(0.9) rotate(-4deg)", opacity: 0 },
+    ],
+    { duration: 900, easing: "cubic-bezier(.2,.8,.2,1)" }
+  );
+  anim.onfinish = () => el.remove();
+  anim.oncancel = () => el.remove();
+}
+
+function startPororoNag() {
+  stopPororoNag();
+  // 2.6초마다 계속 끼어든다 (거슬림이 목적)
+  pororoNagTimer = setInterval(spawnPororoNag, 2600);
+  setTimeout(spawnPororoNag, 500);
+}
+function stopPororoNag() {
+  clearInterval(pororoNagTimer);
+  pororoNagTimer = null;
+  document.querySelectorAll(".pororo-nag, .pororo-pop").forEach((el) => el.remove());
+}
+
+document.addEventListener("click", (e) => {
+  if (!document.body.classList.contains("pororo")) return;
+  spawnPororoPop(e.clientX, e.clientY);
+});
+
 function setPororo(on) {
   document.body.classList.toggle("pororo", on);
   const btn = $("#pororo-toggle");
   btn.setAttribute("aria-pressed", String(on));
-  btn.textContent = on ? "뽀로로 모드 ON" : "뽀로로 모드";
+  btn.textContent = on ? "뽀로로 모드 (테무산) ON" : "뽀로로 모드 (테무산)";
   renderPororoLayer(on);
+  if (on) startPororoNag();
+  else stopPororoNag();
   try { localStorage.setItem(PORORO_KEY, on ? "1" : "0"); } catch {}
 }
 

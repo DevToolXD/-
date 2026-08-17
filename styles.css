@@ -709,6 +709,64 @@ body.pororo #cursor-glow {
   .pororo-mascot { width: 72px; bottom: 24px; right: 10px; }
 }
 
+/* ---- 매 순간 거슬리게 끼어드는 방해꾼 (클릭은 절대 막지 않도록 pointer-events:none) ---- */
+.pororo-nag {
+  position: fixed;
+  z-index: 45;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pororo-nag.from-left { left: 12px; flex-direction: row-reverse; }
+.pororo-nag.from-right { right: 12px; }
+.pororo-nag-peng {
+  width: 72px;
+  height: auto;
+  flex: none;
+  filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.3));
+  animation: pororo-nag-wiggle 0.5s ease-in-out infinite alternate;
+}
+@keyframes pororo-nag-wiggle {
+  from { transform: rotate(-7deg); }
+  to { transform: rotate(7deg); }
+}
+.pororo-nag-bubble {
+  background: #fff;
+  border: 3px solid #000;
+  border-radius: 14px;
+  padding: 8px 13px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  color: #0b2d4a;
+  box-shadow: 3px 3px 0 #000;
+  white-space: nowrap;
+  max-width: 52vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pororo-pop {
+  position: fixed;
+  z-index: 46;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -50%);
+}
+.pororo-pop-peng { width: 46px; height: auto; }
+.pororo-pop span {
+  font-family: Impact, "Arial Black", "Malgun Gothic", sans-serif;
+  font-size: 1.35rem;
+  color: #ffe15a;
+  -webkit-text-stroke: 2px #000;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .pororo-nag-peng { width: 54px; }
+  .pororo-nag-bubble { font-size: 0.82rem; padding: 6px 10px; }
+}
+
 /* ---- 상단바 추가 버튼 ---- */
 .free-tag { background: var(--green-500); color: #fff; }
 .admin-quick-btn { color: var(--green-600); font-weight: 700; }
