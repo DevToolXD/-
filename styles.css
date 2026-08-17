@@ -19,6 +19,9 @@
   --ok: var(--green-600);
   --radius: 22px;
   --radius-sm: 14px;
+  /* 유리 표면의 정반사(specular): 위 테두리는 빛나고 아래는 살짝 가라앉는다 */
+  --glass-spec: rgba(255, 255, 255, 0.75);
+  --glass-spec-low: rgba(16, 40, 26, 0.06);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -36,6 +39,8 @@
     --glass-border: rgba(255, 255, 255, 0.08);
     --card-shadow: 0 8px 30px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
     --err: #e08080;
+    --glass-spec: rgba(255, 255, 255, 0.12);
+    --glass-spec-low: rgba(0, 0, 0, 0.28);
   }
 }
 
@@ -163,12 +168,27 @@ body::after {
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--card-shadow),
+              inset 0 1px 0 var(--glass-spec),
+              inset 0 -1px 0 var(--glass-spec-low);
   padding: 26px 28px;
   margin-bottom: 20px;
   overflow: hidden;
   isolation: isolate;
 }
+/* 마우스를 올리면 유리 표면을 스치는 광택 (Magic UI의 shine 기법을 참고) */
+.glass-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, var(--glass-spec) 50%, transparent 58%);
+  opacity: 0;
+  transform: translateX(-110%);
+  transition: transform 0.9s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease;
+}
+.glass-card:hover::after { opacity: 0.6; transform: translateX(110%); }
 .glass-card::before {
   content: "";
   position: absolute;
@@ -979,3 +999,83 @@ body.student-mode .topbar { z-index: 50; }
 }
 .codex-hint { margin: 8px 0 6px; font-size: 0.88rem; color: var(--muted); }
 .codex-count { font-size: 0.78rem; font-weight: 700; color: var(--green-600); }
+
+/* =============================================================
+   CSS 효과 모음
+   border-beam / shine 기법은 Magic UI(MIT License, Copyright (c) Magic UI,
+   https://github.com/magicuidesign/magicui)를 참고해 이 프로젝트의 순수
+   CSS 구조에 맞게 다시 구현했습니다. React·Tailwind 의존성은 없습니다.
+   ============================================================= */
+
+/* ---- 테두리를 한 바퀴 도는 빛 (border beam) ----
+   테두리 두께만큼의 링을 mask로 잘라내고, 그 안에서 conic-gradient를 회전시킨다.
+   --beam-a 를 등록하지 못하는 브라우저에서는 정지된 링으로 얌전히 남는다. */
+@property --beam-a {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0turn;
+}
+.beam { position: relative; }
+.beam::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--beam-a, 0turn),
+    transparent 0turn,
+    var(--green-500) 0.05turn,
+    var(--green-200) 0.09turn,
+    transparent 0.16turn
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  animation: beam-spin 7s linear infinite;
+  opacity: 0.75;
+}
+@keyframes beam-spin { to { --beam-a: 1turn; } }
+/* 빛나는 테두리는 유리 카드의 광택보다 위에 와야 보인다 */
+.glass-card.beam::after { transform: none; opacity: 0.75; transition: none; }
+.glass-card.beam:hover::after { transform: none; opacity: 1; }
+
+/* ---- 등장 연출: 살짝 흐릿한 상태에서 또렷해지며 올라옴 (blur fade) ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(6px);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              filter 0.5s ease;
+  transition-delay: var(--reveal-delay, 0ms);
+}
+.reveal.in { opacity: 1; transform: none; filter: none; }
+
+/* ---- 누르는 순간 퍼지는 물결 (ripple) ---- */
+.ripple-ink {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  animation: ripple-out 0.55s ease-out forwards;
+}
+@keyframes ripple-out {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+
+/* ---- 숫자가 올라가는 카운터 (number ticker) ---- */
+.ticker { font-variant-numeric: tabular-nums; }
+
+/* ---- 움직임을 줄이고 싶은 사용자 배려 ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal { opacity: 1; transform: none; filter: none; }
+  .pororo-snow, .pororo-mascot, .beam::after { animation: none !important; }
+}

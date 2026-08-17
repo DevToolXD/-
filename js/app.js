@@ -1322,6 +1322,7 @@ async function refreshFeedbackBoard(listSel) {
     list.innerHTML = posts.length
       ? posts.map(feedbackItemHtml).join("")
       : `<p class="muted small">아직 등록된 피드백이 없어요. 첫 피드백을 남겨보세요!</p>`;
+    if (posts.length) revealChildren(list);
     list.querySelectorAll(".feedback-del-btn").forEach((b) =>
       b.addEventListener("click", async () => {
         if (!(await confirmModal("이 피드백을 삭제할까요?"))) return;
@@ -1383,6 +1384,66 @@ $("#student-feedback-submit").addEventListener("click", () =>
 );
 
 // =============================================================
+//  CSS 효과 글루 코드 (ripple / reveal / number ticker)
+//  Magic UI(MIT)의 아이디어를 순수 JS로 다시 구현한 것들.
+// =============================================================
+const reduceMotion = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// 버튼을 누른 자리에서 물결이 퍼진다
+document.addEventListener("pointerdown", (e) => {
+  const btn = e.target.closest(".btn, .role-btn, .side-nav-item, .student-page-nav");
+  if (!btn || reduceMotion()) return;
+  const r = btn.getBoundingClientRect();
+  const size = Math.max(r.width, r.height) * 2;
+  const ink = document.createElement("span");
+  ink.className = "ripple-ink";
+  ink.style.width = ink.style.height = size + "px";
+  ink.style.left = e.clientX - r.left + "px";
+  ink.style.top = e.clientY - r.top + "px";
+  // 버튼이 overflow:hidden 이 아니면 물결이 밖으로 새므로 확인 후 넣는다
+  const cs = getComputedStyle(btn);
+  if (cs.position === "static") btn.style.position = "relative";
+  if (cs.overflow !== "hidden") btn.style.overflow = "hidden";
+  btn.appendChild(ink);
+  // 클릭으로 화면이 바뀌면 그 요소가 display:none 이 되어 애니메이션이 멈추고
+  // animationend 가 오지 않는다. 그러면 물결이 DOM에 계속 남으므로 타이머로도 정리.
+  const kill = () => ink.remove();
+  ink.addEventListener("animationend", kill);
+  setTimeout(kill, 800);
+});
+
+// 목록이 그려진 뒤 항목을 순서대로 흐릿→또렷하게 등장시킨다
+function revealChildren(container, step = 45) {
+  if (!container) return;
+  const kids = [...container.children];
+  if (reduceMotion()) {
+    kids.forEach((k) => k.classList.remove("reveal"));
+    return;
+  }
+  kids.forEach((k, i) => {
+    k.classList.add("reveal");
+    k.style.setProperty("--reveal-delay", i * step + "ms");
+  });
+  requestAnimationFrame(() => kids.forEach((k) => k.classList.add("in")));
+}
+
+// 0에서 목표 숫자까지 부드럽게 올라가는 카운터
+function tickNumber(el, to, ms = 700) {
+  if (!el) return;
+  el.classList.add("ticker");
+  if (reduceMotion() || to <= 0) { el.textContent = String(to); return; }
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - start) / ms);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = String(Math.round(to * eased));
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// =============================================================
 //  9) 이스터에그 + 도감
 //  15개를 숨겨두고, 하나라도 찾으면 그 순간 상단에 "도감" 탭이 생긴다.
 //  (잠긴 탭을 미리 보여주는 게 아니라 아예 없다가 생김)
@@ -1439,7 +1500,7 @@ async function findEgg(id) {
   found.push(id);
   try { localStorage.setItem(EGGS_KEY, JSON.stringify(found)); } catch {}
   updateCodexBtn();
-  toast(`이스터에그 발견! “${egg.name}” (${found.length}/${EGG_TOTAL})`);
+  toast(`이스터에그 발견 — ${egg.name} (${found.length}/${EGG_TOTAL})`);
   try { await data.recordEggFound(id); } catch {}
 }
 
@@ -1454,8 +1515,9 @@ $("#codex-refresh").addEventListener("click", refreshCodex);
 
 async function refreshCodex() {
   const found = loadFoundEggs();
-  $("#codex-summary").textContent =
-    `전체 ${EGG_TOTAL}개 중 ${found.length}개 발견 (쉬움 5 · 중간 5 · 어려움 5)`;
+  $("#codex-summary").innerHTML =
+    `전체 ${EGG_TOTAL}개 중 <b class="ticker" id="codex-found-n">0</b>개 발견 · 쉬움 5 · 중간 5 · 어려움 5`;
+  tickNumber($("#codex-found-n"), found.length);
   const list = $("#codex-list");
   list.innerHTML = `<li class="muted small">발견자 수 불러오는 중…</li>`;
   let stats = {};
@@ -1467,13 +1529,14 @@ async function refreshCodex() {
     const n = stats[e.id] || 0;
     return `<li class="codex-item ${got ? "found" : "locked"}">
       <div class="row-between">
-        <span class="codex-name">${got ? "🥚 " + escapeHtml(e.name) : "🔒 ???"}</span>
+        <span class="codex-name">${got ? escapeHtml(e.name) : "???"}</span>
         <span class="codex-diff ${diffClass[e.d]}">${e.d}</span>
       </div>
       <p class="codex-hint">${escapeHtml(e.hint)}</p>
       <span class="codex-count">${statsFailed ? "발견자 수를 불러오지 못했어요" : `지금까지 ${n}명이 발견`}</span>
     </li>`;
   }).join("");
+  revealChildren(list);
 }
 
 // ---- 트리거 1~5 (쉬움) ----

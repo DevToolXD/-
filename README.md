@@ -147,4 +147,19 @@ node tests/e2e_live.mjs
 node tests/e2e_new_features.mjs
 ```
 
+---
+
+## 크레딧 / 라이선스 고지
+
+화면 효과 중 **테두리를 도는 빛(border beam)** 과 **유리 표면 광택(shine)** 은
+[Magic UI](https://github.com/magicuidesign/magicui) (MIT License, Copyright (c)
+Magic UI) 의 기법을 참고해, React·Tailwind 의존성 없이 이 프로젝트의 순수
+CSS 구조에 맞춰 다시 구현한 것입니다. MIT 라이선스 고지를 위해 여기에
+저작권 표시를 남깁니다.
+
+> 참고로 [React Bits](https://github.com/DavidHDev/react-bits) 도 후보였지만,
+> 이 저장소는 **MIT + Commons Clause** 라서 "포팅한 버전을 포함해 컴포넌트
+> 자체를 재배포하는 것"이 금지됩니다. 이 저장소는 공개 저장소이므로
+> 가져다 넣으면 라이선스 위반이 되어 사용하지 않았습니다.
+
 Made by 정후교
