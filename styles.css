@@ -860,6 +860,15 @@ body.student-mode #app { z-index: 4; }
   z-index: 39;
   background: rgba(10, 20, 14, 0.4);
 }
+/* 사이드바(z-index:40)가 상단바(z-index:3)를 덮어버려서, 모바일에서 한 번
+   열면 왼쪽 위 햄버거가 가려져 다시 눌러 닫을 수 없었다. 학생 화면에서는
+   상단바를 사이드바 위로 올려 햄버거가 항상 눌리게 한다. */
+body.student-mode .topbar { z-index: 50; }
+/* 대신 상단바가 사이드바 첫 항목을 덮지 않도록, 좁은 화면에서는 메뉴를
+   상단바 높이(--topbar-h, JS가 실제 높이를 넣어줌)만큼 아래에서 시작한다. */
+@media (max-width: 900px) {
+  body.student-mode .app-sidebar { padding-top: calc(var(--topbar-h, 84px) + 12px); }
+}
 @media (max-width: 900px) {
   body.student-mode { padding-left: 0; }
   body.student-mode:not(.sidebar-collapsed) .sidebar-backdrop { display: block; }
@@ -924,6 +933,12 @@ body.student-mode #app { z-index: 4; }
   .role-grid { grid-template-columns: 1fr; }
   .two-col { grid-template-columns: 1fr; }
   .topbar, #app { padding-left: 18px; padding-right: 18px; }
+  /* 버튼이 늘어나면서 좁은 화면에선 가로로 넘쳐 "뒤로/로그아웃"이 화면 밖으로
+     밀려나 아예 누를 수 없었다. 줄바꿈시켜 항상 화면 안에 있게 한다. */
+  .topbar { flex-wrap: wrap; row-gap: 6px; column-gap: 6px; }
+  .topbar .link-btn { font-size: 0.84rem; padding: 6px 10px; }
+  .topbar .link-btn:first-of-type { margin-left: auto; }
+  .pororo-toggle { margin-left: 0; font-size: 0.72rem; padding: 6px 10px; }
 }
 
 /* =============================================================

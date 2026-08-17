@@ -34,7 +34,16 @@ function showView(name) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   updateSpecialMode();
   updateAdminQuickBtn();
+  syncTopbarHeight();
 }
+
+// 상단바는 버튼이 늘거나 줄면(관리자·도감·뒤로) 높이가 달라지고, 좁은 화면에선
+// 줄바꿈까지 된다. 그 실제 높이를 CSS 변수로 넘겨 사이드바가 가려지지 않게 한다.
+function syncTopbarHeight() {
+  const h = document.querySelector(".topbar").offsetHeight;
+  document.documentElement.style.setProperty("--topbar-h", h + "px");
+}
+window.addEventListener("resize", syncTopbarHeight);
 
 let viewBeforeVote = null;
 let viewBeforeFeedback = null;
@@ -1419,6 +1428,8 @@ function hasEgg(id) {
 function updateCodexBtn() {
   // 하나라도 찾은 순간부터 탭이 "생긴다"
   $("#codex-nav-btn").classList.toggle("hidden", loadFoundEggs().length === 0);
+  // 버튼이 생기면 상단바 높이가 달라지므로 사이드바 여백도 다시 맞춘다
+  syncTopbarHeight();
 }
 
 async function findEgg(id) {
