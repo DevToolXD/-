@@ -49,6 +49,11 @@ $("#btn-back").addEventListener("click", async () => {
     viewBeforeFeedback = null;
     return;
   }
+  if (currentView === "codex") {
+    showView(viewBeforeCodex || "class-gate");
+    viewBeforeCodex = null;
+    return;
+  }
   if (LOGGED_IN_VIEWS.includes(currentView)) {
     await logout();
     return;
@@ -140,7 +145,10 @@ document.addEventListener("keydown", (e) => {
     (e.ctrlKey && e.shiftKey && ["I", "J", "C", "i", "j", "c"].includes(k)) ||
     (e.metaKey && e.altKey && ["I", "J", "C", "i", "j", "c"].includes(k)) ||
     (e.ctrlKey && (k === "u" || k === "U"));
-  if (blocked) e.preventDefault();
+  if (blocked) {
+    e.preventDefault();
+    findEgg("f12"); // 막아둔 키를 눌러본 사람에게 주는 이스터에그
+  }
 });
 
 // =============================================================
@@ -446,19 +454,22 @@ function setPororo(on) {
   btn.setAttribute("aria-pressed", String(on));
   btn.textContent = on ? "뽀로로 모드 (테무산) ON" : "뽀로로 모드 (테무산)";
   renderPororoLayer(on);
-  if (on) startPororoNag();
+  if (on) { startPororoNag(); findEgg("pororo"); }
   else stopPororoNag();
   try { localStorage.setItem(PORORO_KEY, on ? "1" : "0"); } catch {}
 }
 
+let pororoToggleCount = 0;
 $("#pororo-toggle").addEventListener("click", () => {
   setPororo(!document.body.classList.contains("pororo"));
+  if (++pororoToggleCount >= 10) findEgg("flicker");
 });
 
 // =============================================================
 //  1) 홈 (사이드바 바로가기 / 다른 학급코드 입력)
 // =============================================================
 function enterClass(code) {
+  if (code === TEST_CODE) findEgg("test1889");
   classCode = code;
   setClassChip(code);
   if (code === TEST_CODE) toast("테스트 모드로 진행합니다.");
@@ -478,6 +489,7 @@ codeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#class-
 
 $("#class-gate-btn").addEventListener("click", () => {
   const code = codeInput.value.trim();
+  if (code === "0000") findEgg("code0000");
   if (!isValidClassCode(code)) {
     setHint("#class-gate-hint", "올바른 학급코드가 아니에요. (예: 0603)");
     return;
@@ -592,6 +604,7 @@ async function enterStudentHome() {
 // 사이드바는 클로드 코드처럼 항상 고정: 클릭해도 화면(뷰) 자체는 절대
 // 벗어나지 않고, 오른쪽 내용 영역만 바뀐다. "투표"도 예외 없이 동일하게
 // student-page 중 하나로 취급한다 (별도 뷰로 이동하지 않음).
+const visitedStudentPages = new Set(["wish"]); // 진입 시 기본으로 열려 있는 페이지
 $$(".student-page-nav").forEach((b) =>
   b.addEventListener("click", async () => {
     $$(".student-page-nav").forEach((x) => x.classList.remove("active"));
@@ -599,6 +612,8 @@ $$(".student-page-nav").forEach((b) =>
     $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== b.dataset.page));
     // 모바일(오버레이 모드)에서는 항목을 고르면 사이드바를 접어 내용을 보여줌
     if (window.innerWidth < 900) document.body.classList.add("sidebar-collapsed");
+    visitedStudentPages.add(b.dataset.page);
+    if (visitedStudentPages.size >= 5) findEgg("allpages");
     if (b.dataset.page === "friend") await refreshFriendTarget();
     if (b.dataset.page === "scratch") await refreshScratchTarget();
     if (b.dataset.page === "vote") await refreshVoteCandidates("#student-vote-candidates", "#student-vote-hint");
@@ -634,6 +649,10 @@ async function refreshMyWish() {
     setHint("#my-wish-hint", "불러오기 실패: " + e.message);
   }
 }
+
+$("#my-wish-text").addEventListener("input", (e) => {
+  if (e.target.value.includes("1974")) findEgg("wish1974");
+});
 
 $("#my-wish-submit").addEventListener("click", async () => {
   const text = $("#my-wish-text").value;
@@ -1228,6 +1247,7 @@ async function refreshVoteCandidates(wrapSel = "#vote-candidates", hintSel = "#v
           await data.voteForMode(b.dataset.id);
           try { localStorage.setItem(VOTED_MODE_KEY, b.dataset.id); } catch {}
           toast("투표 완료! 감사합니다.");
+          findEgg("vote");
           await refreshVoteCandidates(wrapSel, hintSel);
         } catch (e) {
           toast("투표 실패: " + e.message, false);
@@ -1352,6 +1372,169 @@ $("#student-feedback-submit").addEventListener("click", () =>
   // 제출 시점에 바로 currentIdentity()를 불러도 항상 정확하다.
   submitFeedback("#student-feedback-submit", "#student-feedback-text", "#student-feedback-hint", "#student-feedback-list", currentIdentity())
 );
+
+// =============================================================
+//  9) 이스터에그 + 도감
+//  15개를 숨겨두고, 하나라도 찾으면 그 순간 상단에 "도감" 탭이 생긴다.
+//  (잠긴 탭을 미리 보여주는 게 아니라 아예 없다가 생김)
+//  내가 찾은 목록은 이 기기(localStorage)에만, 전체 발견자 수만 서버에 센다.
+// =============================================================
+const EGGS_KEY = "manito.eggs";
+
+const EGGS = [
+  // ---- 쉬움 ----
+  { id: "pororo",   d: "쉬움",   name: "짝퉁의 시작",     hint: "상단에서 뭔가 수상한 모드를 켜보세요." },
+  { id: "logo",     d: "쉬움",   name: "로고를 괴롭힘",   hint: "왼쪽 위 이름을 계속 두드리면?" },
+  { id: "footad",   d: "쉬움",   name: "진짜 광고문의",   hint: "맨 아래 광고문의는 진짜 눌러집니다." },
+  { id: "mascot",   d: "쉬움",   name: "펭귄 찌르기",     hint: "짝퉁 펭귄도 만지면 반응합니다." },
+  { id: "f12",      d: "쉬움",   name: "개발자 지망생",   hint: "열지 못하게 막아둔 그 키를 눌러보세요." },
+  // ---- 중간 ----
+  { id: "vote",     d: "중간",   name: "소중한 한 표",    hint: "다음에 추가할 모드를 직접 정해보세요." },
+  { id: "test1889", d: "중간",   name: "비밀 교실",       hint: "명단에 없는 네 자리 학급코드가 하나 더 있어요." },
+  { id: "wish1974", d: "중간",   name: "1974페이지",      hint: "소원 입력칸의 예시 문구를 자세히 읽어보세요." },
+  { id: "allpages", d: "중간",   name: "완주",            hint: "학생 사이드바의 다섯 칸을 전부 열어보세요." },
+  { id: "flicker",  d: "중간",   name: "깜빡이",          hint: "그 수상한 모드를 열 번 껐다 켜보세요." },
+  // ---- 어려움 ----
+  { id: "konami",   d: "어려움", name: "옛날 사람",       hint: "위위 아래아래 좌우좌우 … 그 다음은?" },
+  { id: "snowflake",d: "어려움", name: "눈송이 잡기",     hint: "떨어지는 눈송이를 정확히 클릭할 수 있나요?" },
+  { id: "longpress",d: "어려움", name: "꾹",              hint: "왼쪽 위 이름을 3초 동안 놓지 마세요." },
+  { id: "code0000", d: "어려움", name: "0000",            hint: "존재하지 않는 학급코드를 넣으면 어떻게 될까요?" },
+  { id: "patience", d: "어려움", name: "인내심",          hint: "90초 동안 아무것도 누르지 않고 기다려보세요." },
+];
+const EGG_TOTAL = EGGS.length;
+
+function loadFoundEggs() {
+  try {
+    const raw = localStorage.getItem(EGGS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((id) => EGGS.some((e) => e.id === id)) : [];
+  } catch {
+    return [];
+  }
+}
+function hasEgg(id) {
+  return loadFoundEggs().includes(id);
+}
+
+function updateCodexBtn() {
+  // 하나라도 찾은 순간부터 탭이 "생긴다"
+  $("#codex-nav-btn").classList.toggle("hidden", loadFoundEggs().length === 0);
+}
+
+async function findEgg(id) {
+  const egg = EGGS.find((e) => e.id === id);
+  if (!egg || hasEgg(id)) return;
+  const found = loadFoundEggs();
+  found.push(id);
+  try { localStorage.setItem(EGGS_KEY, JSON.stringify(found)); } catch {}
+  updateCodexBtn();
+  toast(`이스터에그 발견! “${egg.name}” (${found.length}/${EGG_TOTAL})`);
+  try { await data.recordEggFound(id); } catch {}
+}
+
+// ---- 도감 화면 ----
+let viewBeforeCodex = null;
+$("#codex-nav-btn").addEventListener("click", async () => {
+  viewBeforeCodex = currentView;
+  showView("codex");
+  await refreshCodex();
+});
+$("#codex-refresh").addEventListener("click", refreshCodex);
+
+async function refreshCodex() {
+  const found = loadFoundEggs();
+  $("#codex-summary").textContent =
+    `전체 ${EGG_TOTAL}개 중 ${found.length}개 발견 (쉬움 5 · 중간 5 · 어려움 5)`;
+  const list = $("#codex-list");
+  list.innerHTML = `<li class="muted small">발견자 수 불러오는 중…</li>`;
+  let stats = {};
+  let statsFailed = false;
+  try { stats = await data.getEggStats(); } catch { statsFailed = true; }
+  const diffClass = { "쉬움": "easy", "중간": "mid", "어려움": "hard" };
+  list.innerHTML = EGGS.map((e) => {
+    const got = found.includes(e.id);
+    const n = stats[e.id] || 0;
+    return `<li class="codex-item ${got ? "found" : "locked"}">
+      <div class="row-between">
+        <span class="codex-name">${got ? "🥚 " + escapeHtml(e.name) : "🔒 ???"}</span>
+        <span class="codex-diff ${diffClass[e.d]}">${e.d}</span>
+      </div>
+      <p class="codex-hint">${escapeHtml(e.hint)}</p>
+      <span class="codex-count">${statsFailed ? "발견자 수를 불러오지 못했어요" : `지금까지 ${n}명이 발견`}</span>
+    </li>`;
+  }).join("");
+}
+
+// ---- 트리거 1~5 (쉬움) ----
+// 1. pororo: setPororo(true) 안에서 호출
+// 2. logo: 로고 5번 클릭  /  13. longpress: 로고 3초 꾹
+let logoClicks = 0;
+let longPressTimer = null;
+const brandEl = $("#brand-name");
+brandEl.addEventListener("click", () => {
+  if (++logoClicks >= 5) findEgg("logo");
+});
+brandEl.addEventListener("pointerdown", () => {
+  clearTimeout(longPressTimer);
+  longPressTimer = setTimeout(() => findEgg("longpress"), 3000);
+});
+["pointerup", "pointerleave", "pointercancel"].forEach((ev) =>
+  brandEl.addEventListener(ev, () => clearTimeout(longPressTimer))
+);
+// 3. footad
+$("#foot-ad").addEventListener("click", () => findEgg("footad"));
+// 5. f12 는 기존 개발자도구 차단 핸들러에서 호출
+
+// ---- 트리거 11 (어려움): 콘하미 커맨드 ----
+const KONAMI = ["ArrowUp","ArrowUp","ArrowDown","ArrowDown","ArrowLeft","ArrowRight","ArrowLeft","ArrowRight","b","a"];
+let konamiIdx = 0;
+document.addEventListener("keydown", (e) => {
+  const want = KONAMI[konamiIdx];
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (key === want) {
+    konamiIdx++;
+    if (konamiIdx === KONAMI.length) { konamiIdx = 0; findEgg("konami"); }
+  } else {
+    konamiIdx = key === KONAMI[0] ? 1 : 0;
+  }
+});
+
+// ---- 트리거 4 & 12: 마스코트 / 눈송이 클릭 ----
+// 눈·마스코트 레이어는 pointer-events:none 이라 클릭을 가로채지 않는다.
+// 그래서 좌표로만 맞았는지 판정한다 (밑에 있는 버튼은 그대로 정상 클릭됨).
+document.addEventListener("click", (e) => {
+  if (!document.body.classList.contains("pororo")) return;
+  const m = document.querySelector(".pororo-mascot");
+  if (m) {
+    const r = m.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+      findEgg("mascot");
+    }
+  }
+  for (const s of document.querySelectorAll(".pororo-snow")) {
+    const r = s.getBoundingClientRect();
+    if (!r.width) continue;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (Math.hypot(e.clientX - cx, e.clientY - cy) <= Math.max(r.width, 10)) {
+      findEgg("snowflake");
+      break;
+    }
+  }
+});
+
+// ---- 트리거 15 (어려움): 90초 무입력 ----
+let patienceTimer = null;
+function resetPatience() {
+  clearTimeout(patienceTimer);
+  if (hasEgg("patience")) return;
+  patienceTimer = setTimeout(() => findEgg("patience"), 90000);
+}
+["click", "keydown", "pointerdown", "wheel", "touchstart"].forEach((ev) =>
+  document.addEventListener(ev, resetPatience, { passive: true })
+);
+resetPatience();
+
+updateCodexBtn();
 
 // =============================================================
 //  시작: 저장된 세션이 있으면 로그인 상태로 바로 복원

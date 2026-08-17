@@ -23,6 +23,7 @@
       <button id="admin-quick-btn" class="link-btn admin-quick-btn hidden">관리자</button>
       <button id="vote-nav-btn" class="link-btn">모드 투표하기</button>
       <button id="feedback-nav-btn" class="link-btn">피드백</button>
+      <button id="codex-nav-btn" class="link-btn hidden">도감</button>
       <button id="pororo-toggle" class="pororo-toggle" aria-pressed="false">뽀로로 모드 (테무산)</button>
       <button id="btn-back" class="link-btn hidden">뒤로</button>
     </header>
@@ -385,6 +386,24 @@
           <ul class="feedback-list" id="feedback-list"></ul>
         </div>
       </section>
+
+      <!-- ============ 이스터에그 도감 ============ -->
+      <section data-view="codex" class="view hidden">
+        <div class="glass-card">
+          <p class="eyebrow">숨겨진 것들</p>
+          <h2>이스터에그 도감</h2>
+          <p class="muted" id="codex-summary"></p>
+          <p class="muted small">힌트를 보고 직접 찾아보세요. 찾은 것만 이름이 공개돼요.</p>
+        </div>
+
+        <div class="glass-card">
+          <div class="row-between">
+            <h3>목록</h3>
+            <button id="codex-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <ul class="codex-list" id="codex-list"></ul>
+        </div>
+      </section>
     </main>
 
     <div id="toast" class="toast hidden"></div>
@@ -411,7 +430,7 @@
 
     <footer class="foot">
       <p>Made by 정후교</p>
-      <p>광고문의: 정후교(진짜해줌)</p>
+      <p id="foot-ad">광고문의: 정후교(진짜해줌)</p>
     </footer>
 
     <script type="module" src="js/app.js?v=DEV"></script>

@@ -34,6 +34,8 @@ const classDoc = (code) => doc(db, "classes", code);
 const votesDoc = (id) => doc(db, "modeVotes", id);
 const feedbackCol = () => collection(db, "feedback");
 const feedbackDoc = (id) => doc(db, "feedback", id);
+const eggStatsCol = () => collection(db, "eggStats");
+const eggStatsDoc = (id) => doc(db, "eggStats", id);
 
 // ---------- 학생 명단 ----------
 export async function listStudents(code) {
@@ -362,4 +364,21 @@ export async function postFeedback(name, roleTag, message) {
 // 슈퍼 관리자 전용: 부적절한 게시글 삭제 (다른 컬렉션과 동일하게 클라이언트 UI에서만 제한)
 export async function deleteFeedback(id) {
   await deleteDoc(feedbackDoc(id));
+}
+
+// ---------- 이스터에그 도감 (전역 발견자 수) ----------
+// 어떤 이스터에그를 지금까지 몇 명이 찾았는지만 세는 카운터.
+// 누가 찾았는지는 저장하지 않고, 내가 뭘 찾았는지는 기기(localStorage)에만 남는다.
+export async function getEggStats() {
+  const snap = await getDocs(eggStatsCol());
+  const out = {};
+  snap.forEach((d) => { out[d.id] = Number(d.data().count) || 0; });
+  return out;
+}
+
+export async function recordEggFound(eggId) {
+  const ref = eggStatsDoc(eggId);
+  const s = await getDoc(ref);
+  const current = s.exists() ? Number(s.data().count) || 0 : 0;
+  await setDoc(ref, { count: current + 1 }, { merge: true });
 }

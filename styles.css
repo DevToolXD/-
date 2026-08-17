@@ -925,3 +925,42 @@ body.student-mode #app { z-index: 4; }
   .two-col { grid-template-columns: 1fr; }
   .topbar, #app { padding-left: 18px; padding-right: 18px; }
 }
+
+/* =============================================================
+   이스터에그 도감
+   ============================================================= */
+.codex-list {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.codex-item {
+  padding: 14px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg-strong);
+}
+.codex-item.locked { opacity: 0.72; }
+.codex-item.found { border-color: var(--green-500); }
+.codex-name { font-weight: 800; font-size: 0.98rem; }
+.codex-item.locked .codex-name { color: var(--muted); letter-spacing: 0.06em; }
+.codex-diff {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.codex-diff.easy { background: #d7f2e1; color: #17663a; }
+.codex-diff.mid  { background: #fdeecd; color: #8a5a10; }
+.codex-diff.hard { background: #fbd9d9; color: #94211f; }
+@media (prefers-color-scheme: dark) {
+  .codex-diff.easy { background: #17402a; color: #8fe3b3; }
+  .codex-diff.mid  { background: #4a3714; color: #f3cf8a; }
+  .codex-diff.hard { background: #4d1f1f; color: #f0a3a1; }
+}
+.codex-hint { margin: 8px 0 6px; font-size: 0.88rem; color: var(--muted); }
+.codex-count { font-size: 0.78rem; font-weight: 700; color: var(--green-600); }

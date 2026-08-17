@@ -93,6 +93,16 @@ service cloud.firestore {
       allow delete: if true;
     }
 
+    // ---- 이스터에그 도감: 이스터에그별 "몇 명이 찾았는지" 카운터만 ----
+    //  누가 찾았는지는 저장하지 않는다(개인 식별 정보 없음).
+    match /eggStats/{id} {
+      allow get, list: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count is int
+        && request.resource.data.count >= 0;
+      allow delete: if false;
+    }
+
     // ---- 그 외 모든 경로 거부 ----
     match /{document=**} {
       allow read, write: if false;
