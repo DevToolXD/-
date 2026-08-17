@@ -41,7 +41,7 @@
    어려움 5)가 숨어 있습니다. 하나라도 찾으면 **그 순간 상단에 "도감" 탭이
    생깁니다**(잠긴 탭을 미리 보여주는 게 아니라 아예 없다가 생김). 도감에서는
    전체 개수와 내가 찾은 개수, 각 이스터에그를 **지금까지 몇 명이 찾았는지**를
-   볼 수 있고, 아직 못 찾은 것은 이름이 `???`로 가려진 채 힌트만 보입니다.
+   볼 수 있고, 아직 못 찾은 것은 이름만 보이고 힌트가 블러로 가려져 있습니다.
    내가 찾은 목록은 이 기기(localStorage)에만 저장되고, 서버에는 "누가"가 아닌
    **몇 명이 찾았는지 숫자만** 올라갑니다.
 8. **피드백**: 상단의 "피드백" 버튼(또는 학생 사이드바 5번째 항목)에서 앱에
@@ -151,15 +151,16 @@ node tests/e2e_new_features.mjs
 
 ## 크레딧 / 라이선스 고지
 
-화면 효과 중 **테두리를 도는 빛(border beam)** 과 **유리 표면 광택(shine)** 은
-[Magic UI](https://github.com/magicuidesign/magicui) (MIT License, Copyright (c)
-Magic UI) 의 기법을 참고해, React·Tailwind 의존성 없이 이 프로젝트의 순수
-CSS 구조에 맞춰 다시 구현한 것입니다. MIT 라이선스 고지를 위해 여기에
-저작권 표시를 남깁니다.
-
-> 참고로 [React Bits](https://github.com/DavidHDev/react-bits) 도 후보였지만,
-> 이 저장소는 **MIT + Commons Clause** 라서 "포팅한 버전을 포함해 컴포넌트
-> 자체를 재배포하는 것"이 금지됩니다. 이 저장소는 공개 저장소이므로
-> 가져다 넣으면 라이선스 위반이 되어 사용하지 않았습니다.
+- **굴절 유리 렌즈**(커서를 따라다니며 뒤 내용을 굴절시키는 구슬)와
+  **3D 기울어지는 카드**는 [React Bits](https://github.com/DavidHDev/react-bits)
+  (MIT + Commons Clause, Copyright (c) 2026 David Haz)의 FluidGlass /
+  TiltedCard를 포팅한 것입니다. 원본은 React + Three.js/motion 기반이라,
+  같은 시각 효과를 순수 JS(SVG 변위 필터 + CSS 3D)로 다시 구현했습니다.
+  이 라이선스는 **애플리케이션·웹사이트의 일부로 사용하는 것을 명시적으로
+  허용**하며(금지되는 것은 컴포넌트 자체를 라이브러리로 재판매·재배포하는
+  것), 이 저장소는 앱으로서 포함하므로 허용 범위입니다.
+- **테두리를 도는 빛(border beam)** 과 **유리 표면 광택(shine)** 은
+  [Magic UI](https://github.com/magicuidesign/magicui) (MIT License,
+  Copyright (c) Magic UI)의 기법을 참고해 순수 CSS로 다시 구현했습니다.
 
 Made by 정후교

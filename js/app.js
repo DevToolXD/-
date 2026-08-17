@@ -1444,6 +1444,101 @@ function tickNumber(el, to, ms = 700) {
 }
 
 // =============================================================
+//  React Bits 포팅: 굴절 유리 렌즈 (FluidGlass) + 3D 기울어지는 카드 (TiltedCard)
+//  https://github.com/DavidHDev/react-bits — 앱의 일부로 쓰는 것은 라이선스가 허용.
+//  원본은 React + Three.js/motion 이라, 같은 시각 효과를 순수 JS로 구현.
+// =============================================================
+
+// 볼록 렌즈의 굴절을 흉내내는 변위 맵(R=x, G=y 이동량)을 캔버스로 생성
+function makeLensDisplacementMap(size) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+  const img = g.createImageData(size, size);
+  const R = size / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - R, dy = y - R;
+      const d = Math.hypot(dx, dy) / R;
+      let ox = 0, oy = 0;
+      if (d < 1) {
+        // 중앙은 그대로, 가장자리로 갈수록 안쪽 내용을 끌어와 확대되어 보임
+        // (지수를 높이고 세기를 낮춰 글자가 깨지지 않는 부드러운 볼록 렌즈로)
+        const k = Math.pow(d, 3.2) * 0.55;
+        ox = (-dx / R) * k;
+        oy = (-dy / R) * k;
+      }
+      const i = (y * size + x) * 4;
+      img.data[i] = Math.round(127 + ox * 127);
+      img.data[i + 1] = Math.round(127 + oy * 127);
+      img.data[i + 2] = 127;
+      img.data[i + 3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return c.toDataURL();
+}
+
+function setupGlassLens() {
+  const lens = $("#glass-lens");
+  const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  if (!lens || !finePointer || reduceMotion()) return;
+  document.body.classList.add("lens-on");
+
+  // 변위 backdrop-filter(url)는 크로미움 계열에서만 실제로 굴절함.
+  // 그 외 브라우저는 CSS의 블러 유리로 자연스럽게 대체된다.
+  if (window.chrome) {
+    const SIZE = 150;
+    const holder = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    holder.setAttribute("width", "0");
+    holder.setAttribute("height", "0");
+    holder.style.position = "absolute";
+    holder.innerHTML =
+      `<filter id="lens-disp" x="0" y="0" width="100%" height="100%" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">` +
+      `<feImage href="${makeLensDisplacementMap(SIZE)}" x="0" y="0" width="${SIZE}" height="${SIZE}" preserveAspectRatio="none" result="m"/>` +
+      `<feDisplacementMap in="SourceGraphic" in2="m" scale="52" xChannelSelector="R" yChannelSelector="G"/>` +
+      `</filter>`;
+    document.body.appendChild(holder);
+    document.body.classList.add("lens-refract");
+  }
+
+  // 스프링 느낌의 지연 추적 (원본의 motion spring 대응)
+  let tx = -300, ty = -300, cx = -300, cy = -300, raf = null;
+  function tick() {
+    cx += (tx - cx) * 0.16;
+    cy += (ty - cy) * 0.16;
+    lens.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
+    if (Math.abs(tx - cx) + Math.abs(ty - cy) > 0.3) raf = requestAnimationFrame(tick);
+    else raf = null;
+  }
+  document.addEventListener("mousemove", (e) => {
+    tx = e.clientX; ty = e.clientY;
+    lens.classList.add("active");
+    if (!raf) raf = requestAnimationFrame(tick);
+  });
+  document.addEventListener("mouseleave", () => lens.classList.remove("active"));
+}
+setupGlassLens();
+
+// TiltedCard: 카드 위 마우스 위치에 따라 기울어짐 (원본 스펙: ±14도, 1.05배)
+function attachTilt(selector, amplitude = 14, hoverScale = 1.05) {
+  $$(selector).forEach((el) => {
+    el.classList.add("tilt3d");
+    el.addEventListener("pointermove", (e) => {
+      if (reduceMotion() || e.pointerType === "touch") return;
+      const r = el.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      el.style.transform =
+        `perspective(900px) rotateX(${(-py * amplitude).toFixed(2)}deg)` +
+        ` rotateY(${(px * amplitude).toFixed(2)}deg) scale(${hoverScale})`;
+    });
+    el.addEventListener("pointerleave", () => { el.style.transform = ""; });
+  });
+}
+attachTilt(".role-btn");
+
+// =============================================================
 //  9) 이스터에그 + 도감
 //  15개를 숨겨두고, 하나라도 찾으면 그 순간 상단에 "도감" 탭이 생긴다.
 //  (잠긴 탭을 미리 보여주는 게 아니라 아예 없다가 생김)
@@ -1529,10 +1624,10 @@ async function refreshCodex() {
     const n = stats[e.id] || 0;
     return `<li class="codex-item ${got ? "found" : "locked"}">
       <div class="row-between">
-        <span class="codex-name">${got ? escapeHtml(e.name) : "???"}</span>
+        <span class="codex-name">${escapeHtml(e.name)}</span>
         <span class="codex-diff ${diffClass[e.d]}">${e.d}</span>
       </div>
-      <p class="codex-hint">${escapeHtml(e.hint)}</p>
+      <p class="codex-hint${got ? "" : " codex-hint-locked"}" aria-hidden="${got ? "false" : "true"}">${escapeHtml(e.hint)}</p>
       <span class="codex-count">${statsFailed ? "발견자 수를 불러오지 못했어요" : `지금까지 ${n}명이 발견`}</span>
     </li>`;
   }).join("");
