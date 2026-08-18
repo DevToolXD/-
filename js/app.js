@@ -44,6 +44,11 @@ function syncTopbarHeight() {
   document.documentElement.style.setProperty("--topbar-h", h + "px");
 }
 window.addEventListener("resize", syncTopbarHeight);
+// 화면 전환 말고도(학급칩 표시, 버튼 등장, 글꼴 로드 등) 높이가 변할 길이 많다.
+// 상단바 크기를 직접 관찰해서 어떤 경로로 바뀌든 항상 정확하게 유지한다.
+if (window.ResizeObserver) {
+  new ResizeObserver(syncTopbarHeight).observe(document.querySelector(".topbar"));
+}
 
 let viewBeforeVote = null;
 let viewBeforeFeedback = null;
@@ -159,22 +164,6 @@ document.addEventListener("keydown", (e) => {
     findEgg("f12"); // 막아둔 키를 눌러본 사람에게 주는 이스터에그
   }
 });
-
-// =============================================================
-//  마우스 커서 글로우 + 로컬 스포트라이트(볼록 효과)
-// =============================================================
-const glow = $("#cursor-glow");
-document.addEventListener("mousemove", (e) => {
-  glow.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
-  glow.classList.add("active");
-  const el = e.target.closest(".glass-card, .btn");
-  if (el) {
-    const r = el.getBoundingClientRect();
-    el.style.setProperty("--mx", ((e.clientX - r.left) / r.width) * 100 + "%");
-    el.style.setProperty("--my", ((e.clientY - r.top) / r.height) * 100 + "%");
-  }
-});
-document.addEventListener("mouseleave", () => glow.classList.remove("active"));
 
 // =============================================================
 //  소원이 통 안으로 빨려들어가는 전체화면 연출
@@ -379,16 +368,18 @@ function pororoSvg(cls) {
 
 // ---- 매 순간 거슬리게 끼어드는 짝퉁 뽀로로 ----
 const PORORO_NAGS = [
-  "뽀롱뽀롱!",
-  "안녕! 나는 정품 아니야.",
-  "뽀로로 모드 좋아요?",
-  "여기도 뽀로로!",
-  "정품은 투표하러 가세요.",
-  "뽀! 뽀! 뽀!",
-  "나 좀 봐줘!",
-  "이거 진짜 뽀로로 맞아요.",
-  "친구를 도와주는 것을 하다.",
-  "뽀로로가 보고 있다.",
+  "ㅋ 어쩌라고",
+  "못 잡는데 앙기모찌",
+  "거슬리쥬ㅋ",
+  "나 못 끄지롱",
+  "ㅋㅋ 또 나왔쥬",
+  "뽀롱뽀롱 어쩔",
+  "정품 아닌데 어쩔",
+  "꺼봐 꺼봐 ㅋㅋ",
+  "아직 안 껐네ㅋ",
+  "여기도 나 있쥬ㅋ",
+  "짜증나쥬? 앙기모찌",
+  "클릭해도 소용없쥬ㅋ",
 ];
 const PORORO_POPS = ["뽀!", "뽀롱!", "펭!", "뽀뽀!", "뽀롱뽀롱!"];
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -1044,7 +1035,7 @@ async function enterSuperAdmin() {
   showView("super-admin");
   $("#sa-detail").classList.add("hidden");
   saCurrentCode = null;
-  await Promise.all([refreshOverview(), refreshSaVotes()]);
+  await Promise.all([refreshOverview(), refreshSaVotes(), refreshAdInbox()]);
 }
 
 async function refreshOverview() {
@@ -1392,29 +1383,6 @@ $("#student-feedback-submit").addEventListener("click", () =>
 const reduceMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// 버튼을 누른 자리에서 물결이 퍼진다
-document.addEventListener("pointerdown", (e) => {
-  const btn = e.target.closest(".btn, .role-btn, .side-nav-item, .student-page-nav");
-  if (!btn || reduceMotion()) return;
-  const r = btn.getBoundingClientRect();
-  const size = Math.max(r.width, r.height) * 2;
-  const ink = document.createElement("span");
-  ink.className = "ripple-ink";
-  ink.style.width = ink.style.height = size + "px";
-  ink.style.left = e.clientX - r.left + "px";
-  ink.style.top = e.clientY - r.top + "px";
-  // 버튼이 overflow:hidden 이 아니면 물결이 밖으로 새므로 확인 후 넣는다
-  const cs = getComputedStyle(btn);
-  if (cs.position === "static") btn.style.position = "relative";
-  if (cs.overflow !== "hidden") btn.style.overflow = "hidden";
-  btn.appendChild(ink);
-  // 클릭으로 화면이 바뀌면 그 요소가 display:none 이 되어 애니메이션이 멈추고
-  // animationend 가 오지 않는다. 그러면 물결이 DOM에 계속 남으므로 타이머로도 정리.
-  const kill = () => ink.remove();
-  ink.addEventListener("animationend", kill);
-  setTimeout(kill, 800);
-});
-
 // 목록이 그려진 뒤 항목을 순서대로 흐릿→또렷하게 등장시킨다
 function revealChildren(container, step = 45) {
   if (!container) return;
@@ -1451,79 +1419,53 @@ function tickNumber(el, to, ms = 700) {
 //  원본은 React + Three.js/motion 이라, 같은 시각 효과를 순수 JS로 구현.
 // =============================================================
 
-// 볼록 렌즈의 굴절을 흉내내는 변위 맵(R=x, G=y 이동량)을 캔버스로 생성
-function makeLensDisplacementMap(size) {
+// =============================================================
+//  리퀴드 글라스 — UI의 가장자리 굴절 필터
+//  유리판 가장자리를 지나는 빛이 꺾이듯, 카드 테두리 근처의 배경만 밀어낸다.
+//  (커서가 아니라 UI 요소 자체에 걸리는 효과)
+// =============================================================
+(function setupGlassRefraction() {
+  // 변위 맵: 가운데는 중립(127,127), 테두리 쪽으로 갈수록 안쪽으로 밀어냄
+  const N = 128, BAND = 0.16;
   const c = document.createElement("canvas");
-  c.width = c.height = size;
+  c.width = c.height = N;
   const g = c.getContext("2d");
-  const img = g.createImageData(size, size);
-  const R = size / 2;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = x - R, dy = y - R;
-      const d = Math.hypot(dx, dy) / R;
+  const img = g.createImageData(N, N);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const u = x / (N - 1), v = y / (N - 1);
+      const dl = u, dr = 1 - u, dt = v, db = 1 - v;
       let ox = 0, oy = 0;
-      if (d < 1) {
-        // 중앙은 그대로, 가장자리로 갈수록 안쪽 내용을 끌어와 확대되어 보임
-        // (지수를 높이고 세기를 낮춰 글자가 깨지지 않는 부드러운 볼록 렌즈로)
-        const k = Math.pow(d, 3.2) * 0.55;
-        ox = (-dx / R) * k;
-        oy = (-dy / R) * k;
-      }
-      const i = (y * size + x) * 4;
-      img.data[i] = Math.round(127 + ox * 127);
-      img.data[i + 1] = Math.round(127 + oy * 127);
+      if (dl < BAND) ox += Math.pow(1 - dl / BAND, 2);
+      if (dr < BAND) ox -= Math.pow(1 - dr / BAND, 2);
+      if (dt < BAND) oy += Math.pow(1 - dt / BAND, 2);
+      if (db < BAND) oy -= Math.pow(1 - db / BAND, 2);
+      const i = (y * N + x) * 4;
+      img.data[i] = Math.max(0, Math.min(255, Math.round(127 + ox * 110)));
+      img.data[i + 1] = Math.max(0, Math.min(255, Math.round(127 + oy * 110)));
       img.data[i + 2] = 127;
       img.data[i + 3] = 255;
     }
   }
   g.putImageData(img, 0, 0);
-  return c.toDataURL();
-}
 
-function setupGlassLens() {
-  const lens = $("#glass-lens");
-  const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-  if (!lens || !finePointer || reduceMotion()) return;
-  document.body.classList.add("lens-on");
+  const defs = document.querySelector("#glass-defs");
+  if (!defs) return;
+  defs.innerHTML =
+    `<filter id="glass-edge" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">` +
+    `<feImage href="${c.toDataURL()}" preserveAspectRatio="none" result="map"/>` +
+    `<feDisplacementMap in="SourceGraphic" in2="map" scale="16" xChannelSelector="R" yChannelSelector="G"/>` +
+    `</filter>`;
 
-  // 변위 backdrop-filter(url)는 크로미움 계열에서만 실제로 굴절함.
-  // 그 외 브라우저는 CSS의 블러 유리로 자연스럽게 대체된다.
-  if (window.chrome) {
-    const SIZE = 150;
-    const holder = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    holder.setAttribute("width", "0");
-    holder.setAttribute("height", "0");
-    holder.style.position = "absolute";
-    holder.innerHTML =
-      `<filter id="lens-disp" x="0" y="0" width="100%" height="100%" primitiveUnits="userSpaceOnUse" color-interpolation-filters="sRGB">` +
-      `<feImage href="${makeLensDisplacementMap(SIZE)}" x="0" y="0" width="${SIZE}" height="${SIZE}" preserveAspectRatio="none" result="m"/>` +
-      `<feDisplacementMap in="SourceGraphic" in2="m" scale="52" xChannelSelector="R" yChannelSelector="G"/>` +
-      `</filter>`;
-    document.body.appendChild(holder);
-    document.body.classList.add("lens-refract");
+  // backdrop-filter에 SVG 필터를 물릴 수 있는 브라우저에서만 켠다
+  if (CSS.supports("backdrop-filter", "url(#glass-edge)") ||
+      CSS.supports("-webkit-backdrop-filter", "url(#glass-edge)")) {
+    document.body.classList.add("glass-refract");
   }
-
-  // 스프링 느낌의 지연 추적 (원본의 motion spring 대응)
-  let tx = -300, ty = -300, cx = -300, cy = -300, raf = null;
-  function tick() {
-    cx += (tx - cx) * 0.16;
-    cy += (ty - cy) * 0.16;
-    lens.style.transform = `translate3d(${cx}px, ${cy}px, 0)`;
-    if (Math.abs(tx - cx) + Math.abs(ty - cy) > 0.3) raf = requestAnimationFrame(tick);
-    else raf = null;
-  }
-  document.addEventListener("mousemove", (e) => {
-    tx = e.clientX; ty = e.clientY;
-    lens.classList.add("active");
-    if (!raf) raf = requestAnimationFrame(tick);
-  });
-  document.addEventListener("mouseleave", () => lens.classList.remove("active"));
-}
-setupGlassLens();
+})();
 
 // TiltedCard: 카드 위 마우스 위치에 따라 기울어짐 (원본 스펙: ±14도, 1.05배)
-function attachTilt(selector, amplitude = 14, hoverScale = 1.05) {
+function attachTilt(selector, amplitude = 5, hoverScale = 1.012) {
   $$(selector).forEach((el) => {
     el.classList.add("tilt3d");
     el.addEventListener("pointermove", (e) => {
@@ -1539,51 +1481,6 @@ function attachTilt(selector, amplitude = 14, hoverScale = 1.05) {
   });
 }
 attachTilt(".role-btn");
-
-// ClickSpark: 클릭 지점에서 8가닥의 짧은 선이 사방으로 튄다
-document.addEventListener("pointerdown", (e) => {
-  if (reduceMotion() || e.pointerType === "touch") return;
-  for (let i = 0; i < 8; i++) {
-    const sp = document.createElement("span");
-    sp.className = "click-spark";
-    sp.style.left = e.clientX - 1.5 + "px";
-    sp.style.top = e.clientY + "px";
-    sp.style.transform = `rotate(${i * 45}deg)`;
-    document.body.appendChild(sp);
-    const anim = sp.animate(
-      [
-        { transform: `rotate(${i * 45}deg) translateY(6px) scaleY(1)`, opacity: 1 },
-        { transform: `rotate(${i * 45}deg) translateY(22px) scaleY(0.25)`, opacity: 0 },
-      ],
-      { duration: 420, easing: "cubic-bezier(0.2, 0.8, 0.4, 1)" }
-    );
-    const kill = () => sp.remove();
-    anim.onfinish = kill;
-    setTimeout(kill, 600);
-  }
-});
-
-// Magnet: 상단바 버튼이 가까이 온 커서 쪽으로 살짝 끌려온다
-(function setupMagnet() {
-  const topbar = document.querySelector(".topbar");
-  const RANGE = 70, PULL = 0.22;
-  topbar.addEventListener("mousemove", (e) => {
-    if (reduceMotion()) return;
-    topbar.querySelectorAll(".link-btn, .pororo-toggle").forEach((b) => {
-      if (b.classList.contains("hidden")) return;
-      const r = b.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2);
-      const dy = e.clientY - (r.top + r.height / 2);
-      const d = Math.hypot(dx, dy);
-      b.style.transform = d < RANGE
-        ? `translate(${dx * PULL * (1 - d / RANGE)}px, ${dy * PULL * (1 - d / RANGE)}px)`
-        : "";
-    });
-  });
-  topbar.addEventListener("mouseleave", () => {
-    topbar.querySelectorAll(".link-btn, .pororo-toggle").forEach((b) => { b.style.transform = ""; });
-  });
-})();
 
 // Dock 확대: 학생 사이드바 항목이 커서와의 거리에 따라 부풀어오름 (macOS 독의 세로판)
 (function setupDock() {
@@ -1632,6 +1529,68 @@ function blurTextIn(el, step = 34) {
   });
 }
 blurTextIn(document.querySelector(".landing-main h1"));
+
+// =============================================================
+//  광고 문의 (푸터 버튼 → 모달 → 보내기)
+// =============================================================
+let adHideTimer = null;
+function openAdModal(open) {
+  const overlay = $("#ad-modal");
+  clearTimeout(adHideTimer);
+  if (open) {
+    setHint("#ad-hint", "");
+    overlay.classList.remove("hidden");
+    void overlay.offsetWidth;
+    overlay.classList.add("show");
+    $("#ad-text").focus();
+  } else {
+    overlay.classList.remove("show");
+    adHideTimer = setTimeout(() => overlay.classList.add("hidden"), 200);
+  }
+}
+$("#ad-inquiry-btn").addEventListener("click", () => openAdModal(true));
+$("#ad-cancel").addEventListener("click", () => openAdModal(false));
+$("#ad-modal").addEventListener("click", (e) => { if (e.target.id === "ad-modal") openAdModal(false); });
+
+$("#ad-send").addEventListener("click", async () => {
+  const btn = $("#ad-send");
+  const text = $("#ad-text").value;
+  if (!text.trim()) return setHint("#ad-hint", "광고할 내용을 적어주세요.");
+  busy(btn, true, "보내는 중…");
+  try {
+    await data.postAdInquiry($("#ad-name").value, text);
+    $("#ad-text").value = "";
+    $("#ad-name").value = "";
+    openAdModal(false);
+    toast("광고 문의를 보냈어요. 정후교가 확인할게요!");
+  } catch (e) {
+    setHint("#ad-hint", e.message);
+  } finally {
+    busy(btn, false);
+  }
+});
+
+// 전체 관리자 화면의 광고 문의함
+async function refreshAdInbox() {
+  const list = $("#sa-ads-list");
+  list.innerHTML = `<li class="muted small">불러오는 중…</li>`;
+  try {
+    const rows = await data.listAdInquiries();
+    list.innerHTML = rows.length
+      ? rows.map((r) => `<li class="feedback-item">
+          <div class="row-between">
+            <span class="feedback-author">${escapeHtml(r.name || "익명")}</span>
+            <span class="feedback-time">${escapeHtml(formatFeedbackTime(r.createdAt))}</span>
+          </div>
+          <p class="feedback-message">${escapeHtml(r.message || "")}</p>
+        </li>`).join("")
+      : `<li class="muted small">아직 들어온 광고 문의가 없어요.</li>`;
+    if (rows.length) revealChildren(list);
+  } catch (e) {
+    list.innerHTML = `<li class="err">불러오기 실패: ${escapeHtml(e.message)}</li>`;
+  }
+}
+$("#sa-ads-refresh").addEventListener("click", refreshAdInbox);
 
 // =============================================================
 //  9) 이스터에그 + 도감

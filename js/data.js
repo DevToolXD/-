@@ -36,6 +36,7 @@ const feedbackCol = () => collection(db, "feedback");
 const feedbackDoc = (id) => doc(db, "feedback", id);
 const eggStatsCol = () => collection(db, "eggStats");
 const eggStatsDoc = (id) => doc(db, "eggStats", id);
+const adsCol = () => collection(db, "adInquiries");
 
 // ---------- 학생 명단 ----------
 export async function listStudents(code) {
@@ -214,7 +215,7 @@ export async function revealMapping(code) {
 // ---------- 소원 ----------
 // 본인의 소원 등록 (배정 주기당 1회). 학생/선생님(참여 시) 공통으로 사용.
 export async function setMyWish(code, id, text) {
-  const clean = text.trim();
+  const clean = sanitizeText(text, APP.maxWishLength);
   if (!clean) throw new Error("소원을 입력해주세요.");
   if (clean.length > APP.maxWishLength) {
     throw new Error(`소원은 ${APP.maxWishLength}자 이내로 작성해주세요.`);
@@ -348,14 +349,14 @@ export async function listFeedback() {
 }
 
 export async function postFeedback(name, roleTag, message) {
-  const clean = message.trim();
+  const clean = sanitizeText(message, APP.maxFeedbackLength);
   if (!clean) throw new Error("내용을 입력해주세요.");
   if (clean.length > APP.maxFeedbackLength) {
     throw new Error(`피드백은 ${APP.maxFeedbackLength}자 이내로 작성해주세요.`);
   }
   await addDoc(feedbackCol(), {
-    name: (name || "익명").trim().slice(0, APP.maxNameLength) || "익명",
-    roleTag: (roleTag || "").slice(0, 60),
+    name: sanitizeText(name, APP.maxNameLength) || "익명",
+    roleTag: sanitizeText(roleTag, 60),
     message: clean,
     createdAt: serverTimestamp(),
   });
@@ -376,7 +377,42 @@ export async function getEggStats() {
   return out;
 }
 
+// ---------- 보안: 사용자 입력 정화 ----------
+// 제어문자·방향 재정의 문자(RTL override 등 위장에 쓰임)를 제거하고,
+// 공백을 정리한 뒤 길이를 자른다. 화면 출력은 별도로 escapeHtml 처리한다.
+export function sanitizeText(raw, max) {
+  return String(raw ?? "")
+    .replace(/[\u0000-\u001F\u007F]/g, " ")          // 제어문자
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, "") // 제로폭·방향위장
+    .replace(/[ \t]{2,}/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+// ---------- 광고 문의 ----------
+export async function postAdInquiry(name, message) {
+  const cleanMsg = sanitizeText(message, APP.maxAdLength);
+  if (!cleanMsg) throw new Error("광고할 내용을 적어주세요.");
+  if (cleanMsg.length < 5) throw new Error("조금만 더 자세히 적어주세요. (5자 이상)");
+  const cleanName = sanitizeText(name, APP.maxNameLength) || "익명";
+  await addDoc(adsCol(), {
+    name: cleanName,
+    message: cleanMsg,
+    createdAt: serverTimestamp(),
+  });
+}
+
+// 전체 관리자 전용: 광고 문의 열람
+export async function listAdInquiries() {
+  const q = query(adsCol(), orderBy("createdAt", "desc"), limit(100));
+  const snap = await getDocs(q);
+  const out = [];
+  snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+  return out;
+}
+
 export async function recordEggFound(eggId) {
+  if (typeof eggId !== "string" || !/^[a-z0-9]{1,32}$/.test(eggId)) return;
   const ref = eggStatsDoc(eggId);
   const s = await getDoc(ref);
   const current = s.exists() ? Number(s.data().count) || 0 : 0;

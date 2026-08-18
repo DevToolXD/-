@@ -44,7 +44,10 @@
    볼 수 있고, 아직 못 찾은 것은 이름만 보이고 힌트가 블러로 가려져 있습니다.
    내가 찾은 목록은 이 기기(localStorage)에만 저장되고, 서버에는 "누가"가 아닌
    **몇 명이 찾았는지 숫자만** 올라갑니다.
-8. **피드백**: 상단의 "피드백" 버튼(또는 학생 사이드바 5번째 항목)에서 앱에
+8. **광고 문의**: 화면 맨 아래 "광고 문의하기" 버튼을 누르면 무엇을 광고하고
+   싶은지 적어 보낼 수 있습니다(이름은 선택, 비우면 "익명"). 들어온 문의는
+   전체 관리자 패널의 **광고 문의함**에서 확인합니다.
+9. **피드백**: 상단의 "피드백" 버튼(또는 학생 사이드바 5번째 항목)에서 앱에
    대한 의견을 자유롭게 남길 수 있는 **전체 공용 게시판**입니다. 로그인 전
    방문자는 이름을 직접 입력(비우면 "익명")하고, 로그인한 학생/선생님/전체
    관리자는 이름과 소속이 자동으로 붙습니다. 누구나 모든 글을 볼 수 있고,
@@ -63,7 +66,7 @@ js/
   crypto.js            # WebCrypto PBKDF2 해시 (비밀번호/관리자코드)
   assign.js             # 순환 배정 알고리즘 (의존성 없음)
   data.js               # Firestore 읽기/쓰기 + 비즈니스 로직 (학급코드 스코프)
-  app.js                 # UI / 라우팅 / 커서 인터랙션 / 소원 애니메이션
+  app.js                 # UI / 라우팅 / 유리 효과 / 이스터에그 / 광고 문의
 firestore.rules        # ⭐ 보안 규칙 (아래 안내대로 콘솔에 붙여넣기)
 tests/                  # Node 검증 스크립트
 .github/workflows/      # GitHub Pages 자동 배포
@@ -112,7 +115,20 @@ tests/                  # Node 검증 스크립트
 - 문서 필드 형태(허용된 키·길이) 검증
 - `modeVotes`는 `pororo`/`hachuping` 문서만, `count`(음이 아닌 정수) 필드만 허용
 - `feedback`은 `name`,`roleTag`,`message`,`createdAt` 필드만 허용하고 각각 길이 제한(최대 40/60/500자) 적용, 작성 후 수정 불가
-- `eggStats`는 `count`(음이 아닌 정수) 필드만 허용, 삭제 불가
+- `eggStats`·`modeVotes`는 **정확히 +1씩만** 증가 가능 — 숫자를 크게 써넣어
+  발견자 수나 득표수를 부풀릴 수 없음
+- `createdAt`은 **서버 시각만** 허용 — 클라이언트가 시간을 위조할 수 없음
+- 모든 문자열에서 **제어문자 차단**, 문서 필드 개수 상한
+- `adInquiries`는 개별 문서 직접 조회 차단(작성·목록만)
+
+### 앱 쪽에서 추가로 막는 것
+- **CSP 헤더**: 허용한 출처(자신 / gstatic / firestore) 밖의 스크립트 로드와
+  네트워크 접속을 브라우저가 차단. `object-src 'none'`, `base-uri 'none'`으로
+  플러그인 삽입과 base 태그 하이재킹도 차단
+- **입력 정화**: 저장 전에 제어문자와 **방향 재정의·제로폭 문자**(글자를
+  거꾸로 보이게 해 내용을 위장하는 데 쓰임)를 제거
+- **출력 이스케이프**: 화면에 찍는 모든 사용자 입력은 HTML 이스케이프 처리
+- `referrer` 전송 차단
 
 ### ⚠️ 이 스택의 보안 한계
 Firebase Authentication을 쓰지 않는 정적 사이트라서 규칙이 "누가
@@ -151,20 +167,30 @@ node tests/e2e_new_features.mjs
 
 ## 크레딧 / 라이선스 고지
 
-- **굴절 유리 렌즈**(커서를 따라다니며 뒤 내용을 굴절시키는 구슬)와
-  **3D 기울어지는 카드**는 [React Bits](https://github.com/DavidHDev/react-bits)
-  (MIT + Commons Clause, Copyright (c) 2026 David Haz)의 FluidGlass /
-  TiltedCard를 포팅한 것입니다. 원본은 React + Three.js/motion 기반이라,
-  같은 시각 효과를 순수 JS(SVG 변위 필터 + CSS 3D)로 다시 구현했습니다.
-  이 라이선스는 **애플리케이션·웹사이트의 일부로 사용하는 것을 명시적으로
-  허용**하며(금지되는 것은 컴포넌트 자체를 라이브러리로 재판매·재배포하는
-  것), 이 저장소는 앱으로서 포함하므로 허용 범위입니다.
-- **테두리를 도는 빛(border beam)** 과 **유리 표면 광택(shine)** 은
-  [Magic UI](https://github.com/magicuidesign/magicui) (MIT License,
-  Copyright (c) Magic UI)의 기법을 참고해 순수 CSS로 다시 구현했습니다.
-- 이후 두 저장소의 컴포넌트 244종(React Bits 166 + Magic UI 78)을 전수
-  검토해 GradientText·ShinyText·BlurText·Magnet·ClickSpark·Dock 확대·
-  ScrollProgress를 추가로 포팅해 적용했습니다. 모두 위와 같은 방식(순수
-  JS/CSS 재구현 + 앱의 일부로 포함)입니다.
+이 앱은 [React Bits](https://github.com/DavidHDev/react-bits) 166종과
+[Magic UI](https://github.com/magicuidesign/magicui) 78종, 총 244종을 전수
+검토한 뒤 **애플 스타일에 맞는 것만 골라** 포팅했습니다. 원본은 React +
+Three.js/motion/Tailwind 기반이라, 같은 시각 효과를 이 프로젝트의 순수
+JS/CSS로 다시 구현했습니다(프레임워크 의존성 0).
+
+| 효과 | 출처 | 적용 위치 |
+|------|------|-----------|
+| 가장자리 굴절 유리 | React Bits · FluidGlass | 카드·사이드바 **UI 자체** (커서 아님) |
+| 3D 기울기 | React Bits · TiltedCard | 역할 선택 카드 (±5도로 절제) |
+| 정반사 광택 | Magic UI · shine | 유리 카드 윗면 |
+| 흐릿→또렷 등장 | Magic UI · blur-fade | 도감·피드백·광고 문의함 목록 |
+| 숫자 카운터 | Magic UI · number-ticker | 도감 발견 개수 |
+| 글자별 등장 | React Bits · BlurText | 제목, 학생 인사말 |
+| 독 확대 | macOS Dock | 학생 사이드바 |
+| 스크롤 진행 바 | Magic UI · scroll-progress | 화면 상단 |
+
+> 애플다움을 위해 **덜어낸 것들**: 커서를 따라다니던 유리 렌즈·글로우,
+> 무지개 회전 테두리(border beam), 브랜드 그라디언트, 클릭 스파크, 자석
+> 버튼, 머티리얼 물결(ripple). 화려함보다 절제가 애플의 방식이라 뺐습니다.
+
+**라이선스**: React Bits는 MIT + Commons Clause (Copyright (c) 2026 David
+Haz) — **앱·웹사이트의 일부로 쓰는 것은 명시적으로 허용**되며, 금지되는 것은
+컴포넌트 자체를 라이브러리로 재판매·재배포하는 것입니다. Magic UI는 MIT
+(Copyright (c) Magic UI)입니다.
 
 Made by 정후교

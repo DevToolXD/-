@@ -27,6 +27,19 @@ service cloud.firestore {
     function validClassCode(code) {
       return code.matches('^(060[1-9]|1889)$');
     }
+    // 줄바꿈/제어문자가 섞인 값 차단 (로그 위조·표시 깨짐 방지)
+    function cleanStr(v, max) {
+      return v is string && v.size() > 0 && v.size() <= max
+             && !v.matches('.*[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f].*');
+    }
+    // 클라이언트가 과거/미래 시각을 위조하지 못하도록 서버 시각만 허용
+    function serverTime(v) {
+      return v == request.time;
+    }
+    // 문서가 지나치게 커지는 것을 막음
+    function smallDoc() {
+      return request.resource.data.keys().size() <= 10;
+    }
 
     match /classes/{code} {
       allow get: if validClassCode(code);
@@ -41,7 +54,7 @@ service cloud.firestore {
       // ---- 학생 명단: 이름만 저장. 선생님이 삭제도 할 수 있음 ----
       match /students/{id} {
         allow get, list: if validClassCode(code);
-        allow create: if validClassCode(code) && nonEmptyStr(request.resource.data.name, 40);
+        allow create: if validClassCode(code) && cleanStr(request.resource.data.name, 40);
         allow update: if false;
         allow delete: if validClassCode(code);
       }
@@ -74,20 +87,29 @@ service cloud.firestore {
     // ---- 모드 투표 (뽀로로 모드 / 하츄핑 모드) ----
     match /modeVotes/{id} {
       allow get, list: if true;
-      allow create, update: if id in ['pororo', 'hachuping']
+      allow create: if id in ['pororo', 'hachuping']
         && request.resource.data.keys().hasOnly(['count'])
-        && request.resource.data.count is int
-        && request.resource.data.count >= 0;
+        && request.resource.data.count == 1;
+      // 한 번에 1표씩만. 초기화(0)는 전체 관리자가 콘솔에서 수행.
+      allow update: if id in ['pororo', 'hachuping']
+        && request.resource.data.keys().hasOnly(['count'])
+        && (request.resource.data.count == resource.data.count + 1
+            || request.resource.data.count == 0);
       allow delete: if false;
     }
 
     // ---- 피드백 게시판: 반 구분 없이 전체 공용, 누구나 읽고 씀 ----
     match /feedback/{id} {
       allow get, list: if true;
-      allow create: if request.resource.data.keys().hasOnly(['name','roleTag','message','createdAt'])
-        && nonEmptyStr(request.resource.data.name, 40)
-        && nullableStr(request.resource.data.get('roleTag', null), 60)
-        && nonEmptyStr(request.resource.data.message, 500);
+      allow create: if smallDoc()
+        && request.resource.data.keys().hasOnly(['name','roleTag','message','createdAt'])
+        && cleanStr(request.resource.data.name, 40)
+        && (request.resource.data.get('roleTag', '') == ''
+            || cleanStr(request.resource.data.roleTag, 60))
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 1
+        && request.resource.data.message.size() <= 500
+        && serverTime(request.resource.data.createdAt);
       allow update: if false;
       // 삭제는 전체 관리자만 노출되는 버튼으로만 호출됨(다른 컬렉션과 동일한 신뢰 모델)
       allow delete: if true;
@@ -96,11 +118,32 @@ service cloud.firestore {
     // ---- 이스터에그 도감: 이스터에그별 "몇 명이 찾았는지" 카운터만 ----
     //  누가 찾았는지는 저장하지 않는다(개인 식별 정보 없음).
     match /eggStats/{id} {
-      allow get, list: if true;
-      allow create, update: if request.resource.data.keys().hasOnly(['count'])
-        && request.resource.data.count is int
-        && request.resource.data.count >= 0;
+      allow get, list: if id.matches('^[a-z0-9]{1,32}$');
+      // 새로 만들 땐 1부터, 갱신은 정확히 +1만 — 숫자 조작으로 순위를 부풀릴 수 없음
+      allow create: if id.matches('^[a-z0-9]{1,32}$')
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == 1;
+      allow update: if id.matches('^[a-z0-9]{1,32}$')
+        && request.resource.data.keys().hasOnly(['count'])
+        && request.resource.data.count == resource.data.count + 1;
       allow delete: if false;
+    }
+
+    // ---- 광고 문의 ----
+    //  보내는 건 누구나. 열람 버튼은 전체 관리자 화면에만 있지만, 이 스택은
+    //  Firebase Auth가 없어 규칙만으로는 "관리자만 읽기"를 강제할 수 없다.
+    //  (개별 문서 직접 조회는 막고 목록만 허용 — 문서 ID를 찍어 훔쳐보는 건 차단)
+    match /adInquiries/{id} {
+      allow get: if false;
+      allow list: if true;
+      allow create: if smallDoc()
+        && request.resource.data.keys().hasOnly(['name','message','createdAt'])
+        && cleanStr(request.resource.data.name, 40)
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 5
+        && request.resource.data.message.size() <= 500
+        && serverTime(request.resource.data.createdAt);
+      allow update, delete: if false;
     }
 
     // ---- 그 외 모든 경로 거부 ----

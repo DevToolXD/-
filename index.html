@@ -3,12 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 보안: 허용한 출처(자신/gstatic/firestore) 밖의 스크립트·접속을 브라우저가 차단 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://firestore.googleapis.com https://www.gstatic.com; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="referrer" content="no-referrer" />
     <title>마니또</title>
     <link rel="stylesheet" href="styles.css?v=DEV" />
   </head>
   <body>
-    <div id="cursor-glow" aria-hidden="true"></div>
-    <div id="glass-lens" aria-hidden="true"></div>
+    <!-- 커서 장식 없음: 유리는 UI(카드·상단바·사이드바) 자체에 적용한다 -->
+    <svg id="glass-defs" width="0" height="0" aria-hidden="true"></svg>
     <div id="sparkle-layer" class="hidden" aria-hidden="true"></div>
 
     <header class="topbar">
@@ -349,6 +352,14 @@
           </div>
           <button id="sa-votes-reset" class="btn btn-ghost btn-sm">투표 초기화</button>
         </div>
+
+        <div class="glass-card">
+          <div class="row-between">
+            <h3>광고 문의함</h3>
+            <button id="sa-ads-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <ul class="feedback-list" id="sa-ads-list"></ul>
+        </div>
       </section>
 
       <!-- ============ 모드 투표 ============ -->
@@ -410,6 +421,23 @@
     <div id="toast" class="toast hidden"></div>
 
     <!-- ============ 확인 모달 (이중 확인 등에 재사용) ============ -->
+    <!-- ============ 광고 문의 모달 ============ -->
+    <div id="ad-modal" class="modal-overlay hidden">
+      <div class="modal glass-card">
+        <h3>광고 문의</h3>
+        <p class="muted small">어떤 걸 광고하고 싶은지 적어주세요. 정후교가 직접 확인해요.</p>
+        <label><span class="label-text">이름(선택)</span>
+          <input id="ad-name" type="text" maxlength="40" placeholder="비워두면 '익명'" />
+        </label>
+        <textarea id="ad-text" maxlength="500" rows="4" placeholder="예) 우리 반 학급 유튜브 채널을 광고하고 싶어요…"></textarea>
+        <p class="hint" id="ad-hint"></p>
+        <div class="row modal-actions">
+          <button id="ad-cancel" class="btn btn-ghost">닫기</button>
+          <button id="ad-send" class="btn btn-primary">보내기</button>
+        </div>
+      </div>
+    </div>
+
     <div id="confirm-modal" class="modal-overlay hidden">
       <div class="modal glass-card">
         <p id="confirm-modal-text"></p>
@@ -432,6 +460,7 @@
     <footer class="foot">
       <p>Made by 정후교</p>
       <p id="foot-ad">광고문의: 정후교(진짜해줌)</p>
+      <button id="ad-inquiry-btn" class="btn btn-ghost btn-sm foot-ad-btn">광고 문의하기</button>
     </footer>
 
     <script type="module" src="js/app.js?v=DEV"></script>
