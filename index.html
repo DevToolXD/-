@@ -19,7 +19,6 @@
         <span></span><span></span><span></span>
       </button>
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"></span>
         <span id="brand-name" class="brand-name">마니또</span>
         <span id="brand-free-tag" class="chip free-tag hidden">무료</span>
         <span id="class-chip" class="chip class-chip hidden"></span>
@@ -98,8 +97,7 @@
              상단의 줄 3개(햄버거) 버튼으로 열고 닫는다. -->
         <aside id="student-sidebar" class="app-sidebar">
           <div class="app-sidebar-head">
-            <span class="brand-mark" aria-hidden="true"></span>
-            <span class="app-sidebar-title">마니또</span>
+                <span class="app-sidebar-title">마니또</span>
           </div>
           <p class="eyebrow app-sidebar-eyebrow">메뉴</p>
           <nav class="side-nav">
@@ -183,8 +181,10 @@
               </div>
               <div id="scratch-empty" class="muted small hidden">아직 마니또 배정 전이에요. 선생님이 배정하면 여기 표시돼요.</div>
               <div id="scratch-content" class="hidden care-big">
+                <!-- 이름은 DOM 텍스트로 두지 않는다. 아래 캔버스에 픽셀로만
+                     그려서, 긁기 전에는 개발자도구로도 읽을 수 없게 한다. -->
                 <div class="scratch-wrap scratch-wrap-big">
-                  <p class="care-name care-name-big" id="scratch-name"></p>
+                  <canvas id="scratch-name-canvas" class="scratch-name-canvas"></canvas>
                   <canvas id="scratch-canvas" class="scratch-canvas scratch-canvas-big"></canvas>
                 </div>
                 <p class="scratch-hint scratch-hint-big">긁어서 누군지 확인하세요</p>

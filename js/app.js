@@ -708,8 +708,8 @@ async function refreshScratchTarget() {
     }
     empty.classList.add("hidden");
     content.classList.remove("hidden");
-    $("#scratch-name").textContent = target.name;
-    setupScratchCard();
+    // 이름을 DOM에 절대 넣지 않는다. 캔버스 픽셀로만 그린다.
+    setupScratchCard(target.name);
   } catch (e) {
     empty.classList.remove("hidden");
     content.classList.add("hidden");
@@ -719,42 +719,68 @@ async function refreshScratchTarget() {
 $("#scratch-refresh").addEventListener("click", refreshScratchTarget);
 
 // ---- 복권처럼 긁어서 마니또 대상 이름을 확인하는 스크래치 카드 ----
-function setupScratchCard() {
+function setupScratchCard(name) {
   const wrap = $("#scratch-content .scratch-wrap");
-  const nameEl = $("#scratch-name");
+  const nameCanvas = $("#scratch-name-canvas");
   const canvas = $("#scratch-canvas");
-  if (!wrap || !canvas) return;
+  if (!wrap || !canvas || !nameCanvas) return;
   const ctx = canvas.getContext("2d");
+  const nctx = nameCanvas.getContext("2d");
 
   requestAnimationFrame(() => {
-    // 카드 전체(이름 글자만이 아니라 큰 박스 전체)를 긁는 영역으로 삼는다
     const wrapRect = wrap.getBoundingClientRect();
     const w = Math.max(wrapRect.width, 40);
     const h = Math.max(wrapRect.height, 40);
-    canvas.width = w;
-    canvas.height = h;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    // --- 아래층: 이름을 픽셀로 그린다 (DOM 텍스트가 없으므로 검색·복사 불가) ---
+    nameCanvas.width = w * dpr;
+    nameCanvas.height = h * dpr;
+    nameCanvas.style.width = w + "px";
+    nameCanvas.style.height = h + "px";
+    nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    nctx.clearRect(0, 0, w, h);
+    nctx.fillStyle = getComputedStyle(document.body).color;
+    let fs = Math.min(h * 0.42, w * 0.24);
+    nctx.textAlign = "center";
+    nctx.textBaseline = "middle";
+    const fam = '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
+    nctx.font = `700 ${fs}px ${fam}`;
+    while (nctx.measureText(name).width > w * 0.82 && fs > 12) {
+      fs -= 2;
+      nctx.font = `700 ${fs}px ${fam}`;
+    }
+    nctx.fillText(name, w / 2, h / 2);
+
+    // --- 위층: 긁어내는 코팅 ---
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
     canvas.style.width = w + "px";
     canvas.style.height = h + "px";
     canvas.style.top = "0px";
     canvas.style.left = "0px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     canvas.classList.remove("scratched-away");
     canvas.style.opacity = "1";
     canvas.style.pointerEvents = "auto";
 
     ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "#b9c2bd";
+    const grad = ctx.createLinearGradient(0, 0, w, h);
+    grad.addColorStop(0, "#c7c7cc");
+    grad.addColorStop(1, "#aeaeb2");
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#5b6b62";
+    ctx.fillStyle = "rgba(60,60,67,0.55)";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const hintLabel = "긁어서 확인";
-    let fontSize = Math.round(Math.min(w, h) * 0.14);
-    ctx.font = "bold " + fontSize + "px sans-serif";
-    while (ctx.measureText(hintLabel).width > w * 0.82 && fontSize > 10) {
-      fontSize -= 2;
-      ctx.font = "bold " + fontSize + "px sans-serif";
+    const label = "긁어서 확인";
+    let lf = Math.round(Math.min(w, h) * 0.14);
+    ctx.font = `600 ${lf}px ${fam}`;
+    while (ctx.measureText(label).width > w * 0.82 && lf > 10) {
+      lf -= 2;
+      ctx.font = `600 ${lf}px ${fam}`;
     }
-    ctx.fillText(hintLabel, w / 2, h / 2);
+    ctx.fillText(label, w / 2, h / 2);
 
     let scratching = false;
     const brushRadius = Math.max(36, Math.min(w, h) * 0.14);
@@ -769,9 +795,9 @@ function setupScratchCard() {
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     }
     function checkRevealed() {
-      const data = ctx.getImageData(0, 0, w, h).data;
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
       let cleared = 0, total = 0;
-      for (let i = 3; i < data.length; i += 4 * 6) {
+      for (let i = 3; i < data.length; i += 4 * 12) {
         total++;
         if (data[i] === 0) cleared++;
       }
@@ -1551,6 +1577,12 @@ function openAdModal(open) {
 $("#ad-inquiry-btn").addEventListener("click", () => openAdModal(true));
 $("#ad-cancel").addEventListener("click", () => openAdModal(false));
 $("#ad-modal").addEventListener("click", (e) => { if (e.target.id === "ad-modal") openAdModal(false); });
+// Esc로 닫기 (애플 시트의 기본 동작)
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("#ad-modal").classList.contains("hidden")) openAdModal(false);
+  else if (!$("#confirm-modal").classList.contains("hidden")) $("#confirm-modal-cancel").click();
+});
 
 $("#ad-send").addEventListener("click", async () => {
   const btn = $("#ad-send");
@@ -1681,7 +1713,7 @@ async function refreshCodex() {
         <span class="codex-name">${escapeHtml(e.name)}</span>
         <span class="codex-diff ${diffClass[e.d]}">${e.d}</span>
       </div>
-      <p class="codex-hint${got ? "" : " codex-hint-locked"}" aria-hidden="${got ? "false" : "true"}">${escapeHtml(e.hint)}</p>
+      <p class="codex-hint${got ? "" : " codex-hint-locked"}">${got ? escapeHtml(e.hint) : "찾으면 힌트가 열려요"}</p>
       <span class="codex-count">${statsFailed ? "발견자 수를 불러오지 못했어요" : `지금까지 ${n}명이 발견`}</span>
     </li>`;
   }).join("");
