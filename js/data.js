@@ -21,6 +21,7 @@ import {
 import { randomHex, hashSecret } from "./crypto.js?v=DEV";
 import { buildCycle } from "./assign.js?v=DEV";
 import { APP, CLASS_CODES, SUPER_ADMIN } from "../config.js?v=DEV";
+import { screenVoteLabel } from "./moderation.js?v=DEV";
 
 // 주의: Firestore는 "__로 시작하고 끝나는" 문서 ID를 예약어로 취급해 거부합니다.
 export const TEACHER_ID = "_teacher_";
@@ -31,12 +32,17 @@ const studentsCol = (code) => collection(db, "classes", code, "students");
 const secretsDoc = (code, id) => doc(db, "classes", code, "secrets", id);
 const stateDoc = (code) => doc(db, "classes", code, "meta", "state");
 const classDoc = (code) => doc(db, "classes", code);
-const votesDoc = (id) => doc(db, "modeVotes", id);
 const feedbackCol = () => collection(db, "feedback");
 const feedbackDoc = (id) => doc(db, "feedback", id);
 const eggStatsCol = () => collection(db, "eggStats");
 const eggStatsDoc = (id) => doc(db, "eggStats", id);
 const adsCol = () => collection(db, "adInquiries");
+const voteItemsCol = () => collection(db, "voteItems");
+const voteItemDoc = (id) => doc(db, "voteItems", id);
+const voteWinnerDoc = (weekKey) => doc(db, "voteWinners", weekKey);
+const voteWinnersCol = () => collection(db, "voteWinners");
+const reportsCol = (code) => collection(db, "classes", code, "reports");
+const reportDoc = (code, id) => doc(db, "classes", code, "reports", id);
 
 // ---------- 학생 명단 ----------
 export async function listStudents(code) {
@@ -103,6 +109,20 @@ async function ensureSecretDoc(code, id) {
   };
   await setDoc(secretsDoc(code, id), fresh);
   return fresh;
+}
+
+// 선생님이 비밀번호를 초기화하면 hasPassword 만 내려간다. 소원·마니또 배정
+// 같은 나머지 데이터는 손대지 않으므로, 학생이 새 비밀번호를 정하고 다시
+// 로그인하면 이전 상태 그대로 이어서 쓸 수 있다.
+export async function resetStudentPassword(code, id) {
+  await ensureSecretDoc(code, id);
+  await updateDoc(secretsDoc(code, id), { hasPassword: false, pwHash: null, salt: null });
+}
+
+// 로그인 화면에서 "로그인"인지 "계정 만들기"인지 미리 판별하는 용도.
+export async function studentHasPassword(code, id) {
+  const sec = await getSecret(code, id);
+  return !!sec?.hasPassword;
 }
 
 export async function setStudentPassword(code, id, password) {
@@ -307,39 +327,7 @@ export async function superAdminSetCare(code, guardianId, protegeId) {
   });
 }
 
-// ---------- 모드 투표 (뽀로로 모드 / 하츄핑 모드) ----------
-// 투표로 뽑는 뽀로로는 "정품"(한국산)이라는 농담. 상단 토글로 켜는
-// 뽀로로 모드는 짝퉁(테무산)이라 라벨이 다르다.
-export const MODE_CANDIDATES = [
-  { id: "pororo", label: "뽀로로 모드 (한국산)" },
-  { id: "hachuping", label: "하츄핑 모드" },
-];
-const VOTED_KEY_PREFIX = "vote-"; // Firestore 문서 id 접두사 용도는 아니고 참고용
-
-export async function getModeVotes() {
-  const out = [];
-  for (const c of MODE_CANDIDATES) {
-    const s = await getDoc(votesDoc(c.id));
-    out.push({ id: c.id, label: c.label, count: s.exists() ? s.data().count || 0 : 0 });
-  }
-  return out;
-}
-
-export async function voteForMode(candidateId) {
-  if (!MODE_CANDIDATES.some((c) => c.id === candidateId)) throw new Error("올바르지 않은 후보예요.");
-  const s = await getDoc(votesDoc(candidateId));
-  const current = s.exists() ? s.data().count || 0 : 0;
-  await setDoc(votesDoc(candidateId), { count: current + 1 }, { merge: true });
-}
-
-// 슈퍼 관리자 전용: 투표 초기화
-export async function resetModeVotes() {
-  for (const c of MODE_CANDIDATES) {
-    await setDoc(votesDoc(c.id), { count: 0 }, { merge: true });
-  }
-}
-
-// ---------- 피드백 게시판 (반 구분 없이 전체 공용, 최신순) ----------
+// ---------- 버그 제보 게시판 (반 구분 없이 전체 공용, 최신순) ----------
 export async function listFeedback() {
   const q = query(feedbackCol(), orderBy("createdAt", "desc"), limit(100));
   const snap = await getDocs(q);
@@ -348,14 +336,18 @@ export async function listFeedback() {
   return out;
 }
 
+// 광고 문의와 동일하게 이름은 화면에서 입력받지 않고 로그인한 본인 것이 넘어온다.
+// 이름이 비면 저장을 거부한다 — 익명 제보는 만들 수 없다.
 export async function postFeedback(name, roleTag, message) {
   const clean = sanitizeText(message, APP.maxFeedbackLength);
   if (!clean) throw new Error("내용을 입력해주세요.");
   if (clean.length > APP.maxFeedbackLength) {
-    throw new Error(`피드백은 ${APP.maxFeedbackLength}자 이내로 작성해주세요.`);
+    throw new Error(`버그 제보는 ${APP.maxFeedbackLength}자 이내로 작성해주세요.`);
   }
+  const cleanName = sanitizeText(name, APP.maxNameLength);
+  if (!cleanName) throw new Error("학급에 먼저 입장해 주세요.");
   await addDoc(feedbackCol(), {
-    name: sanitizeText(name, APP.maxNameLength) || "익명",
+    name: cleanName,
     roleTag: sanitizeText(roleTag, 60),
     message: clean,
     createdAt: serverTimestamp(),
@@ -375,6 +367,173 @@ export async function getEggStats() {
   const out = {};
   snap.forEach((d) => { out[d.id] = Number(d.data().count) || 0; });
   return out;
+}
+
+// ---------- 모드 투표 (매주 새 라운드 · 항목은 사용자가 직접 추가) ----------
+//  고정 후보(뽀로로/하츄핑)를 없애고, 누구나 "다음에 넣었으면 하는 것"을
+//  직접 올려 투표하는 구조로 바꿨다. 일주일이 한 라운드이고, 한 주가 끝나면
+//  그 주 1위가 "채택"되어 다음에 만들 기능으로 확정된다.
+//
+//  서버(Cloud Functions)가 없는 정적 사이트라서 진짜 주간 크론은 돌릴 수
+//  없다. 대신 누군가 투표 화면을 열 때 지난 주가 아직 마감되지 않았으면
+//  그 자리에서 1위를 확정해 기록한다(지연 마감). 문서 ID가 주차 키라서
+//  여러 명이 동시에 열어도 결과는 하나로 수렴한다.
+
+// 월요일 시작 기준 주차 키. 한국 시간(UTC+9)으로 계산한다.
+export function weekKeyOf(date = new Date()) {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const day = (kst.getUTCDay() + 6) % 7; // 월=0 … 일=6
+  const monday = new Date(kst);
+  monday.setUTCDate(kst.getUTCDate() - day);
+  const y = monday.getUTCFullYear();
+  const m = String(monday.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(monday.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`; // 그 주 월요일 날짜를 키로 쓴다
+}
+
+export function prevWeekKeyOf(date = new Date()) {
+  return weekKeyOf(new Date(date.getTime() - 7 * 24 * 60 * 60 * 1000));
+}
+
+// 이번 주 라벨 (화면 표시용)
+export function weekRangeLabel(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  const mon = new Date(Date.UTC(y, m - 1, d));
+  const sun = new Date(mon.getTime() + 6 * 24 * 60 * 60 * 1000);
+  const f = (dt) => `${dt.getUTCMonth() + 1}월 ${dt.getUTCDate()}일`;
+  return `${f(mon)} ~ ${f(sun)}`;
+}
+
+const MAX_VOTE_LABEL = 40;
+
+// 특정 주차의 투표 항목 (득표순)
+export async function listVoteItems(key = weekKeyOf()) {
+  const snap = await getDocs(query(voteItemsCol(), orderBy("createdAt", "desc"), limit(300)));
+  const out = [];
+  snap.forEach((d) => {
+    const v = d.data();
+    if (v.weekKey === key) {
+      out.push({ id: d.id, label: v.label, count: Number(v.count) || 0, addedBy: v.addedBy || "" });
+    }
+  });
+  out.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ko"));
+  return out;
+}
+
+/**
+ * 투표 항목 추가. 검열에 걸리면 저장하지 않고 선생님 신고함으로 보낸다.
+ * @returns {{ok: true, id: string} | {ok: false, reason: string}}
+ */
+export async function addVoteItem(code, label, addedBy, addedByRole, rosterNames = []) {
+  const clean = sanitizeText(label, MAX_VOTE_LABEL);
+  if (!clean) throw new Error("추가할 항목을 적어주세요.");
+  if (clean.length < 2) throw new Error("조금만 더 자세히 적어주세요. (2자 이상)");
+  const who = sanitizeText(addedBy, APP.maxNameLength);
+  if (!who) throw new Error("학급에 먼저 입장해 주세요.");
+
+  const verdict = screenVoteLabel(clean, rosterNames);
+  if (!verdict.ok) {
+    await reportBlockedAttempt(code, who, addedByRole, clean, verdict.reason);
+    return { ok: false, reason: verdict.reason };
+  }
+
+  const key = weekKeyOf();
+  const existing = await listVoteItems(key);
+  if (existing.some((it) => it.label === clean)) {
+    throw new Error("이미 같은 항목이 올라와 있어요.");
+  }
+  const ref = await addDoc(voteItemsCol(), {
+    label: clean,
+    count: 0,
+    weekKey: key,
+    addedBy: who,
+    addedByRole: sanitizeText(addedByRole, 60),
+    createdAt: serverTimestamp(),
+  });
+  return { ok: true, id: ref.id };
+}
+
+export async function voteForItem(itemId) {
+  const snap = await getDoc(voteItemDoc(itemId));
+  if (!snap.exists()) throw new Error("사라진 항목이에요. 새로고침 해주세요.");
+  const cur = Number(snap.data().count) || 0;
+  await updateDoc(voteItemDoc(itemId), { count: cur + 1 });
+}
+
+// ---------- 주간 마감 / 채택 ----------
+export async function getWinner(key) {
+  const s = await getDoc(voteWinnerDoc(key));
+  return s.exists() ? { weekKey: key, ...s.data() } : null;
+}
+
+// 지난 주가 아직 마감되지 않았으면 1위를 확정해 기록한다.
+// 이미 기록돼 있거나 지난 주 항목이 없으면 아무 것도 하지 않는다.
+export async function settleLastWeek() {
+  const key = prevWeekKeyOf();
+  const already = await getWinner(key);
+  if (already) return already;
+  const items = await listVoteItems(key);
+  if (!items.length) return null;
+  const top = items[0];
+  if (top.count <= 0) return null;
+  const record = { label: top.label, count: top.count, itemId: top.id, decidedAt: serverTimestamp() };
+  await setDoc(voteWinnerDoc(key), record);
+  return { weekKey: key, ...record };
+}
+
+// 지금까지 채택된 것들 (최신 주차부터)
+export async function listWinners() {
+  const snap = await getDocs(voteWinnersCol());
+  const out = [];
+  snap.forEach((d) => out.push({ weekKey: d.id, ...d.data() }));
+  out.sort((a, b) => b.weekKey.localeCompare(a.weekKey));
+  return out;
+}
+
+// 슈퍼 관리자 전용: 이번 주 투표 항목 삭제
+export async function deleteVoteItem(id) {
+  await deleteDoc(voteItemDoc(id));
+}
+
+// ---------- 부적절 시도 신고함 (해당 반 담임선생님에게 전달) ----------
+export async function reportBlockedAttempt(code, name, roleTag, text, reason) {
+  await addDoc(reportsCol(code), {
+    name: sanitizeText(name, APP.maxNameLength) || "이름 없음",
+    roleTag: sanitizeText(roleTag, 60),
+    text: sanitizeText(text, MAX_VOTE_LABEL),
+    reason: sanitizeText(reason, 60),
+    status: "pending",
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function listReports(code) {
+  const snap = await getDocs(query(reportsCol(code), orderBy("createdAt", "desc"), limit(100)));
+  const out = [];
+  snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+  return out;
+}
+
+// 선생님이 "잘못된 판정이었다"고 판단하면 검열을 건너뛰고 그대로 올린다.
+export async function approveReport(code, id) {
+  const snap = await getDoc(reportDoc(code, id));
+  if (!snap.exists()) throw new Error("신고를 찾을 수 없어요.");
+  const r = snap.data();
+  const key = weekKeyOf();
+  await addDoc(voteItemsCol(), {
+    label: sanitizeText(r.text, MAX_VOTE_LABEL),
+    count: 0,
+    weekKey: key,
+    addedBy: r.name || "이름 없음",
+    addedByRole: r.roleTag || "",
+    createdAt: serverTimestamp(),
+  });
+  await updateDoc(reportDoc(code, id), { status: "approved" });
+}
+
+// 선생님이 판정이 맞다고 확인 (신고를 처리 완료로만 표시)
+export async function rejectReport(code, id) {
+  await updateDoc(reportDoc(code, id), { status: "rejected" });
 }
 
 // ---------- 보안: 사용자 입력 정화 ----------

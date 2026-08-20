@@ -2,6 +2,7 @@
 //  UI / 라우팅 / 인터랙션 글루 코드
 // =============================================================
 import * as data from "./data.js?v=DEV";
+import { BLOCK_MESSAGE } from "./moderation.js?v=DEV";
 import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN } from "../config.js?v=DEV";
 
 const $ = (sel) => document.querySelector(sel);
@@ -83,12 +84,15 @@ $("#btn-back").addEventListener("click", async () => {
 //  확인 모달 (재사용) — window.confirm() 대신 리퀴드 글라스 모달 사용
 // =============================================================
 let confirmHideTimer = null;
-function confirmModal(message) {
+// opts.okOnly 를 주면 취소 없이 "확인" 하나만 있는 알림 모달로 쓸 수 있다.
+function confirmModal(message, opts = {}) {
   return new Promise((resolve) => {
     const overlay = $("#confirm-modal");
     $("#confirm-modal-text").textContent = message;
     const okBtn = $("#confirm-modal-ok");
     const cancelBtn = $("#confirm-modal-cancel");
+    okBtn.textContent = opts.okText || "확인";
+    cancelBtn.classList.toggle("hidden", !!opts.okOnly);
     clearTimeout(confirmHideTimer); // 이전 모달이 남긴 지연 hidden 처리 취소 (연속 호출 대비)
     overlay.classList.remove("hidden");
     void overlay.offsetWidth;
@@ -105,7 +109,7 @@ function confirmModal(message) {
     }
     function onOk() { cleanup(true); }
     function onCancel() { cleanup(false); }
-    function onOverlay(e) { if (e.target === overlay) cleanup(false); }
+    function onOverlay(e) { if (e.target === overlay) cleanup(!!opts.okOnly); }
 
     okBtn.addEventListener("click", onOk);
     cancelBtn.addEventListener("click", onCancel);
@@ -166,41 +170,134 @@ document.addEventListener("keydown", (e) => {
 });
 
 // =============================================================
-//  소원이 통 안으로 빨려들어가는 전체화면 연출
+//  소원 등록 연출 (영화 오프닝처럼)
+//  종이에 소원이 적혀 나타남 → 과자 봉지 접듯 양옆을 접고 돌돌 말림 →
+//  휘리릭 날아 소원함 속으로 쏙 빨려들어감.
 // =============================================================
-function wishPortal(text) {
+function wishCeremony(text) {
   return new Promise((resolve) => {
-    const overlay = $("#wish-portal");
-    const textEl = $("#wish-portal-text");
-    const ring = $("#wish-portal-ring");
-    textEl.textContent = text;
-    overlay.classList.remove("hidden");
+    const overlay = $("#wish-cinema");
+    const paper = $("#wish-paper");
+    const left = overlay.querySelector(".wish-paper-left");
+    const right = overlay.querySelector(".wish-paper-right");
+    const jar = $("#wish-jar");
+    $("#wish-paper-text").textContent = text;
+
+    // 움직임을 줄여달라고 설정한 사용자에게는 연출을 생략한다.
+    if (reduceMotion()) {
+      toast("소원함에 추가되었습니다!");
+      resolve();
+      return;
+    }
+
+    // 매번 처음 상태에서 시작하도록 초기화
+    for (const el of [paper, left, right]) el.style.transform = "";
+    paper.style.opacity = "";
+    paper.classList.remove("sealed");
+    overlay.classList.remove("hidden", "jar-in");
     void overlay.offsetWidth;
     overlay.classList.add("show");
-    if (navigator.vibrate) navigator.vibrate([15, 40, 15]);
+    if (navigator.vibrate) navigator.vibrate([12, 60, 12]);
 
-    ring.animate(
+    const E_IN = "cubic-bezier(.22,1,.36,1)";
+    const E_SNAP = "cubic-bezier(.7,-0.2,.3,1.4)";
+
+    // 1) 종이가 저 멀리서 돌며 다가와 정면으로 선다
+    const enter = paper.animate(
       [
-        { transform: "scale(0.3)", opacity: 0 },
-        { transform: "scale(1)", opacity: 0.9, offset: 0.55 },
-        { transform: "scale(0.02)", opacity: 1 },
+        { transform: "translateZ(-900px) rotateX(58deg) rotateZ(-16deg) scale(0.7)", opacity: 0 },
+        { transform: "translateZ(-120px) rotateX(10deg) rotateZ(-3deg) scale(0.98)", opacity: 1, offset: 0.55 },
+        { transform: "translateZ(0) rotateX(0deg) rotateZ(0deg) scale(1)", opacity: 1 },
       ],
-      { duration: 900, easing: "cubic-bezier(.4,0,.2,1)" }
+      { duration: 1100, easing: E_IN, fill: "forwards" }
     );
-    const textAnim = textEl.animate(
-      [
-        { transform: "rotate(0deg) scale(1)", opacity: 1 },
-        { transform: "rotate(180deg) scale(0.7)", opacity: 1, offset: 0.55 },
-        { transform: "rotate(360deg) scale(0)", opacity: 0 },
-      ],
-      { duration: 900, easing: "cubic-bezier(.55,0,.55,1)" }
-    );
-    textAnim.onfinish = () => {
-      overlay.classList.remove("show");
+
+    enter.onfinish = () => {
+      // 소원함이 아래에서 스르륵 나타나 기다린다
+      overlay.classList.add("jar-in");
+
+      // 2) 과자 봉지처럼 왼쪽 날개 → 오른쪽 날개 순으로 접는다
       setTimeout(() => {
-        overlay.classList.add("hidden");
-        resolve();
-      }, 220);
+        // translateZ 로 살짝 앞으로 띄워, 접힌 날개가 가운데 면 위에 덮이게 한다
+        left.animate(
+          [
+            { transform: "rotateY(0deg) translateZ(0px)" },
+            { transform: "rotateY(-172deg) translateZ(3px)" },
+          ],
+          { duration: 260, easing: E_SNAP, fill: "forwards" }
+        );
+      }, 420);
+      setTimeout(() => {
+        right.animate(
+          [
+            { transform: "rotateY(0deg) translateZ(0px)" },
+            { transform: "rotateY(172deg) translateZ(3px)" },
+          ],
+          { duration: 260, easing: E_SNAP, fill: "forwards" }
+        );
+      }, 620);
+
+      // 3) 남은 몸통을 위아래로 돌돌 말아 납작한 띠로 만든다 (휘리릭)
+      setTimeout(() => {
+        paper.classList.add("sealed"); // 안의 글씨는 봉지 속으로
+        paper.animate(
+          [
+            { transform: "scaleY(1) rotateX(0deg)" },
+            { transform: "scaleY(0.52) rotateX(28deg)", offset: 0.45 },
+            { transform: "scaleY(0.16) rotateX(0deg) rotateZ(-8deg)" },
+          ],
+          { duration: 420, easing: E_SNAP, fill: "forwards" }
+        );
+        if (navigator.vibrate) navigator.vibrate(18);
+      }, 880);
+
+      // 4) 접힌 종이가 호를 그리며 날아 소원함 입구로 빨려들어간다
+      setTimeout(() => {
+        const pr = paper.getBoundingClientRect();
+        const jr = jar.getBoundingClientRect();
+        // 소원함 "입구"(뚜껑 아래)를 목표점으로 잡는다
+        const dx = jr.left + jr.width / 2 - (pr.left + pr.width / 2);
+        const dy = jr.top + jr.height * 0.22 - (pr.top + pr.height / 2);
+
+        const fly = paper.animate(
+          [
+            { transform: "scaleY(0.16) rotate(-8deg) scale(1)", opacity: 1 },
+            {
+              transform: `translate(${dx * 0.45}px, ${dy * 0.4 - 130}px) scaleY(0.16) rotate(220deg) scale(0.8)`,
+              opacity: 1,
+              offset: 0.45,
+            },
+            {
+              transform: `translate(${dx}px, ${dy}px) scaleY(0.16) rotate(760deg) scale(0.06)`,
+              opacity: 0.9,
+            },
+          ],
+          { duration: 900, easing: "cubic-bezier(.5,0,.2,1)", fill: "forwards" }
+        );
+
+        fly.onfinish = () => {
+          paper.style.opacity = "0";
+          // 소원함이 꿀꺽 삼키는 반동
+          jar.animate(
+            [
+              { transform: "translateX(-50%) scale(1)" },
+              { transform: "translateX(-50%) scale(1.16, 0.88)", offset: 0.35 },
+              { transform: "translateX(-50%) scale(0.96, 1.06)", offset: 0.65 },
+              { transform: "translateX(-50%) scale(1)" },
+            ],
+            { duration: 520, easing: E_SNAP }
+          );
+          if (navigator.vibrate) navigator.vibrate([25, 30, 45]);
+          setTimeout(() => {
+            overlay.classList.remove("show");
+            setTimeout(() => {
+              overlay.classList.add("hidden");
+              overlay.classList.remove("jar-in");
+              resolve();
+            }, 420);
+          }, 620);
+        };
+      }, 1320);
     };
   });
 }
@@ -518,7 +615,13 @@ async function openStudentLogin() {
   showView("student-login");
   setHint("#student-login-hint", "");
   $("#student-pw").value = "";
+  $("#student-pw2").value = "";
   $("#student-name-input").value = "";
+  signupMode = false;
+  $("#student-pw2-field").classList.add("hidden");
+  $("#student-login-mode-note").textContent = "";
+  $("#student-login-btn").textContent = "로그인";
+  $("#student-login-title").textContent = "학생 로그인";
   const list = $("#student-name-list");
   list.innerHTML = "";
   nameToId = new Map();
@@ -539,6 +642,42 @@ async function openStudentLogin() {
 }
 
 $("#student-pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#student-login-btn").click(); });
+$("#student-pw2").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#student-login-btn").click(); });
+
+// 이름을 고르면 그 학생이 비밀번호를 이미 정했는지 미리 확인해서,
+// "로그인" 화면인지 "계정 만들기" 화면인지 전환한다. 계정 만들기일 때만
+// 비밀번호 확인 칸이 나타나고, 두 칸이 같아야 계정이 만들어진다.
+// (선생님이 비밀번호를 초기화하면 다시 이 계정 만들기 상태로 돌아온다.)
+let signupMode = false;
+async function refreshLoginMode() {
+  const name = $("#student-name-input").value.trim();
+  const id = nameToId.get(name);
+  const pw2Field = $("#student-pw2-field");
+  const note = $("#student-login-mode-note");
+  const btn = $("#student-login-btn");
+  if (!id) {
+    signupMode = false;
+    pw2Field.classList.add("hidden");
+    note.textContent = "";
+    btn.textContent = "로그인";
+    $("#student-login-title").textContent = "학생 로그인";
+    return;
+  }
+  try {
+    const has = await data.studentHasPassword(classCode, id);
+    signupMode = !has;
+  } catch {
+    signupMode = false; // 확인 실패 시엔 일단 로그인으로 두고, 제출 때 다시 판단한다
+  }
+  pw2Field.classList.toggle("hidden", !signupMode);
+  note.textContent = signupMode
+    ? "아직 비밀번호가 없어요. 쓸 비밀번호를 두 번 똑같이 입력하면 계정이 만들어져요."
+    : "";
+  btn.textContent = signupMode ? "계정 만들기" : "로그인";
+  $("#student-login-title").textContent = signupMode ? "계정 만들기" : "학생 로그인";
+}
+$("#student-name-input").addEventListener("change", refreshLoginMode);
+$("#student-name-input").addEventListener("blur", refreshLoginMode);
 
 $("#student-login-btn").addEventListener("click", async () => {
   const name = $("#student-name-input").value.trim();
@@ -547,21 +686,39 @@ $("#student-login-btn").addEventListener("click", async () => {
   const id = nameToId.get(name);
   if (!id) return setHint("#student-login-hint", "등록되지 않은 이름이에요. 목록에서 선택해주세요.");
   if (!pw) return setHint("#student-login-hint", "비밀번호를 입력해주세요.");
+  if (signupMode && $("#student-pw2").value !== pw) {
+    return setHint("#student-login-hint", "두 비밀번호가 서로 달라요. 똑같이 입력해주세요.");
+  }
 
   const btn = $("#student-login-btn");
-  busy(btn, true, "로그인 중…");
+  busy(btn, true, signupMode ? "계정 만드는 중…" : "로그인 중…");
   try {
     let res = await data.verifyStudentPassword(classCode, id, pw);
     if (res === "needSetup") {
+      // 확인 칸을 아직 못 본 상태라면(미리 확인이 실패했던 경우) 여기서
+      // 계정 만들기 화면으로 전환하고, 비밀번호를 몰래 정해버리지 않는다.
+      if (!signupMode) {
+        signupMode = true;
+        $("#student-pw2-field").classList.remove("hidden");
+        $("#student-login-mode-note").textContent =
+          "아직 비밀번호가 없어요. 쓸 비밀번호를 두 번 똑같이 입력하면 계정이 만들어져요.";
+        btn.textContent = "계정 만들기";
+        $("#student-login-title").textContent = "계정 만들기";
+        setHint("#student-login-hint", "비밀번호를 한 번 더 입력해주세요.");
+        $("#student-pw2").focus();
+        return;
+      }
       await data.setStudentPassword(classCode, id, pw);
       res = "ok";
-      toast("비밀번호가 설정되었어요. 다음부터 이 비밀번호로 로그인하세요.");
+      toast("계정이 만들어졌어요. 다음부터 이 비밀번호로 로그인하세요.");
     }
     if (res !== "ok") {
       setHint("#student-login-hint", "비밀번호가 올바르지 않습니다.");
       return;
     }
     student = { id, name };
+    $("#student-pw").value = "";
+    $("#student-pw2").value = "";
     if (id === SUPER_ADMIN.studentId) {
       saveSession({ classCode, role: "superadmin" });
       markSuperAdminAuthed();
@@ -618,8 +775,13 @@ $$(".student-page-nav").forEach((b) =>
     if (visitedStudentPages.size >= 5) findEgg("allpages");
     if (b.dataset.page === "friend") await refreshFriendTarget();
     if (b.dataset.page === "scratch") await refreshScratchTarget();
-    if (b.dataset.page === "vote") await refreshVoteCandidates("#student-vote-candidates", "#student-vote-hint");
-    if (b.dataset.page === "feedback") await refreshFeedbackBoard("#student-feedback-list");
+    if (b.dataset.page === "vote") await refreshStudentVotePage();
+    if (b.dataset.page === "feedback") {
+      renderFeedbackSender(
+        "#student-feedback-sender", "#student-feedback-text", "#student-feedback-submit", currentIdentity()
+      );
+      await refreshFeedbackBoard("#student-feedback-list");
+    }
   })
 );
 
@@ -659,12 +821,18 @@ $("#my-wish-text").addEventListener("input", (e) => {
 $("#my-wish-submit").addEventListener("click", async () => {
   const text = $("#my-wish-text").value;
   if (!text.trim()) return setHint("#my-wish-hint", "소원을 입력해주세요.");
+  // 한 번 등록하면 되돌릴 수 없으므로 반드시 2차 확인을 받는다.
+  const ok = await confirmModal(
+    "이 소원으로 등록할까요?\n\n" + text.trim() +
+    "\n\n한 번 등록하면 다음 마니또 배정 전까지 바꿀 수 없어요."
+  );
+  if (!ok) return;
   const btn = $("#my-wish-submit");
   busy(btn, true, "등록 중…");
   try {
     const clean = await data.setMyWish(classCode, student.id, text);
     busy(btn, false);
-    await wishPortal(clean);
+    await wishCeremony(clean);
     await refreshMyWish();
     toast("소원함에 추가되었습니다!");
   } catch (e) {
@@ -782,6 +950,48 @@ function setupScratchCard(name) {
     }
     ctx.fillText(label, w / 2, h / 2);
 
+    // --- 긁을 때 은박 가루가 튀는 레이어 ---
+    let dust = wrap.querySelector(".scratch-dust");
+    if (!dust) {
+      dust = document.createElement("div");
+      dust.className = "scratch-dust";
+      dust.setAttribute("aria-hidden", "true");
+      wrap.appendChild(dust);
+    }
+    dust.innerHTML = "";
+    let lastDustAt = 0;
+    function spillDust(x, y) {
+      if (reduceMotion()) return;
+      const now = performance.now();
+      if (now - lastDustAt < 26) return; // 너무 촘촘히 만들면 무거워진다
+      lastDustAt = now;
+      const n = 3 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < n; i++) {
+        const bit = document.createElement("span");
+        bit.className = "dust-bit";
+        const size = 3 + Math.random() * 4;
+        bit.style.width = size + "px";
+        bit.style.height = size * (0.6 + Math.random() * 0.7) + "px";
+        bit.style.left = x + "px";
+        bit.style.top = y + "px";
+        bit.style.background = Math.random() < 0.5 ? "#b6b6bb" : "#cfcfd4";
+        dust.appendChild(bit);
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 18 + Math.random() * 46;
+        const anim = bit.animate(
+          [
+            { transform: "translate(0,0) rotate(0deg)", opacity: 0.95 },
+            {
+              transform: `translate(${Math.cos(ang) * dist}px, ${Math.sin(ang) * dist * 0.5 + 26 + Math.random() * 34}px) rotate(${Math.random() * 540 - 270}deg)`,
+              opacity: 0,
+            },
+          ],
+          { duration: 520 + Math.random() * 380, easing: "cubic-bezier(.2,.7,.3,1)" }
+        );
+        anim.onfinish = () => bit.remove();
+      }
+    }
+
     let scratching = false;
     const brushRadius = Math.max(36, Math.min(w, h) * 0.14);
     function scratchAt(x, y) {
@@ -789,6 +999,7 @@ function setupScratchCard(name) {
       ctx.beginPath();
       ctx.arc(x, y, brushRadius, 0, Math.PI * 2);
       ctx.fill();
+      spillDust(x, y);
     }
     function pointFromEvent(e) {
       const r = canvas.getBoundingClientRect();
@@ -862,8 +1073,101 @@ $("#admin-login-btn").addEventListener("click", async () => {
 async function enterAdminHome() {
   showView("admin-home");
   $("#reveal-wrap").classList.add("hidden");
-  await Promise.all([refreshRoster(), refreshAdminWishlist(), refreshTeacherParticipation()]);
+  switchAdminTab("manage");
+  await Promise.all([
+    refreshRoster(),
+    refreshAdminWishlist(),
+    refreshTeacherParticipation(),
+    refreshReports(),
+  ]);
 }
+
+// ---- 선생님 탭: 학급 관리 / 신고함 ----
+function switchAdminTab(name) {
+  $$(".tab-btn[data-admin-tab]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.adminTab === name)
+  );
+  $$(".admin-tab-panel").forEach((p) => {
+    const mine = p.dataset.adminPanel === name;
+    // 선생님 참여 카드는 홀수 인원일 때만 보이므로 자기 hidden 상태를 존중한다
+    if (p.id === "teacher-participate-card") {
+      p.classList.toggle("hidden", !mine || p.dataset.teacherHidden === "1");
+    } else {
+      p.classList.toggle("hidden", !mine);
+    }
+  });
+}
+$$(".tab-btn[data-admin-tab]").forEach((b) =>
+  b.addEventListener("click", () => switchAdminTab(b.dataset.adminTab))
+);
+
+// ---- 부적절 시도 신고함 (검열에 걸린 투표 항목이 여기로 모인다) ----
+async function refreshReports() {
+  const list = $("#admin-reports-list");
+  const badge = $("#admin-reports-badge");
+  list.innerHTML = `<li class="muted small">불러오는 중…</li>`;
+  try {
+    const rows = await data.listReports(classCode);
+    const pending = rows.filter((r) => r.status === "pending");
+    badge.textContent = String(pending.length);
+    badge.classList.toggle("hidden", pending.length === 0);
+
+    list.innerHTML = rows.length
+      ? rows
+          .map((r) => {
+            const done = r.status !== "pending";
+            const actions = done
+              ? `<span class="muted small">${r.status === "approved" ? "다시 추가함" : "차단 유지"}</span>`
+              : `<div class="report-actions">
+                   <button class="btn btn-primary btn-sm report-approve" data-id="${r.id}">다시 추가</button>
+                   <button class="btn btn-ghost btn-sm report-reject" data-id="${r.id}">차단 유지</button>
+                 </div>`;
+            return `<li class="feedback-item report-item ${done ? "done" : ""}" data-id="${r.id}">
+              <div class="row-between">
+                <span class="feedback-author">${escapeHtml(r.name || "이름 없음")}${
+                  r.roleTag ? `<span class="feedback-role"> · ${escapeHtml(r.roleTag)}</span>` : ""
+                }<span class="report-reason">${escapeHtml(r.reason || "부적절")}</span></span>
+                <span class="feedback-time">${escapeHtml(formatFeedbackTime(r.createdAt))}</span>
+              </div>
+              <p class="report-text">${escapeHtml(r.text || "")}</p>
+              ${actions}
+            </li>`;
+          })
+          .join("")
+      : `<li class="muted small">아직 걸러진 항목이 없어요.</li>`;
+    if (rows.length) revealChildren(list);
+
+    list.querySelectorAll(".report-approve").forEach((b) =>
+      b.addEventListener("click", async () => {
+        busy(b, true, "추가 중…");
+        try {
+          await data.approveReport(classCode, b.dataset.id);
+          toast("투표 목록에 추가했어요.");
+          await refreshReports();
+        } catch (e) {
+          toast("추가 실패: " + e.message, false);
+          busy(b, false);
+        }
+      })
+    );
+    list.querySelectorAll(".report-reject").forEach((b) =>
+      b.addEventListener("click", async () => {
+        busy(b, true, "처리 중…");
+        try {
+          await data.rejectReport(classCode, b.dataset.id);
+          await refreshReports();
+        } catch (e) {
+          toast("처리 실패: " + e.message, false);
+          busy(b, false);
+        }
+      })
+    );
+  } catch (e) {
+    list.innerHTML = `<li class="err">불러오기 실패: ${escapeHtml(e.message)}</li>`;
+    badge.classList.add("hidden");
+  }
+}
+$("#admin-reports-refresh").addEventListener("click", refreshReports);
 
 async function refreshRoster() {
   const ul = $("#roster-list");
@@ -874,15 +1178,63 @@ async function refreshRoster() {
     $("#admin-status").textContent =
       `${classLabel(classCode)} · 학생 ${students.length}명 등록됨 · ` +
       (assigned ? "마니또 배정 완료" : "아직 배정 전");
+    // 학생마다 점 세 개(⋯) 메뉴 — 비밀번호 초기화 / 명단에서 삭제
     ul.innerHTML = students
       .map(
         (s) => `<li class="chip chip-removable" data-id="${s.id}">
-          ${escapeHtml(s.name)}<button class="chip-del" data-id="${s.id}" title="삭제">×</button>
+          ${escapeHtml(s.name)}
+          <span class="chip-menu-wrap">
+            <button class="chip-more" data-id="${s.id}" title="${escapeHtml(s.name)} 관리" aria-haspopup="true" aria-expanded="false">⋯</button>
+            <div class="chip-menu hidden" data-menu-for="${s.id}">
+              <button class="chip-menu-reset" data-id="${s.id}">비밀번호 초기화</button>
+              <button class="chip-menu-del danger" data-id="${s.id}">명단에서 삭제</button>
+            </div>
+          </span>
         </li>`
       )
       .join("");
-    $$(".chip-del").forEach((b) =>
+
+    const closeAllChipMenus = () => {
+      ul.querySelectorAll(".chip-menu").forEach((m) => m.classList.add("hidden"));
+      ul.querySelectorAll(".chip-more").forEach((b) => b.setAttribute("aria-expanded", "false"));
+    };
+    ul.querySelectorAll(".chip-more").forEach((b) =>
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const menu = ul.querySelector(`.chip-menu[data-menu-for="${b.dataset.id}"]`);
+        const willOpen = menu.classList.contains("hidden");
+        closeAllChipMenus();
+        if (willOpen) {
+          menu.classList.remove("hidden");
+          b.setAttribute("aria-expanded", "true");
+        }
+      })
+    );
+    document.addEventListener("click", closeAllChipMenus, { once: true });
+
+    ul.querySelectorAll(".chip-menu-reset").forEach((b) =>
       b.addEventListener("click", async () => {
+        closeAllChipMenus();
+        const s = students.find((x) => x.id === b.dataset.id);
+        if (!s) return;
+        const ok = await confirmModal(
+          `${s.name} 학생의 비밀번호를 초기화할까요?\n\n` +
+          "학생이 다음에 로그인할 때 새 비밀번호를 두 번 입력해 다시 정하게 돼요.\n" +
+          "소원과 마니또 배정 같은 기존 데이터는 그대로 남습니다."
+        );
+        if (!ok) return;
+        try {
+          await data.resetStudentPassword(classCode, s.id);
+          toast(`${s.name} 학생의 비밀번호를 초기화했어요.`);
+        } catch (e) {
+          toast("초기화 실패: " + e.message, false);
+        }
+      })
+    );
+
+    ul.querySelectorAll(".chip-menu-del").forEach((b) =>
+      b.addEventListener("click", async () => {
+        closeAllChipMenus();
         const s = students.find((x) => x.id === b.dataset.id);
         if (!s) return;
         if (!(await confirmModal(`${s.name} 학생을 명단에서 삭제할까요?`))) return;
@@ -1006,7 +1358,10 @@ async function refreshTeacherParticipation() {
   const card = $("#teacher-participate-card");
   try {
     const participating = await data.isTeacherParticipating(classCode);
-    card.classList.toggle("hidden", !participating);
+    // 탭 전환이 이 카드를 다시 켜버리지 않도록 "원래 숨김인지"를 표시해 둔다
+    card.dataset.teacherHidden = participating ? "0" : "1";
+    const onManageTab = $('.tab-btn[data-admin-tab="manage"]').classList.contains("active");
+    card.classList.toggle("hidden", !participating || !onManageTab);
     if (!participating) return;
 
     const sec = await data.getSecret(classCode, data.TEACHER_ID);
@@ -1188,34 +1543,44 @@ $("#sa-reassign-btn").addEventListener("click", async (e) => {
   }
 });
 
-// ---- 모드 투표 관리 (슈퍼 관리자) ----
+// ---- 주간 투표 관리 (슈퍼 관리자) ----
 async function refreshSaVotes() {
   const tbody = $("#sa-votes-body");
-  tbody.innerHTML = `<tr><td colspan="2" class="muted small">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="4" class="muted small">불러오는 중…</td></tr>`;
+  const week = data.weekKeyOf();
+  $("#sa-votes-week").textContent =
+    `이번 주 (${data.weekRangeLabel(week)}) 올라온 항목이에요. 일요일 밤에 1위가 채택돼요.`;
   try {
-    const votes = await data.getModeVotes();
-    tbody.innerHTML = votes
-      .map((v) => `<tr><td>${escapeHtml(v.label)}</td><td>${v.count}</td></tr>`)
-      .join("");
+    const items = await data.listVoteItems(week);
+    tbody.innerHTML = items.length
+      ? items
+          .map(
+            (v) => `<tr>
+              <td>${escapeHtml(v.label)}</td>
+              <td>${escapeHtml(v.addedBy || "")}</td>
+              <td>${v.count}</td>
+              <td><button class="btn btn-ghost btn-sm sa-vote-del" data-id="${v.id}">삭제</button></td>
+            </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="4" class="muted small">이번 주엔 아직 올라온 항목이 없어요.</td></tr>`;
+    tbody.querySelectorAll(".sa-vote-del").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (!(await confirmModal("이 투표 항목을 삭제할까요?"))) return;
+        try {
+          await data.deleteVoteItem(b.dataset.id);
+          await refreshSaVotes();
+        } catch (e) {
+          toast("삭제 실패: " + e.message, false);
+        }
+      })
+    );
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="2" class="err">불러오기 실패: ${escapeHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="err">불러오기 실패: ${escapeHtml(e.message)}</td></tr>`;
   }
+  await renderWinners("#sa-winners-list");
 }
 $("#sa-votes-refresh").addEventListener("click", refreshSaVotes);
-$("#sa-votes-reset").addEventListener("click", async (e) => {
-  if (!(await confirmModal("모드 투표 결과를 모두 초기화할까요?"))) return;
-  const btn = e.currentTarget;
-  busy(btn, true, "초기화…");
-  try {
-    await data.resetModeVotes();
-    toast("투표를 초기화했습니다.");
-    await refreshSaVotes();
-  } catch (e) {
-    toast("초기화 실패: " + e.message, false);
-  } finally {
-    busy(btn, false);
-  }
-});
 
 // =============================================================
 //  6) 정후교 전용 "관리자" 바로가기 버튼
@@ -1238,45 +1603,98 @@ $("#admin-quick-btn").addEventListener("click", async () => {
 });
 
 // =============================================================
-//  7) 모드 투표 (뽀로로 모드 / 하츄핑 모드)
+//  7) 주간 투표 (항목을 직접 올리고, 매주 1위가 채택된다)
 // =============================================================
-const VOTED_MODE_KEY = "manito.votedMode";
+//  기기당 이번 주에 1표, 항목 추가도 이번 주에 1개까지만 허용한다.
+//  주차가 바뀌면 두 제한 모두 자동으로 풀린다.
+const VOTED_WEEK_KEY = "manito.votedWeek";
+const ADDED_WEEK_KEY = "manito.addedVoteWeek";
+
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 
 $("#vote-nav-btn").addEventListener("click", async () => {
   viewBeforeVote = currentView;
+  voteBoardIdentity = currentIdentity();
   showView("mode-vote");
-  await refreshVoteCandidates();
+  renderVoteSender("#vote-add-sender", "#vote-add-text", "#vote-add-btn", voteBoardIdentity);
+  await refreshVotePage();
 });
 
-async function refreshVoteCandidates(wrapSel = "#vote-candidates", hintSel = "#vote-hint") {
+// 항목을 올리면 이름이 같이 남는다. 로그인 전에는 올릴 수 없다.
+let voteBoardIdentity = null;
+function renderVoteSender(senderSel, inputSel, btnSel, identity) {
+  const el = $(senderSel);
+  const input = $(inputSel);
+  const btn = $(btnSel);
+  if (!el) return;
+  if (identity) {
+    el.innerHTML = `올리는 사람 <strong>${escapeHtml(identity.name)}</strong>` +
+      `<span class="muted small"> · ${escapeHtml(identity.roleTag)}</span>`;
+    el.classList.remove("err");
+    input.disabled = false;
+    btn.disabled = false;
+  } else {
+    el.textContent = "학급에 먼저 입장해 주세요. 누가 올렸는지 이름이 같이 남아요.";
+    el.classList.add("err");
+    input.disabled = true;
+    btn.disabled = true;
+  }
+}
+
+// 이번 주 후보 + 채택 기록을 함께 그린다.
+async function refreshVotePage(
+  wrapSel = "#vote-candidates",
+  hintSel = "#vote-hint",
+  winnersSel = "#vote-winners",
+  weekSel = "#vote-week-label"
+) {
   const wrap = $(wrapSel);
   wrap.innerHTML = `<p class="muted small">불러오는 중…</p>`;
   setHint(hintSel, "");
-  let alreadyVoted = null;
-  try { alreadyVoted = localStorage.getItem(VOTED_MODE_KEY); } catch {}
+
+  const week = data.weekKeyOf();
+  const weekEl = weekSel ? $(weekSel) : null;
+  if (weekEl) weekEl.textContent = `이번 주 (${data.weekRangeLabel(week)}) · 일요일 밤에 마감돼요`;
+
   try {
-    const votes = await data.getModeVotes();
-    wrap.innerHTML = votes
-      .map(
-        (v) => `<button class="role-btn glass-card vote-item" data-id="${v.id}" ${alreadyVoted ? "disabled" : ""}>
-          <span class="role-title">${escapeHtml(v.label)}</span>
-          <span class="role-desc">${v.count}표</span>
-        </button>`
-      )
-      .join("");
+    // 지난 주가 아직 마감되지 않았다면 이 자리에서 1위를 확정한다.
+    try { await data.settleLastWeek(); } catch {}
+
+    const items = await data.listVoteItems(week);
+    const votedWeek = lsGet(VOTED_WEEK_KEY);
+    const alreadyVoted = votedWeek === week;
+    const top = items.length ? items[0].count : 0;
+
+    wrap.innerHTML = items.length
+      ? items
+          .map(
+            (v) => `<button class="role-btn glass-card vote-item ${v.count > 0 && v.count === top ? "leading" : ""}"
+              data-id="${v.id}" ${alreadyVoted ? "disabled" : ""}>
+              <span class="role-title">${escapeHtml(v.label)}${
+                v.count > 0 && v.count === top ? `<span class="vote-lead-badge">1위</span>` : ""
+              }</span>
+              <span class="role-desc"><span class="vote-count">${v.count}</span>표
+                <span class="vote-added-by">${escapeHtml(v.addedBy || "")} 올림</span></span>
+            </button>`
+          )
+          .join("")
+      : `<p class="muted small">이번 주엔 아직 올라온 항목이 없어요. 위에서 먼저 하나 올려보세요.</p>`;
+
     if (alreadyVoted) {
-      setHint(hintSel, "이미 투표하셨어요. 결과는 위에서 실시간으로 볼 수 있어요.", true);
+      setHint(hintSel, "이번 주 투표는 이미 하셨어요. 다음 주에 다시 투표할 수 있어요.", true);
     }
+
     wrap.querySelectorAll(".vote-item").forEach((b) =>
       b.addEventListener("click", async () => {
         if (alreadyVoted) return;
         busy(b, true, "투표 중…");
         try {
-          await data.voteForMode(b.dataset.id);
-          try { localStorage.setItem(VOTED_MODE_KEY, b.dataset.id); } catch {}
+          await data.voteForItem(b.dataset.id);
+          lsSet(VOTED_WEEK_KEY, week);
           toast("투표 완료! 감사합니다.");
           findEgg("vote");
-          await refreshVoteCandidates(wrapSel, hintSel);
+          await refreshVotePage(wrapSel, hintSel, winnersSel, weekSel);
         } catch (e) {
           toast("투표 실패: " + e.message, false);
           busy(b, false);
@@ -1286,10 +1704,105 @@ async function refreshVoteCandidates(wrapSel = "#vote-candidates", hintSel = "#v
   } catch (e) {
     wrap.innerHTML = `<p class="err">불러오기 실패: ${escapeHtml(e.message)}</p>`;
   }
+
+  await renderWinners(winnersSel);
 }
 
+async function renderWinners(sel) {
+  const list = $(sel);
+  if (!list) return;
+  try {
+    const winners = await data.listWinners();
+    list.innerHTML = winners.length
+      ? winners
+          .map(
+            (w) => `<li>
+              <span class="winner-week">${escapeHtml(data.weekRangeLabel(w.weekKey))}</span>
+              <span class="winner-label">${escapeHtml(w.label)}</span>
+              <span class="winner-count">${Number(w.count) || 0}표로 채택</span>
+            </li>`
+          )
+          .join("")
+      : `<li class="muted small">아직 채택된 항목이 없어요. 이번 주가 첫 라운드예요.</li>`;
+  } catch (e) {
+    list.innerHTML = `<li class="err">불러오기 실패: ${escapeHtml(e.message)}</li>`;
+  }
+}
+
+// ---- 항목 추가 (검열 통과 실패 시 선생님 신고함으로) ----
+async function submitVoteItem(inputSel, hintSel, btnSel, identity, refresh) {
+  const input = $(inputSel);
+  const label = input.value;
+  if (!identity) return setHint(hintSel, "학급에 먼저 입장해 주세요.");
+  if (!label.trim()) return setHint(hintSel, "추가할 항목을 적어주세요.");
+  if (lsGet(ADDED_WEEK_KEY) === data.weekKeyOf()) {
+    return setHint(hintSel, "이번 주엔 이미 항목을 하나 올리셨어요. 다음 주에 또 올릴 수 있어요.");
+  }
+  const btn = $(btnSel);
+  busy(btn, true, "올리는 중…");
+  try {
+    // 같은 반 친구 이름을 넘겨, 특정인을 겨냥한 항목도 걸러지게 한다.
+    let roster = [];
+    try {
+      roster = (await data.listStudents(classCode)).map((x) => x.name);
+    } catch {}
+    const res = await data.addVoteItem(classCode, label, identity.name, identity.roleTag, roster);
+    if (!res.ok) {
+      // 요청받은 문구를 그대로 띄운다.
+      input.value = "";
+      setHint(hintSel, "");
+      await confirmModal(BLOCK_MESSAGE, { okOnly: true, okText: "알겠어요" });
+      return;
+    }
+    input.value = "";
+    setHint(hintSel, "");
+    lsSet(ADDED_WEEK_KEY, data.weekKeyOf());
+    toast("항목을 올렸어요. 이제 투표해보세요!");
+    await refresh();
+  } catch (e) {
+    setHint(hintSel, e.message);
+  } finally {
+    busy(btn, false);
+  }
+}
+
+$("#vote-add-btn").addEventListener("click", () =>
+  submitVoteItem("#vote-add-text", "#vote-add-hint", "#vote-add-btn", voteBoardIdentity, () =>
+    refreshVotePage()
+  )
+);
+$("#vote-add-text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("#vote-add-btn").click();
+});
+
+// ---- 학생 사이드바 안의 투표 페이지 ----
+async function refreshStudentVotePage() {
+  const me = currentIdentity();
+  renderVoteSender("#student-vote-sender", "#student-vote-add-text", "#student-vote-add-btn", me);
+  const chip = $("#student-vote-week");
+  if (chip) chip.textContent = data.weekRangeLabel(data.weekKeyOf());
+  await refreshVotePage(
+    "#student-vote-candidates",
+    "#student-vote-hint",
+    "#student-vote-winners",
+    null
+  );
+}
+$("#student-vote-add-btn").addEventListener("click", () =>
+  submitVoteItem(
+    "#student-vote-add-text",
+    "#student-vote-add-hint",
+    "#student-vote-add-btn",
+    currentIdentity(),
+    refreshStudentVotePage
+  )
+);
+$("#student-vote-add-text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("#student-vote-add-btn").click();
+});
+
 // =============================================================
-//  8) 피드백 게시판 (반 구분 없이 전체 공용, 누구나 남기고 볼 수 있음)
+//  8) 버그 제보 게시판 (반 구분 없이 전체 공용, 로그인한 사람만 제보 가능)
 // =============================================================
 // 현재 로그인 상태에서 이름/역할 태그를 뽑아낸다. 로그인 전(홈/로그인
 // 화면)에는 null을 반환하고, 그때는 사용자가 직접 이름을 입력한다.
@@ -1340,11 +1853,11 @@ async function refreshFeedbackBoard(listSel) {
     const posts = await data.listFeedback();
     list.innerHTML = posts.length
       ? posts.map(feedbackItemHtml).join("")
-      : `<p class="muted small">아직 등록된 피드백이 없어요. 첫 피드백을 남겨보세요!</p>`;
+      : `<p class="muted small">아직 들어온 버그 제보가 없어요.</p>`;
     if (posts.length) revealChildren(list);
     list.querySelectorAll(".feedback-del-btn").forEach((b) =>
       b.addEventListener("click", async () => {
-        if (!(await confirmModal("이 피드백을 삭제할까요?"))) return;
+        if (!(await confirmModal("이 버그 제보를 삭제할까요?"))) return;
         try {
           await data.deleteFeedback(b.dataset.id);
           await refreshFeedbackBoard(listSel);
@@ -1358,22 +1871,21 @@ async function refreshFeedbackBoard(listSel) {
   }
 }
 
-// identity를 인자로 받는다 — currentView는 "피드백" 화면 자체로 이미
+// identity를 인자로 받는다 — currentView는 "버그 제보" 화면 자체로 이미
 // 바뀐 뒤일 수 있어서(별도 뷰로 이동하는 topbar 진입 경로), 제출 시점에
 // currentIdentity()를 다시 부르면 로그인 여부를 잘못 판단하게 된다.
-async function submitFeedback(btnSel, textareaSel, hintSel, listSel, identity, nameInputSel) {
+async function submitFeedback(btnSel, textareaSel, hintSel, listSel, identity) {
   const textEl = $(textareaSel);
   const text = textEl.value;
+  if (!identity) return setHint(hintSel, "학급에 먼저 입장해 주세요.");
   if (!text.trim()) return setHint(hintSel, "내용을 입력해주세요.");
   const btn = $(btnSel);
-  const name = identity ? identity.name : ($(nameInputSel)?.value || "").trim() || "익명";
-  const roleTag = identity ? identity.roleTag : "";
   busy(btn, true, "등록 중…");
   try {
-    await data.postFeedback(name, roleTag, text);
+    await data.postFeedback(identity.name, identity.roleTag, text);
     textEl.value = "";
     setHint(hintSel, "");
-    toast("피드백을 남겼어요. 감사합니다!");
+    toast("버그 제보를 보냈어요. 감사합니다!");
     await refreshFeedbackBoard(listSel);
   } catch (e) {
     setHint(hintSel, e.message);
@@ -1382,18 +1894,38 @@ async function submitFeedback(btnSel, textareaSel, hintSel, listSel, identity, n
   }
 }
 
+// 광고 문의·투표 항목과 동일하게, 이름은 입력받지 않고 로그인한 본인 것이 붙는다.
+function renderFeedbackSender(senderSel, textareaSel, btnSel, identity) {
+  const el = $(senderSel);
+  const textEl = $(textareaSel);
+  const btn = $(btnSel);
+  if (!el) return;
+  if (identity) {
+    el.innerHTML = `제보하는 사람 <strong>${escapeHtml(identity.name)}</strong>` +
+      `<span class="muted small"> · ${escapeHtml(identity.roleTag)}</span>`;
+    el.classList.remove("err");
+    textEl.disabled = false;
+    btn.disabled = false;
+  } else {
+    el.textContent = "학급에 먼저 입장해 주세요. 누가 제보했는지 이름이 같이 남아요.";
+    el.classList.add("err");
+    textEl.disabled = true;
+    btn.disabled = true;
+  }
+}
+
 // topbar에서 진입할 때의 로그인 상태를 스냅샷으로 저장(진입 시점 기준)
 let feedbackBoardIdentity = null;
 $("#feedback-nav-btn").addEventListener("click", async () => {
   viewBeforeFeedback = currentView;
   feedbackBoardIdentity = currentIdentity();
-  $("#feedback-name-field").classList.toggle("hidden", !!feedbackBoardIdentity);
+  renderFeedbackSender("#feedback-sender", "#feedback-text", "#feedback-submit", feedbackBoardIdentity);
   showView("feedback-board");
   await refreshFeedbackBoard("#feedback-list");
 });
 $("#feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#feedback-list"));
 $("#feedback-submit").addEventListener("click", () =>
-  submitFeedback("#feedback-submit", "#feedback-text", "#feedback-hint", "#feedback-list", feedbackBoardIdentity, "#feedback-name")
+  submitFeedback("#feedback-submit", "#feedback-text", "#feedback-hint", "#feedback-list", feedbackBoardIdentity)
 );
 $("#student-feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#student-feedback-list"));
 $("#student-feedback-submit").addEventListener("click", () =>

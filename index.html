@@ -24,8 +24,8 @@
         <span id="class-chip" class="chip class-chip hidden"></span>
       </div>
       <button id="admin-quick-btn" class="link-btn admin-quick-btn hidden">관리자</button>
-      <button id="vote-nav-btn" class="link-btn">모드 투표하기</button>
-      <button id="feedback-nav-btn" class="link-btn">피드백</button>
+      <button id="vote-nav-btn" class="link-btn">투표</button>
+      <button id="feedback-nav-btn" class="link-btn">버그 제보</button>
       <button id="codex-nav-btn" class="link-btn hidden">도감</button>
       <button id="pororo-toggle" class="pororo-toggle" aria-pressed="false">뽀로로 모드 (테무산)</button>
       <button id="btn-back" class="link-btn hidden">뒤로</button>
@@ -78,14 +78,19 @@
       <!-- ============ 학생 로그인 ============ -->
       <section data-view="student-login" class="view hidden">
         <div class="glass-card form-card">
-          <h2>학생 로그인</h2>
+          <h2 id="student-login-title">학생 로그인</h2>
           <label><span class="label-text">이름</span>
             <input id="student-name-input" list="student-name-list" autocomplete="off" placeholder="이름을 선택하거나 입력하세요" />
             <datalist id="student-name-list"></datalist>
           </label>
-          <label><span class="label-text">비밀번호</span>
+          <label><span class="label-text" id="student-pw-label">비밀번호</span>
             <input id="student-pw" type="password" autocomplete="off" placeholder="간단한 비밀번호" />
           </label>
+          <!-- 계정을 처음 만들 때만 나타난다. 두 칸이 정확히 같아야 생성된다. -->
+          <label id="student-pw2-field" class="hidden"><span class="label-text">비밀번호 확인</span>
+            <input id="student-pw2" type="password" autocomplete="off" placeholder="위와 똑같이 한 번 더" />
+          </label>
+          <p class="muted small" id="student-login-mode-note"></p>
           <p class="hint" id="student-login-hint"></p>
           <button id="student-login-btn" class="btn btn-primary btn-lg">로그인</button>
         </div>
@@ -119,7 +124,7 @@
             </button>
             <button class="student-page-nav" data-page="feedback">
               <span class="side-nav-code">5</span>
-              <span class="side-nav-label">피드백</span>
+              <span class="side-nav-label">버그 제보</span>
             </button>
           </nav>
           <div class="app-sidebar-foot">
@@ -193,21 +198,35 @@
 
             <!-- 페이지 4: 투표 (사이드바에 그대로 남은 채로 바로 투표) -->
             <div class="glass-card student-page hidden" data-page="vote">
-              <h3>모드 투표</h3>
-              <p class="muted small">다음에 추가할 테마에 투표하세요. 기기당 1회만 투표할 수 있어요.</p>
+              <div class="row-between">
+                <h3>이번 주 투표</h3>
+                <span class="chip week-chip" id="student-vote-week"></span>
+              </div>
+              <p class="muted small">다음에 넣었으면 하는 걸 직접 올리고 투표하세요. 매주 1위가 실제로 만들어져요.</p>
+              <p class="ad-sender" id="student-vote-sender"></p>
+              <div class="vote-add-row">
+                <input id="student-vote-add-text" type="text" maxlength="40" placeholder="예) 밤하늘 모드" />
+                <button id="student-vote-add-btn" class="btn btn-primary">항목 추가</button>
+              </div>
+              <p class="hint" id="student-vote-add-hint"></p>
               <div class="role-grid" id="student-vote-candidates"></div>
               <p class="hint" id="student-vote-hint"></p>
+              <div class="winners-block">
+                <h4>지금까지 채택된 것</h4>
+                <ul class="winner-list" id="student-vote-winners"></ul>
+              </div>
             </div>
 
-            <!-- 페이지 5: 피드백 게시판 -->
+            <!-- 페이지 5: 버그 제보 게시판 -->
             <div class="glass-card student-page hidden" data-page="feedback">
-              <h3>피드백</h3>
-              <p class="muted small">앱에 대한 의견을 자유롭게 남겨주세요. 누구나 볼 수 있는 게시판이에요.</p>
-              <textarea id="student-feedback-text" maxlength="500" rows="3" placeholder="좋았던 점, 불편했던 점, 추가되면 좋을 기능을 알려주세요…"></textarea>
-              <button id="student-feedback-submit" class="btn btn-primary">피드백 남기기</button>
+              <h3>버그 제보</h3>
+              <p class="muted small">앱이 이상하게 동작하면 알려주세요. 누구나 볼 수 있고, 보낸 사람 이름이 같이 남아요.</p>
+              <p class="ad-sender" id="student-feedback-sender"></p>
+              <textarea id="student-feedback-text" maxlength="500" rows="3" placeholder="어떤 화면에서 무엇을 눌렀을 때 어떻게 됐는지 적어주세요…"></textarea>
+              <button id="student-feedback-submit" class="btn btn-primary">버그 제보하기</button>
               <p class="hint" id="student-feedback-hint"></p>
               <div class="row-between" style="margin-top: 18px;">
-                <h4 style="margin: 0;">모두의 피드백</h4>
+                <h4 style="margin: 0;">들어온 버그 제보</h4>
                 <button id="student-feedback-refresh" class="btn btn-ghost btn-sm">새로고침</button>
               </div>
               <ul class="feedback-list" id="student-feedback-list"></ul>
@@ -234,9 +253,16 @@
         <div class="glass-card">
           <h2>관리자</h2>
           <p class="muted" id="admin-status"></p>
+          <!-- 학급 관리와 신고함을 완전히 분리된 탭으로 둔다 -->
+          <div class="tab-bar" role="tablist">
+            <button class="tab-btn active" data-admin-tab="manage" role="tab">학급 관리</button>
+            <button class="tab-btn" data-admin-tab="reports" role="tab">
+              신고함<span id="admin-reports-badge" class="tab-badge hidden">0</span>
+            </button>
+          </div>
         </div>
 
-        <div class="two-col">
+        <div class="two-col admin-tab-panel" data-admin-panel="manage">
           <div class="glass-card">
             <h3>학생 명단</h3>
             <p class="muted small">한 줄에 한 명씩 입력하세요.</p>
@@ -257,7 +283,7 @@
           </div>
         </div>
 
-        <div class="glass-card">
+        <div class="glass-card admin-tab-panel" data-admin-panel="manage">
           <h3>전체 마니또 관계 공개</h3>
           <p class="muted small">관리자만 볼 수 있어요.</p>
           <button id="reveal-btn" class="btn btn-ghost">전체 공개 보기</button>
@@ -270,7 +296,7 @@
           <p class="hint" id="reveal-hint"></p>
         </div>
 
-        <div id="teacher-participate-card" class="glass-card hidden">
+        <div id="teacher-participate-card" class="glass-card admin-tab-panel hidden" data-admin-panel="manage">
           <h3>선생님도 참여 중이에요</h3>
           <p class="muted small">학생 수가 홀수라서 선생님도 마니또에 자동으로 포함됐어요.</p>
           <div id="teacher-wish-form">
@@ -288,7 +314,7 @@
           </div>
         </div>
 
-        <div class="glass-card">
+        <div class="glass-card admin-tab-panel" data-admin-panel="manage">
           <div class="row-between">
             <h3>우리 반 학생 소원</h3>
             <button id="admin-wishlist-refresh" class="btn btn-ghost btn-sm">새로고침</button>
@@ -300,6 +326,19 @@
               <tbody id="admin-wishlist-body"></tbody>
             </table>
           </div>
+        </div>
+
+        <!-- ============ 탭 2: 부적절 시도 신고함 ============ -->
+        <div class="glass-card admin-tab-panel hidden" data-admin-panel="reports">
+          <div class="row-between">
+            <h3>부적절 시도 신고함</h3>
+            <button id="admin-reports-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <p class="muted small">
+            투표 항목에 성적인 표현·특정인 비하·욕설이 들어가 자동으로 막힌 기록이에요.
+            잘못 걸린 것이라면 "다시 추가"를 눌러 그대로 투표 목록에 올릴 수 있어요.
+          </p>
+          <ul class="feedback-list" id="admin-reports-list"></ul>
         </div>
       </section>
 
@@ -340,17 +379,18 @@
 
         <div class="glass-card">
           <div class="row-between">
-            <h3>모드 투표 관리</h3>
+            <h3>이번 주 투표 관리</h3>
             <button id="sa-votes-refresh" class="btn btn-ghost btn-sm">새로고침</button>
           </div>
-          <p class="muted small">학생들이 다음에 추가할 모드에 투표한 결과예요.</p>
+          <p class="muted small" id="sa-votes-week"></p>
           <div class="table-wrap">
             <table class="tbl">
-              <thead><tr><th>후보</th><th>득표수</th></tr></thead>
+              <thead><tr><th>항목</th><th>올린 사람</th><th>득표수</th><th></th></tr></thead>
               <tbody id="sa-votes-body"></tbody>
             </table>
           </div>
-          <button id="sa-votes-reset" class="btn btn-ghost btn-sm">투표 초기화</button>
+          <h4 class="sa-winners-title">채택 기록</h4>
+          <ul class="winner-list" id="sa-winners-list"></ul>
         </div>
 
         <div class="glass-card">
@@ -362,37 +402,59 @@
         </div>
       </section>
 
-      <!-- ============ 모드 투표 ============ -->
+      <!-- ============ 주간 투표 ============ -->
       <section data-view="mode-vote" class="view hidden">
-        <div class="glass-card">
-          <p class="eyebrow">다음에 추가할 모드</p>
-          <h2>모드 투표하기</h2>
-          <p class="muted">마음에 드는 모드에 투표해주세요. 한 기기당 한 번만 투표할 수 있어요.</p>
+        <div class="glass-card beam">
+          <p class="eyebrow">매주 1위는 실제로 만들어져요</p>
+          <h2>이번 주 투표</h2>
+          <p class="muted">
+            다음에 넣었으면 하는 걸 직접 올리고, 마음에 드는 항목에 투표하세요.
+            일주일이 한 라운드이고, 한 주가 끝나면 그 주 1위가 채택돼요.
+          </p>
+          <p class="muted small" id="vote-week-label"></p>
         </div>
+
+        <div class="glass-card">
+          <h3>항목 추가하기</h3>
+          <p class="muted small">
+            부적절한 항목(성적인 표현·특정인 비하·욕설)은 자동으로 걸러지고 선생님께 전달돼요.
+          </p>
+          <p class="ad-sender" id="vote-add-sender"></p>
+          <div class="vote-add-row">
+            <input id="vote-add-text" type="text" maxlength="40" placeholder="예) 밤하늘 모드" />
+            <button id="vote-add-btn" class="btn btn-primary">항목 추가</button>
+          </div>
+          <p class="hint" id="vote-add-hint"></p>
+        </div>
+
         <div class="role-grid" id="vote-candidates"></div>
         <p class="hint" id="vote-hint"></p>
+
+        <div class="glass-card">
+          <h3>지금까지 채택된 것</h3>
+          <ul class="winner-list" id="vote-winners"></ul>
+        </div>
       </section>
 
-      <!-- ============ 피드백 게시판 (반 구분 없이 전체 공용) ============ -->
+      <!-- ============ 버그 제보 게시판 (반 구분 없이 전체 공용) ============ -->
       <section data-view="feedback-board" class="view hidden">
         <div class="glass-card">
-          <p class="eyebrow">누구나 남기고 볼 수 있어요</p>
-          <h2>피드백</h2>
-          <p class="muted">앱에 대한 의견이나 건의사항을 자유롭게 남겨주세요. 게시판처럼 누구나 볼 수 있어요.</p>
+          <p class="eyebrow">이상하게 동작하는 걸 찾았다면</p>
+          <h2>버그 제보</h2>
+          <p class="muted">앱이 잘못 동작하는 걸 발견하면 알려주세요. 게시판처럼 누구나 볼 수 있어요.</p>
         </div>
 
         <div class="glass-card">
-          <label id="feedback-name-field"><span class="label-text">이름(선택)</span>
-            <input id="feedback-name" type="text" maxlength="40" placeholder="비워두면 '익명'으로 남아요" />
-          </label>
-          <textarea id="feedback-text" maxlength="500" rows="3" placeholder="이 앱에서 좋았던 점, 불편했던 점, 추가되면 좋을 기능을 알려주세요…"></textarea>
-          <button id="feedback-submit" class="btn btn-primary">피드백 남기기</button>
+          <!-- 광고 문의와 똑같이, 이름은 입력받지 않고 로그인한 본인 이름이 붙는다 -->
+          <p class="ad-sender" id="feedback-sender"></p>
+          <textarea id="feedback-text" maxlength="500" rows="3" placeholder="어떤 화면에서 무엇을 눌렀을 때 어떻게 됐는지 적어주세요…"></textarea>
+          <button id="feedback-submit" class="btn btn-primary">버그 제보하기</button>
           <p class="hint" id="feedback-hint"></p>
         </div>
 
         <div class="glass-card">
           <div class="row-between">
-            <h3>모두의 피드백</h3>
+            <h3>들어온 버그 제보</h3>
             <button id="feedback-refresh" class="btn btn-ghost btn-sm">새로고침</button>
           </div>
           <ul class="feedback-list" id="feedback-list"></ul>
@@ -448,10 +510,30 @@
       </div>
     </div>
 
-    <!-- ============ 소원이 통 안으로 빨려들어가는 전체화면 연출 ============ -->
-    <div id="wish-portal" class="wish-portal hidden" aria-hidden="true">
-      <div id="wish-portal-ring" class="wish-portal-ring"></div>
-      <p id="wish-portal-text" class="wish-portal-text"></p>
+    <!-- ============ 소원 등록 연출 (영화 오프닝처럼) ============
+         종이에 소원이 적혀 나타남 → 과자 봉지처럼 양옆을 접고 돌돌 말아
+         휘리릭 접힘 → 날아서 소원함 속으로 쏙 빨려들어감. -->
+    <div id="wish-cinema" class="wish-cinema hidden" aria-hidden="true">
+      <div class="wish-cinema-rays"></div>
+      <div class="wish-stage">
+        <div id="wish-paper" class="wish-paper">
+          <div class="wish-paper-panel wish-paper-left"></div>
+          <div class="wish-paper-panel wish-paper-center">
+            <p class="wish-paper-title">나의 소원</p>
+            <p id="wish-paper-text" class="wish-paper-text"></p>
+          </div>
+          <div class="wish-paper-panel wish-paper-right"></div>
+        </div>
+      </div>
+      <div id="wish-jar" class="wish-jar" aria-hidden="true">
+        <svg viewBox="0 0 120 140" width="120" height="140" aria-hidden="true">
+          <path class="jar-body" d="M22 44 h76 a10 10 0 0 1 10 10 v66 a14 14 0 0 1-14 14 H26 a14 14 0 0 1-14-14 V54 a10 10 0 0 1 10-10 z" />
+          <rect class="jar-neck" x="34" y="26" width="52" height="20" rx="7" />
+          <rect class="jar-lid" x="28" y="14" width="64" height="16" rx="8" />
+          <path class="jar-shine" d="M32 60 q6 30 2 54" />
+        </svg>
+        <span class="wish-jar-label">소원함</span>
+      </div>
     </div>
 
     <!-- ============ 뽀로로 모드: 내리는 눈 + 펭귄 마스코트 레이어 ============ -->

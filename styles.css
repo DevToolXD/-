@@ -498,43 +498,135 @@ input:focus, select:focus, textarea:focus {
 .modal-actions .btn { margin-top: 0; flex: 1; }
 
 /* =============================================================
-   소원이 통 안으로 빨려들어가는 전체화면 연출
+   소원 등록 연출 — 종이가 접혀 소원함으로 빨려들어가는 오프닝
    ============================================================= */
-.wish-portal {
+.wish-cinema {
   position: fixed;
   inset: 0;
   z-index: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(6, 18, 11, 0.6);
-  backdrop-filter: blur(0px);
+  display: grid;
+  place-items: center;
+  background: radial-gradient(120% 90% at 50% 42%, #1b1b20 0%, #060608 70%);
   opacity: 0;
-  transition: opacity 0.28s ease, backdrop-filter 0.28s ease;
+  transition: opacity 0.4s ease;
   overflow: hidden;
+  perspective: 1400px;
 }
-.wish-portal.show { opacity: 1; backdrop-filter: blur(14px); }
-.wish-portal.hidden { display: none; }
-.wish-portal-ring {
+.wish-cinema.show { opacity: 1; }
+.wish-cinema.hidden { display: none; }
+
+/* 뒤에서 천천히 도는 빛줄기 — 영화 오프닝의 그 느낌 */
+.wish-cinema-rays {
   position: absolute;
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--green-500), transparent 70%);
-  filter: blur(8px);
+  width: 200vmax;
+  height: 200vmax;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg, rgba(255, 255, 255, 0.07) 6deg, transparent 12deg,
+    transparent 40deg, rgba(255, 255, 255, 0.05) 46deg, transparent 52deg,
+    transparent 90deg, rgba(255, 255, 255, 0.08) 96deg, transparent 102deg,
+    transparent 150deg, rgba(255, 255, 255, 0.05) 156deg, transparent 162deg,
+    transparent 210deg, rgba(255, 255, 255, 0.07) 216deg, transparent 222deg,
+    transparent 280deg, rgba(255, 255, 255, 0.06) 286deg, transparent 292deg,
+    transparent 360deg
+  );
+  animation: wish-rays 26s linear infinite;
+  opacity: 0.9;
+  pointer-events: none;
 }
-.wish-portal-text {
+@keyframes wish-rays { to { transform: rotate(360deg); } }
+
+.wish-stage {
   position: relative;
-  z-index: 1;
-  max-width: min(640px, 80vw);
-  text-align: center;
-  font-size: clamp(1.1rem, 3vw, 1.6rem);
-  font-weight: 800;
-  color: #fff;
-  padding: 0 24px;
+  transform-style: preserve-3d;
+}
+
+/* 종이: 가운데 면 + 좌우로 접히는 날개 */
+.wish-paper {
+  display: flex;
+  align-items: stretch;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 30px 50px rgba(0, 0, 0, 0.55));
+  will-change: transform, opacity;
+}
+.wish-paper-panel {
+  background: linear-gradient(160deg, #fffdf6 0%, #f4efe2 100%);
+  /* 뒷면도 보여야 날개가 앞으로 덮이는 게 눈에 보인다 */
+  backface-visibility: visible;
+}
+.wish-paper-center {
+  width: min(430px, 74vw);
+  min-height: min(300px, 46vh);
+  padding: 30px 30px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  /* 종이 결 */
+  background-image:
+    linear-gradient(160deg, #fffdf6 0%, #f4efe2 100%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.035) 0 1px, transparent 1px 30px);
+  background-blend-mode: normal, multiply;
+}
+.wish-paper-left,
+.wish-paper-right {
+  width: min(96px, 17vw);
+  background: linear-gradient(160deg, #f7f2e6 0%, #ece5d5 100%);
+}
+.wish-paper-left {
+  transform-origin: right center;
+  box-shadow: inset -10px 0 18px -14px rgba(0, 0, 0, 0.5);
+}
+.wish-paper-right {
+  transform-origin: left center;
+  box-shadow: inset 10px 0 18px -14px rgba(0, 0, 0, 0.5);
+}
+/* 접힌 뒤 종이 안의 글씨는 봉지 안으로 들어간 것처럼 사라진다 */
+.wish-paper-center > * { transition: opacity 0.22s ease; }
+.wish-paper.sealed .wish-paper-center > * { opacity: 0; }
+
+.wish-paper-title {
+  margin: 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a08e6a;
+  font-weight: 700;
+}
+.wish-paper-text {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.6vw, 1.5rem);
+  line-height: 1.5;
+  font-weight: 600;
+  color: #2a2419;
   white-space: pre-wrap;
   word-break: break-word;
-  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* 소원함: 화면 아래쪽에서 종이를 받아먹는다 */
+.wish-jar {
+  position: absolute;
+  left: 50%;
+  bottom: 6vh;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.wish-cinema.jar-in .wish-jar { opacity: 1; }
+.wish-jar .jar-body {
+  fill: rgba(190, 225, 255, 0.16);
+  stroke: rgba(220, 240, 255, 0.75);
+  stroke-width: 3;
+}
+.wish-jar .jar-neck { fill: rgba(190, 225, 255, 0.2); stroke: rgba(220, 240, 255, 0.7); stroke-width: 3; }
+.wish-jar .jar-lid { fill: rgba(220, 240, 255, 0.85); }
+.wish-jar .jar-shine { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 4; stroke-linecap: round; }
+.wish-jar-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 /* =============================================================
@@ -1110,3 +1202,193 @@ body.student-mode .topbar { z-index: 50; }
 .ad-sender.err { color: var(--err); }
 #ad-text:disabled { opacity: 0.5; }
 #ad-modal h3 { margin-top: 0; }
+
+/* =============================================================
+   선생님 탭 (학급 관리 / 신고함)
+   ============================================================= */
+.tab-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--glass-tint-strong, rgba(120, 120, 128, 0.12));
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 8px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.tab-btn:hover { color: var(--ink); }
+.tab-btn.active {
+  background: var(--card-bg, rgba(255, 255, 255, 0.9));
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.tab-badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--err);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+}
+.tab-badge.hidden { display: none; }
+
+/* =============================================================
+   투표: 항목 추가 · 주차 표시 · 채택 기록
+   ============================================================= */
+.vote-add-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.vote-add-row input {
+  flex: 1 1 220px;
+  margin: 0;
+}
+.vote-add-row .btn { margin-top: 0; white-space: nowrap; }
+.week-chip { font-variant-numeric: tabular-nums; }
+
+.vote-item .vote-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.vote-item .vote-added-by {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.vote-item.leading {
+  outline: 2px solid var(--green-500);
+  outline-offset: -2px;
+}
+.vote-lead-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--green-500);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.winners-block { margin-top: 22px; }
+.winner-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.winner-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--glass-tint, rgba(120, 120, 128, 0.08));
+}
+.winner-week { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.winner-label { font-weight: 700; }
+.winner-count { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
+.sa-winners-title { margin: 22px 0 0; }
+
+/* 신고함 항목 */
+.report-item .report-reason {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--err);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.report-item .report-text {
+  margin: 8px 0;
+  font-weight: 600;
+  word-break: break-word;
+}
+.report-item.done { opacity: 0.5; }
+.report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.report-actions .btn { margin-top: 0; }
+
+/* 학생 목록 칩의 점 세 개 메뉴 */
+.chip-menu-wrap { position: relative; display: inline-flex; }
+.chip-more {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  opacity: 0.6;
+}
+.chip-more:hover { opacity: 1; background: rgba(120, 120, 128, 0.2); }
+.chip-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 168px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.96));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  border: 0.5px solid rgba(120, 120, 128, 0.3);
+  display: grid;
+  gap: 2px;
+}
+.chip-menu.hidden { display: none; }
+.chip-menu button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.chip-menu button:hover { background: rgba(120, 120, 128, 0.14); }
+.chip-menu button.danger { color: var(--err); }
+
+/* 긁을 때 날리는 가루 */
+.scratch-dust {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 3;
+}
+.dust-bit {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 1.5px;
+  background: #b6b6bb;
+  will-change: transform, opacity;
+}
+
+/* 확인 모달: 소원 등록 2차 확인처럼 여러 줄 문구를 그대로 보여준다 */
+#confirm-modal-text { white-space: pre-wrap; word-break: break-word; }

@@ -75,6 +75,27 @@ service cloud.firestore {
         allow delete: if validClassCode(code);
       }
 
+      // ---- 신고함: 검열에 걸린 투표 항목 시도가 담임선생님께 쌓인다 ----
+      //  선생님 화면에서만 목록을 보여주지만, Auth 없는 이 스택에서는
+      //  규칙만으로 "선생님만 읽기"를 강제할 수 없다(광고 문의와 동일한 한계).
+      match /reports/{id} {
+        allow get: if false;
+        allow list: if validClassCode(code);
+        allow create: if validClassCode(code) && smallDoc()
+          && request.resource.data.keys().hasOnly(['name','roleTag','text','reason','status','createdAt'])
+          && cleanStr(request.resource.data.name, 40)
+          && nullableStr(request.resource.data.get('roleTag', ''), 60)
+          && cleanStr(request.resource.data.text, 40)
+          && cleanStr(request.resource.data.reason, 60)
+          && request.resource.data.status == 'pending'
+          && serverTime(request.resource.data.createdAt);
+        // 선생님의 처리 결과만 바꿀 수 있고, 신고 내용 자체는 고칠 수 없다.
+        allow update: if validClassCode(code)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status in ['approved', 'rejected'];
+        allow delete: if false;
+      }
+
       // ---- meta: 관리자 코드 검증 이력이 필요없는 배정 상태만 ----
       match /meta/{docId} {
         allow get: if validClassCode(code) && docId == 'state';
@@ -84,18 +105,45 @@ service cloud.firestore {
       }
     }
 
-    // ---- 모드 투표 (뽀로로 모드 / 하츄핑 모드) ----
-    match /modeVotes/{id} {
+    // ---- 주간 투표 항목 (사용자가 직접 올린다) ----
+    //  검열은 클라이언트에서 하고 걸린 건 reports 로 보낸다. 규칙 단에서
+    //  뜻까지 판단할 수는 없으므로 여기서는 형태(길이·필드·+1 증가)만 강제한다.
+    match /voteItems/{id} {
       allow get, list: if true;
-      allow create: if id in ['pororo', 'hachuping']
-        && request.resource.data.keys().hasOnly(['count'])
-        && request.resource.data.count == 1;
-      // 한 번에 1표씩만. 초기화(0)는 전체 관리자가 콘솔에서 수행.
-      allow update: if id in ['pororo', 'hachuping']
-        && request.resource.data.keys().hasOnly(['count'])
-        && (request.resource.data.count == resource.data.count + 1
-            || request.resource.data.count == 0);
-      allow delete: if false;
+      allow create: if smallDoc()
+        && request.resource.data.keys().hasOnly(
+             ['label','count','weekKey','addedBy','addedByRole','createdAt'])
+        && cleanStr(request.resource.data.label, 40)
+        && request.resource.data.label.size() >= 2
+        && request.resource.data.count == 0
+        && request.resource.data.weekKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && cleanStr(request.resource.data.addedBy, 40)
+        && nullableStr(request.resource.data.get('addedByRole', ''), 60)
+        && serverTime(request.resource.data.createdAt);
+      // 투표는 정확히 +1 씩만. 다른 필드는 손댈 수 없다.
+      allow update: if request.resource.data.keys().hasOnly(
+             ['label','count','weekKey','addedBy','addedByRole','createdAt'])
+        && request.resource.data.count == resource.data.count + 1
+        && request.resource.data.label == resource.data.label
+        && request.resource.data.weekKey == resource.data.weekKey
+        && request.resource.data.addedBy == resource.data.addedBy;
+      // 삭제 버튼은 전체 관리자 화면에만 있음 (다른 컬렉션과 같은 신뢰 모델)
+      allow delete: if true;
+    }
+
+    // ---- 주간 채택 결과: 문서 ID가 그 주 월요일 날짜라 한 주에 하나뿐 ----
+    //  여러 명이 동시에 마감을 시도해도 같은 문서에 같은 결과가 들어간다.
+    //  한 번 정해진 결과는 고칠 수 없다(수정·삭제 금지).
+    match /voteWinners/{weekKey} {
+      allow get, list: if true;
+      allow create: if weekKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && smallDoc()
+        && request.resource.data.keys().hasOnly(['label','count','itemId','decidedAt'])
+        && cleanStr(request.resource.data.label, 40)
+        && request.resource.data.count is int
+        && request.resource.data.count > 0
+        && serverTime(request.resource.data.decidedAt);
+      allow update, delete: if false;
     }
 
     // ---- 피드백 게시판: 반 구분 없이 전체 공용, 누구나 읽고 씀 ----

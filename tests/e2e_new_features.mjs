@@ -4,7 +4,7 @@
 //   - 소원 다시 쓰기 요청
 //   - 학생 수가 홀수/짝수일 때 선생님 자동 참여 여부
 //   - 슈퍼 관리자의 몰래 배정(다음 마니또 수동 지정)
-//   - 모드 투표 (뽀로로 모드 / 하츄핑 모드)
+//   - 주간 투표 (항목 추가 → 투표) + 부적절 시도 신고함
 //  classes/1889(테스트 모드)에서 태그된 학생만 만들고 지운다.
 //    실행:  node tests/e2e_new_features.mjs
 // =============================================================
@@ -43,6 +43,15 @@ const patch = (path, obj, mask) => {
 const get = (path) => curlJSON([`${BASE}/${path}`]);
 const del = (path) => curlJSON(["-X", "DELETE", `${BASE}/${path}`]);
 const list = async (path) => (await get(path)).documents || [];
+// 자동 ID 문서 생성 (POST). 반환값에 name(문서 경로)이 들어온다.
+const post = (path, obj) =>
+  curlJSON(["-X", "POST", `${BASE}/${path}`, "-H", "Content-Type: application/json", "-d", JSON.stringify(toFields(obj))]);
+// list() 는 원본 문서를 주므로 필드를 쓰려면 이걸로 편다
+const listFields = async (path) => (await list(path)).map(fromFields);
+// 규칙이 아직 게시되지 않았는지 판별 (새 컬렉션은 기본 거부에 걸린다)
+const denied = (res) => !!res.error && /PERMISSION_DENIED|Missing or insufficient/i.test(JSON.stringify(res.error));
+let skipped = 0;
+const skip = (why) => { skipped++; console.log("  ⏭️ ", why); };
 
 const TAG = "NF" + randomHex(3) + "_";
 const created = { students: [], secrets: [] };
@@ -163,22 +172,71 @@ async function main() {
     check("수동 지정한 대상으로 caringForId가 바뀜", sec.caringForId === c.id && sec.caringForName === c.name);
   }
 
-  console.log("\n[6] 모드 투표 (뽀로로 모드 / 하츄핑 모드)");
+  console.log("\n[6] 주간 투표 (항목 직접 추가 → 투표 → 마감)");
   {
-    const before = await get(`modeVotes/pororo`);
-    // Firestore REST는 integerValue를 "1" 같은 문자열로 돌려준다. Number()로
-    // 감싸지 않으면 "1" + 1 === "11" 로 문자열이 이어붙고, 그 값이 stringValue로
-    // 전송돼 보안 규칙의 count is int 검사에 걸려 403이 난다.
-    const beforeCount = before.error ? 0 : Number(fromFields(before).count || 0);
-    const next = beforeCount + 1;
-    await patch(`modeVotes/pororo`, { count: next }, ["count"]);
-    const after = fromFields(await get(`modeVotes/pororo`));
-    check("뽀로로 모드 투표 수가 1 증가", Number(after.count) === next);
-    // 정리: 되돌리기 (원래 없었다면 삭제, 있었다면 원래 값으로)
-    if (before.error) await del(`modeVotes/pororo`);
-    else await patch(`modeVotes/pororo`, { count: beforeCount }, ["count"]);
-    const restored = await get(`modeVotes/pororo`);
-    check("투표 데이터 원상복구", before.error ? !!restored.error : Number(fromFields(restored).count) === beforeCount);
+    // 이번 주 키 (월요일 시작, 한국 시간 기준) — js/data.js 의 weekKeyOf 와 같은 규칙
+    const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const day = (kst.getUTCDay() + 6) % 7;
+    const mon = new Date(kst);
+    mon.setUTCDate(kst.getUTCDate() - day);
+    const weekKey = `${mon.getUTCFullYear()}-${String(mon.getUTCMonth() + 1).padStart(2, "0")}-${String(mon.getUTCDate()).padStart(2, "0")}`;
+    check("주차 키 형식", /^\d{4}-\d{2}-\d{2}$/.test(weekKey));
+
+    const label = TAG + "테마";
+    const created2 = await post(`voteItems`, {
+      label, count: 0, weekKey, addedBy: TAG + "학생", addedByRole: "학생 · 테스트",
+      createdAt: new Date(),
+    });
+    const itemId = created2.name ? created2.name.split("/").pop() : null;
+    if (!itemId && denied(created2)) {
+      skip("voteItems 규칙이 아직 게시되지 않았습니다 → Firebase 콘솔에 firestore.rules 를 게시하세요");
+    } else {
+      check("투표 항목이 만들어짐", !!itemId);
+    }
+
+    if (itemId) {
+      const got = fromFields(await get(`voteItems/${itemId}`));
+      check("라벨·주차가 그대로 저장됨", got.label === label && got.weekKey === weekKey);
+      check("처음 득표수는 0", Number(got.count) === 0);
+
+      // 투표 = count +1
+      await patch(`voteItems/${itemId}`, { count: 1 }, ["count"]);
+      const voted = fromFields(await get(`voteItems/${itemId}`));
+      check("투표하면 득표수가 1 증가", Number(voted.count) === 1);
+
+      // 목록에서 이번 주 항목만 골라낼 수 있는지 (앱이 하는 방식과 동일)
+      const all = await listFields(`voteItems`);
+      const thisWeek = all.filter((d) => d.weekKey === weekKey);
+      check("이번 주 목록에 포함됨", thisWeek.some((d) => d.label === label));
+
+      // 정리
+      await del(`voteItems/${itemId}`);
+      const gone = await get(`voteItems/${itemId}`);
+      check("투표 항목 정리 완료", !!gone.error);
+    }
+  }
+
+  console.log("\n[6-2] 부적절 시도 신고가 해당 반으로 전달되는지");
+  {
+    const created3 = await post(`classes/${TEST_CODE}/reports`, {
+      name: TAG + "학생", roleTag: "학생 · 테스트", text: TAG + "차단된항목",
+      reason: "욕설·비속어", status: "pending", createdAt: new Date(),
+    });
+    const rid = created3.name ? created3.name.split("/").pop() : null;
+    if (!rid && denied(created3)) {
+      skip("reports 규칙이 아직 게시되지 않았습니다 → Firebase 콘솔에 firestore.rules 를 게시하세요");
+    } else {
+      check("신고 문서 생성", !!rid);
+    }
+    if (rid) {
+      const rows = await listFields(`classes/${TEST_CODE}/reports`);
+      check("선생님이 신고 목록을 읽을 수 있음", rows.some((r) => r.text === TAG + "차단된항목"));
+      await patch(`classes/${TEST_CODE}/reports/${rid}`, { status: "approved" }, ["status"]);
+      const after = fromFields(await get(`classes/${TEST_CODE}/reports/${rid}`));
+      check("선생님이 상태를 approved 로 바꿀 수 있음", after.status === "approved");
+      await del(`classes/${TEST_CODE}/reports/${rid}`);
+      check("신고 정리 완료", !!(await get(`classes/${TEST_CODE}/reports/${rid}`)).error);
+    }
   }
 
   console.log("\n[7] 정리(cleanup)");
@@ -189,7 +247,9 @@ async function main() {
     check("테스트로 만든 학생 문서 정리 완료", left.length === 0);
   }
 
-  console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
+  console.log(`
+결과: ${pass} 통과 / ${fail} 실패${skipped ? ` / ${skipped} 건너뜀(규칙 미게시)` : ""}
+`);
   process.exit(fail ? 1 : 0);
 }
 
