@@ -1,5 +1,5 @@
 // =============================================================
-//  투표 항목 검열 (성적인 표현 · 특정인 비하 · 욕설)
+//  투표 항목 검열 (부적절한 항목 거르기)
 // =============================================================
 //  이 필터는 "완벽한 판정기"가 아니라 "1차 거름망"입니다. 일부러 띄어쓰기나
 //  특수문자를 끼워 넣어 우회하는 시도까지 잡으려고 정규화를 거치지만,
@@ -113,7 +113,7 @@ function findHit(haystack, list) {
  */
 export function screenVoteLabel(raw, rosterNames = []) {
   const text = String(raw ?? "").trim();
-  if (!text) return { ok: false, reason: "빈 내용", matched: "" };
+  if (!text) return { ok: false, reason: BLOCK_REASON, matched: "" };
 
   const norm = normalizeForScreening(text);
   const cho = toChosung(text.replace(/\s/g, ""));
@@ -124,28 +124,27 @@ export function screenVoteLabel(raw, rosterNames = []) {
     findHit(cho, list.filter((w) => /^[ㄱ-ㅎ]+$/.test(w))) ||
     findHit(jamo, list.filter((w) => /[가-힣]/.test(w)).map(toJamo));
 
-  let hit = hitAny(SEXUAL);
-  if (hit) return { ok: false, reason: "성적인 표현", matched: hit };
-
-  hit = hitAny(PROFANITY);
-  if (hit) return { ok: false, reason: "욕설·비속어", matched: hit };
-
-  hit = hitAny(DEGRADING);
-  if (hit) return { ok: false, reason: "비하 표현", matched: hit };
+  // 화면에는 어떤 종류인지 구분해서 보여주지 않고 "부적절한 항목"으로만 알린다.
+  // (선생님은 원문이 그대로 보이므로 직접 판단할 수 있다)
+  let hit = hitAny(SEXUAL) || hitAny(PROFANITY) || hitAny(DEGRADING);
+  if (hit) return { ok: false, reason: BLOCK_REASON, matched: hit };
 
   // 반 친구 이름 + 부정 표현이 함께 있으면 특정인을 겨냥한 것으로 본다.
   for (const name of rosterNames) {
     const n = normalizeForScreening(name);
     if (n.length < 2 || !norm.includes(n)) continue;
     const near = findHit(norm, NEGATIVE_NEAR_NAME);
-    if (near) return { ok: false, reason: `특정인(${name}) 비하`, matched: near };
+    if (near) return { ok: false, reason: BLOCK_REASON, matched: near };
     // 이름만 덜렁 적은 항목도 사람을 대상으로 한 투표라 막는다.
     if (norm.replace(n, "").length <= 2) {
-      return { ok: false, reason: `특정인(${name}) 지목`, matched: name };
+      return { ok: false, reason: BLOCK_REASON, matched: name };
     }
   }
   return { ok: true, reason: "", matched: "" };
 }
+
+// 걸린 이유는 종류를 나누지 않고 하나로만 표기한다
+export const BLOCK_REASON = "부적절한 항목";
 
 // 검열에 걸렸을 때 화면에 그대로 띄우는 문구 (요청받은 문장 그대로)
 export const BLOCK_MESSAGE =

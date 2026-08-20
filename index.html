@@ -12,7 +12,6 @@
   <body>
     <!-- 커서 장식 없음: 유리는 UI(카드·상단바·사이드바) 자체에 적용한다 -->
     <svg id="glass-defs" width="0" height="0" aria-hidden="true"></svg>
-    <div id="sparkle-layer" class="hidden" aria-hidden="true"></div>
 
     <header class="topbar">
       <button id="sidebar-toggle" class="hamburger hidden" aria-label="메뉴 열기/닫기" aria-expanded="true">
@@ -335,7 +334,7 @@
             <button id="admin-reports-refresh" class="btn btn-ghost btn-sm">새로고침</button>
           </div>
           <p class="muted small">
-            투표 항목에 성적인 표현·특정인 비하·욕설이 들어가 자동으로 막힌 기록이에요.
+            부적절한 투표 항목으로 판단되어 자동으로 막힌 기록이에요.
             잘못 걸린 것이라면 "다시 추가"를 눌러 그대로 투표 목록에 올릴 수 있어요.
           </p>
           <ul class="feedback-list" id="admin-reports-list"></ul>
@@ -416,9 +415,7 @@
 
         <div class="glass-card">
           <h3>항목 추가하기</h3>
-          <p class="muted small">
-            부적절한 항목(성적인 표현·특정인 비하·욕설)은 자동으로 걸러지고 선생님께 전달돼요.
-          </p>
+          <p class="muted small">부적절한 항목은 자동으로 걸러지고 선생님께 전달돼요.</p>
           <p class="ad-sender" id="vote-add-sender"></p>
           <div class="vote-add-row">
             <input id="vote-add-text" type="text" maxlength="40" placeholder="예) 밤하늘 모드" />
@@ -487,7 +484,7 @@
     <div id="ad-modal" class="modal-overlay hidden">
       <div class="modal glass-card">
         <h3>광고 문의</h3>
-        <p class="muted small">어떤 걸 광고하고 싶은지 적어주세요. 정후교가 직접 확인해요.</p>
+        <p class="muted small">어떤 걸 광고하고 싶은지 적어주세요.</p>
         <!-- 이름은 따로 입력받지 않는다. 지금 로그인한 본인 이름이 그대로
              붙어서 나가므로 익명 문의는 존재할 수 없다. -->
         <p class="ad-sender" id="ad-sender"></p>

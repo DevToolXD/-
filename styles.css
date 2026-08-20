@@ -659,27 +659,6 @@ body.special-0603 #special-badge {
   animation: shimmer-text 4s linear infinite;
 }
 
-#sparkle-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-}
-.sparkle {
-  position: absolute;
-  width: var(--sz, 4px);
-  height: var(--sz, 4px);
-  border-radius: 50%;
-  background: var(--green-500);
-  opacity: 0;
-  box-shadow: 0 0 6px 1px rgba(10, 132, 255, 0.6);
-  animation: sparkle-twinkle 3.4s ease-in-out infinite;
-}
-@keyframes sparkle-twinkle {
-  0%, 100% { opacity: 0; transform: scale(0.4); }
-  50% { opacity: 1; transform: scale(1); }
-}
-
 /* =============================================================
    뽀로로 모드 (테무산) — 어디서 본 듯한 짝퉁 펭귄 겨울 테마
    (쨍한 원색 배색 + 굵은 검은 테두리 스티커 카드 + 삐뚤빼뚤 마스코트)
@@ -967,16 +946,24 @@ body.student-mode #app { z-index: 4; }
    열면 왼쪽 위 햄버거가 가려져 다시 눌러 닫을 수 없었다. 학생 화면에서는
    상단바를 사이드바 위로 올려 햄버거가 항상 눌리게 한다. */
 body.student-mode .topbar { z-index: 50; }
-/* 대신 상단바가 사이드바 첫 항목을 덮지 않도록, 좁은 화면에서는 메뉴를
-   상단바 높이(--topbar-h, JS가 실제 높이를 넣어줌)만큼 아래에서 시작한다. */
-@media (max-width: 900px) {
-  body.student-mode .app-sidebar { padding-top: calc(var(--topbar-h, 84px) + 12px); }
-}
+/* 좁은 화면에서 사이드바는 상단바와 겹치지 않고 그 "아래"에서 시작한다.
+   예전에는 사이드바 패널이 화면 맨 위(y=0)부터 깔려서 상단바 버튼들이
+   사이드바 위에 떠 있는 것처럼 보였고, 사이드바를 연 채로 위쪽을 누르면
+   실제로는 상단바의 "로그아웃"이 눌려 갑자기 로그아웃되곤 했다.
+   이제 사이드바도 백드롭도 상단바 높이(--topbar-h)만큼 내려서 시작하므로,
+   상단 버튼들은 항상 온전히 보이고 잘못 눌릴 일도 없다. */
 @media (max-width: 900px) {
   body.student-mode { padding-left: 0; }
+  body.student-mode .app-sidebar {
+    top: var(--topbar-h, 84px);
+    padding-top: 16px;
+  }
+  body.student-mode .sidebar-backdrop { top: var(--topbar-h, 84px); }
   body.student-mode:not(.sidebar-collapsed) .sidebar-backdrop { display: block; }
   /* 오버레이 모드에서는 반투명 유리 뒤로 본문 글자가 비쳐 보이므로 불투명하게 */
   .app-sidebar { background: var(--bg-base); }
+  /* 상단바가 사이드바 위로 올라와 있으니 그 아래로 내용이 비쳐 보이지 않게 */
+  body.student-mode .topbar { background: var(--bg-base); }
 }
 
 .student-content { display: flex; flex-direction: column; gap: 20px; }

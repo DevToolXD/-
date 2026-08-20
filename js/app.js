@@ -39,12 +39,25 @@ function showView(name) {
 }
 
 // 상단바는 버튼이 늘거나 줄면(관리자·도감·뒤로) 높이가 달라지고, 좁은 화면에선
-// 줄바꿈까지 된다. 그 실제 높이를 CSS 변수로 넘겨 사이드바가 가려지지 않게 한다.
+// 줄바꿈까지 된다. 좁은 화면의 사이드바가 상단바 "아래"에서 시작하도록,
+// 높이가 아니라 화면 기준 아래쪽 좌표(bottom)를 넘긴다. 상단바는 고정이
+// 아니라 같이 스크롤되므로, 스크롤할 때도 값을 다시 계산한다.
 function syncTopbarHeight() {
-  const h = document.querySelector(".topbar").offsetHeight;
-  document.documentElement.style.setProperty("--topbar-h", h + "px");
+  const r = document.querySelector(".topbar").getBoundingClientRect();
+  const bottom = Math.max(0, Math.round(r.bottom));
+  document.documentElement.style.setProperty("--topbar-h", bottom + "px");
+}
+let topbarSyncQueued = false;
+function queueTopbarSync() {
+  if (topbarSyncQueued) return;
+  topbarSyncQueued = true;
+  requestAnimationFrame(() => {
+    topbarSyncQueued = false;
+    syncTopbarHeight();
+  });
 }
 window.addEventListener("resize", syncTopbarHeight);
+window.addEventListener("scroll", queueTopbarSync, { passive: true });
 // 화면 전환 말고도(학급칩 표시, 버튼 등장, 글꼴 로드 등) 높이가 변할 길이 많다.
 // 상단바 크기를 직접 관찰해서 어떤 경로로 바뀌든 항상 정확하게 유지한다.
 if (window.ResizeObserver) {
@@ -341,14 +354,10 @@ function setClassChip(code) {
 
 // 로그아웃: 이중 확인 후 세션만 지우고
 // 학급코드는 유지 (같은 기기에서 다음 학생이 이어서 로그인)
-const LOGOUT_STEPS = [
-  "정말 로그아웃 하시겠어요?",
-  "한 번 더 확인할게요. 정말 나가시겠어요? 다시 로그인해야 해요.",
-];
+// 예전에는 확인을 두 번 받았는데, 모달이 연달아 뜨는 게 "계속 로그아웃을
+// 물어본다"처럼 느껴져서 한 번으로 줄였다.
 async function logout() {
-  for (const msg of LOGOUT_STEPS) {
-    if (!(await confirmModal(msg))) return;
-  }
+  if (!(await confirmModal("로그아웃할까요? 다시 로그인해야 해요."))) return;
   clearSession();
   student = null;
   adminSession = null;
@@ -359,33 +368,10 @@ async function logout() {
 //  0603 학급 전용 이스터에그 (선생님/슈퍼관리자 화면 제외)
 // =============================================================
 const FLOURISH_VIEWS = ["home", "student-login", "student-home"];
-let sparklesRendered = false;
-
-function renderSparkles(active) {
-  const layer = $("#sparkle-layer");
-  if (active && !sparklesRendered) {
-    const frag = document.createDocumentFragment();
-    for (let i = 0; i < 24; i++) {
-      const s = document.createElement("span");
-      s.className = "sparkle";
-      s.style.left = Math.random() * 100 + "%";
-      s.style.top = Math.random() * 100 + "%";
-      s.style.animationDelay = Math.random() * 4 + "s";
-      s.style.setProperty("--sz", 3 + Math.random() * 4 + "px");
-      frag.appendChild(s);
-    }
-    layer.innerHTML = "";
-    layer.appendChild(frag);
-    sparklesRendered = true;
-  }
-  layer.classList.toggle("hidden", !active);
-  if (!active) sparklesRendered = false;
-}
 
 function updateSpecialMode() {
   const active = classCode === SUPER_ADMIN.classCode && FLOURISH_VIEWS.includes(currentView);
   document.body.classList.toggle("special-0603", active);
-  renderSparkles(active);
   $("#brand-name").textContent = active ? "광고문의(정후교에게)" : "마니또";
   $("#brand-free-tag").classList.toggle("hidden", !active);
 }
