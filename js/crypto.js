@@ -43,3 +43,34 @@ export async function hashSecret(secret, saltHex) {
   );
   return bufToHex(bits);
 }
+
+// ---------------------------------------------------------------
+//  HMAC-SHA256 (빠름) — 세션 토큰 서명용.
+//  비밀번호 해시에는 일부러 느린 PBKDF2를 쓰지만, 토큰은 화면을 누를 때마다
+//  검증·재발급하므로 빠른 HMAC이어야 한다.
+// ---------------------------------------------------------------
+export async function hmacHex(keyHex, message) {
+  const key = await subtle.importKey(
+    "raw",
+    hexToBuf(keyHex),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await subtle.sign("HMAC", key, enc.encode(message));
+  return bufToHex(sig);
+}
+
+// 타이밍 공격을 줄이기 위해 길이·내용을 상수 시간으로 비교
+export function safeEqual(a, b) {
+  const x = String(a ?? ""), y = String(b ?? "");
+  if (x.length !== y.length) return false;
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return diff === 0;
+}
+
+// 짧은 파생 ID: 값을 알아야만 문서 경로를 계산할 수 있게 할 때 쓴다.
+export async function deriveId(secret, saltHex, len = 24) {
+  return (await hashSecret(secret, saltHex)).slice(0, len);
+}

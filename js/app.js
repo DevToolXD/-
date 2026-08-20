@@ -3,6 +3,7 @@
 // =============================================================
 import * as data from "./data.js?v=DEV";
 import { BLOCK_MESSAGE } from "./moderation.js?v=DEV";
+import * as guard from "./guard.js?v=DEV";
 import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN } from "../config.js?v=DEV";
 
 const $ = (sel) => document.querySelector(sel);
@@ -316,23 +317,48 @@ function wishCeremony(text) {
 }
 
 // =============================================================
-//  세션 상태 (localStorage에 저장 → 새로고침해도 로그인 유지)
+//  세션 상태 — 기기 키로 서명된 토큰 (js/guard.js)
 // =============================================================
-const SESSION_KEY = "manito.session";
-
-function saveSession(session) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(session)); } catch {}
-}
-function loadSession() {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+//  예전에는 localStorage 에 {"role":"admin"} 한 줄만 써넣으면 선생님 화면이
+//  그대로 열렸다. 이제는 세션에 이 기기에서만 만들 수 있는 서명이 붙어 있고,
+//  유효기간도 있으며, 중요한 동작을 할 때마다 토큰이 새로 발급된다.
+async function saveSession(session) {
+  return guard.issueSession({
+    role: session.role,
+    classCode: session.classCode,
+    subjectId: session.studentId ?? null,
+    name: session.studentName ?? null,
+  });
 }
 function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch {}
+  guard.clearSessionToken();
+}
+
+// 요청 토큰을 쓰고, 통이 비었으면 사용자에게 알린 뒤 중단한다.
+function useToken(bucket, hintSel) {
+  try {
+    guard.spendToken(bucket);
+    return true;
+  } catch (e) {
+    if (hintSel) setHint(hintSel, e.message);
+    else toast(e.message, false);
+    return false;
+  }
+}
+
+// 세션이 살아 있는지 확인하고 토큰을 회전시킨다. 끊겼으면 로그인 화면으로.
+async function ensureRole(roles) {
+  try {
+    return await guard.requireRole(roles);
+  } catch (e) {
+    toast(e.message, false);
+    clearSession();
+    student = null;
+    adminSession = null;
+    updateAdminQuickBtn();
+    showView("home");
+    return null;
+  }
 }
 
 let classCode = null;
@@ -343,6 +369,8 @@ let saCurrentCode = null;
 function resetClass() {
   classCode = null;
   clearSession();
+  superAdminAuthed = false;
+  updateAdminQuickBtn();
   $("#class-chip").classList.add("hidden");
 }
 
@@ -361,6 +389,8 @@ async function logout() {
   clearSession();
   student = null;
   adminSession = null;
+  superAdminAuthed = false; // 관리자 바로가기 버튼도 함께 사라진다
+  updateAdminQuickBtn();
   showView("home");
 }
 
@@ -677,6 +707,13 @@ $("#student-login-btn").addEventListener("click", async () => {
   }
 
   const btn = $("#student-login-btn");
+  const lockKey = `${classCode}:${id}`;
+  try {
+    guard.assertLoginAllowed(lockKey);   // 여러 번 틀리면 점점 길게 잠긴다
+    guard.spendToken("login");           // 짧은 시간에 4번까지만
+  } catch (e) {
+    return setHint("#student-login-hint", e.message);
+  }
   busy(btn, true, signupMode ? "계정 만드는 중…" : "로그인 중…");
   try {
     let res = await data.verifyStudentPassword(classCode, id, pw);
@@ -699,18 +736,26 @@ $("#student-login-btn").addEventListener("click", async () => {
       toast("계정이 만들어졌어요. 다음부터 이 비밀번호로 로그인하세요.");
     }
     if (res !== "ok") {
-      setHint("#student-login-hint", "비밀번호가 올바르지 않습니다.");
+      const st = guard.noteLoginFailure(lockKey);
+      const left = guard.loginLockLeft(lockKey);
+      setHint(
+        "#student-login-hint",
+        left > 0
+          ? `비밀번호가 올바르지 않습니다. ${Math.ceil(left / 1000)}초 동안 잠깁니다. (${st.fails}번째 실패)`
+          : "비밀번호가 올바르지 않습니다."
+      );
       return;
     }
+    guard.clearLoginFailures(lockKey);
     student = { id, name };
     $("#student-pw").value = "";
     $("#student-pw2").value = "";
     if (id === SUPER_ADMIN.studentId) {
-      saveSession({ classCode, role: "superadmin" });
+      await saveSession({ classCode, role: "superadmin" });
       markSuperAdminAuthed();
       await enterSuperAdmin();
     } else {
-      saveSession({ classCode, role: "student", studentId: id, studentName: name });
+      await saveSession({ classCode, role: "student", studentId: id, studentName: name });
       await enterStudentHome();
     }
   } catch (e) {
@@ -813,6 +858,8 @@ $("#my-wish-submit").addEventListener("click", async () => {
     "\n\n한 번 등록하면 다음 마니또 배정 전까지 바꿀 수 없어요."
   );
   if (!ok) return;
+  if (!(await ensureRole("student"))) return;
+  if (!useToken("wish", "#my-wish-hint")) return;
   const btn = $("#my-wish-submit");
   busy(btn, true, "등록 중…");
   try {
@@ -1033,6 +1080,13 @@ $("#admin-login-btn").addEventListener("click", async () => {
   const code = $("#admin-code").value;
   if (!code) return setHint("#admin-login-hint", "코드를 입력해주세요.");
   const btn = $("#admin-login-btn");
+  const lockKey = `${classCode}:admin`;
+  try {
+    guard.assertLoginAllowed(lockKey);
+    guard.spendToken("login");
+  } catch (e) {
+    return setHint("#admin-login-hint", e.message);
+  }
   busy(btn, true, "확인 중…");
   try {
     const exists = await data.adminConfigExists(classCode);
@@ -1042,12 +1096,20 @@ $("#admin-login-btn").addEventListener("click", async () => {
     } else {
       const ok = await data.verifyAdmin(classCode, code);
       if (!ok) {
-        setHint("#admin-login-hint", "관리자 코드가 올바르지 않습니다.");
+        const st = guard.noteLoginFailure(lockKey);
+        const left = guard.loginLockLeft(lockKey);
+        setHint(
+          "#admin-login-hint",
+          left > 0
+            ? `관리자 코드가 올바르지 않습니다. ${Math.ceil(left / 1000)}초 동안 잠깁니다. (${st.fails}번째 실패)`
+            : "관리자 코드가 올바르지 않습니다."
+        );
         return;
       }
     }
+    guard.clearLoginFailures(lockKey);
     adminSession = { code };
-    saveSession({ classCode, role: "admin" });
+    await saveSession({ classCode, role: "admin" });
     await enterAdminHome();
   } catch (e) {
     setHint("#admin-login-hint", "오류: " + e.message);
@@ -1125,6 +1187,8 @@ async function refreshReports() {
 
     list.querySelectorAll(".report-approve").forEach((b) =>
       b.addEventListener("click", async () => {
+        if (!(await ensureRole(["admin", "superadmin"]))) return;
+        if (!useToken("reportOp")) return;
         busy(b, true, "추가 중…");
         try {
           await data.approveReport(classCode, b.dataset.id);
@@ -1138,6 +1202,8 @@ async function refreshReports() {
     );
     list.querySelectorAll(".report-reject").forEach((b) =>
       b.addEventListener("click", async () => {
+        if (!(await ensureRole(["admin", "superadmin"]))) return;
+        if (!useToken("reportOp")) return;
         busy(b, true, "처리 중…");
         try {
           await data.rejectReport(classCode, b.dataset.id);
@@ -1209,6 +1275,8 @@ async function refreshRoster() {
           "소원과 마니또 배정 같은 기존 데이터는 그대로 남습니다."
         );
         if (!ok) return;
+        if (!(await ensureRole(["admin", "superadmin"]))) return;
+        if (!useToken("studentOp")) return;
         try {
           await data.resetStudentPassword(classCode, s.id);
           toast(`${s.name} 학생의 비밀번호를 초기화했어요.`);
@@ -1224,6 +1292,8 @@ async function refreshRoster() {
         const s = students.find((x) => x.id === b.dataset.id);
         if (!s) return;
         if (!(await confirmModal(`${s.name} 학생을 명단에서 삭제할까요?`))) return;
+        if (!(await ensureRole(["admin", "superadmin"]))) return;
+        if (!useToken("studentOp")) return;
         try {
           await data.deleteStudent(classCode, s.id);
           toast("학생을 삭제했습니다.");
@@ -1242,6 +1312,8 @@ async function refreshRoster() {
 $("#roster-add-btn").addEventListener("click", async () => {
   const names = $("#roster").value.split("\n");
   const btn = $("#roster-add-btn");
+  if (!(await ensureRole(["admin", "superadmin"]))) return;
+  if (!useToken("roster", "#roster-hint")) return;
   busy(btn, true, "추가 중…");
   try {
     const n = await data.addStudents(classCode, names);
@@ -1256,6 +1328,8 @@ $("#roster-add-btn").addEventListener("click", async () => {
 });
 
 async function doAssign(btn) {
+  if (!(await ensureRole(["admin", "superadmin"]))) return;
+  if (!useToken("assign", "#assign-hint")) return;
   busy(btn, true, "배정 중…");
   setHint("#assign-hint", "");
   try {
@@ -1322,6 +1396,8 @@ async function refreshAdminWishlist() {
         const id = tr.dataset.id;
         const name = tr.dataset.name;
         if (!(await confirmModal(`${name} 학생에게 소원을 다시 쓰도록 요청할까요?`))) return;
+        if (!(await ensureRole(["admin", "superadmin"]))) return;
+        if (!useToken("wishMod")) return;
         busy(b, true, "요청 중…");
         try {
           await data.requestWishRewrite(classCode, id, "부적절하거나 잘못 쓴 내용은 피해서 다시 써주세요.");
@@ -1475,6 +1551,8 @@ async function loadClassDetail(code) {
         const guardianId = tr.dataset.id;
         const protegeId = tr.querySelector(".sa-care-select").value;
         if (!protegeId) return toast("돌볼 대상을 선택해주세요.", false);
+        if (!(await ensureRole("superadmin"))) return;
+        if (!useToken("wishMod")) return;
         busy(b, true, "저장…");
         try {
           await data.superAdminSetCare(code, guardianId, protegeId);
@@ -1491,6 +1569,8 @@ async function loadClassDetail(code) {
         const tr = b.closest("tr");
         const id = tr.dataset.id;
         const text = tr.querySelector(".sa-wish-input").value;
+        if (!(await ensureRole("superadmin"))) return;
+        if (!useToken("wishMod")) return;
         busy(b, true, "저장…");
         try {
           await data.superAdminSetWish(code, id, text);
@@ -1515,6 +1595,8 @@ $("#sa-back-btn").addEventListener("click", () => {
 $("#sa-reassign-btn").addEventListener("click", async (e) => {
   if (!saCurrentCode) return;
   if (!(await confirmModal(`${classLabel(saCurrentCode)}을(를) 재배정할까요? 기존 소원이 초기화됩니다.`))) return;
+  if (!(await ensureRole("superadmin"))) return;
+  if (!useToken("assign", "#sa-detail-hint")) return;
   const btn = e.currentTarget;
   busy(btn, true, "배정 중…");
   try {
@@ -1553,6 +1635,8 @@ async function refreshSaVotes() {
     tbody.querySelectorAll(".sa-vote-del").forEach((b) =>
       b.addEventListener("click", async () => {
         if (!(await confirmModal("이 투표 항목을 삭제할까요?"))) return;
+        if (!(await ensureRole("superadmin"))) return;
+        if (!useToken("reportOp")) return;
         try {
           await data.deleteVoteItem(b.dataset.id);
           await refreshSaVotes();
@@ -1573,18 +1657,26 @@ $("#sa-votes-refresh").addEventListener("click", refreshSaVotes);
 //  한 번이라도 슈퍼 관리자로 인증하면 이 기기에서는 어느 화면에 있든
 //  버튼 하나로 바로 전체 관리자 패널로 점프할 수 있음.
 // =============================================================
-const SUPERADMIN_AUTHED_KEY = "manito.superadminAuthed";
+//  예전에는 localStorage 의 플래그 한 개("1")로 판단해서, 콘솔에 한 줄만
+//  치면 전체 관리자 버튼이 생기고 삭제 버튼까지 보였다. 이제는 서명된 세션
+//  토큰의 역할이 superadmin 일 때만 인정한다.
+let superAdminAuthed = false;
 
+async function refreshSuperAdminAuthed() {
+  const s = await guard.readSession();
+  superAdminAuthed = s?.role === "superadmin";
+  updateAdminQuickBtn();
+  return superAdminAuthed;
+}
 function markSuperAdminAuthed() {
-  try { localStorage.setItem(SUPERADMIN_AUTHED_KEY, "1"); } catch {}
+  superAdminAuthed = true;
   updateAdminQuickBtn();
 }
 function updateAdminQuickBtn() {
-  let authed = false;
-  try { authed = localStorage.getItem(SUPERADMIN_AUTHED_KEY) === "1"; } catch {}
-  $("#admin-quick-btn").classList.toggle("hidden", !authed || currentView === "super-admin");
+  $("#admin-quick-btn").classList.toggle("hidden", !superAdminAuthed || currentView === "super-admin");
 }
 $("#admin-quick-btn").addEventListener("click", async () => {
+  if (!(await ensureRole("superadmin"))) return;
   await enterSuperAdmin();
 });
 
@@ -1674,6 +1766,7 @@ async function refreshVotePage(
     wrap.querySelectorAll(".vote-item").forEach((b) =>
       b.addEventListener("click", async () => {
         if (alreadyVoted) return;
+        if (!useToken("vote")) return;
         busy(b, true, "투표 중…");
         try {
           await data.voteForItem(b.dataset.id);
@@ -1682,6 +1775,7 @@ async function refreshVotePage(
           findEgg("vote");
           await refreshVotePage(wrapSel, hintSel, winnersSel, weekSel);
         } catch (e) {
+          guard.refundToken("vote"); // 서버가 거부했으면 토큰은 돌려준다
           toast("투표 실패: " + e.message, false);
           busy(b, false);
         }
@@ -1725,6 +1819,7 @@ async function submitVoteItem(inputSel, hintSel, btnSel, identity, refresh) {
     return setHint(hintSel, "이번 주엔 이미 항목을 하나 올리셨어요. 다음 주에 또 올릴 수 있어요.");
   }
   const btn = $(btnSel);
+  if (!useToken("voteAdd", hintSel)) return;
   busy(btn, true, "올리는 중…");
   try {
     // 같은 반 친구 이름을 넘겨, 특정인을 겨냥한 항목도 걸러지게 한다.
@@ -1815,7 +1910,7 @@ function formatFeedbackTime(createdAt) {
 }
 
 function isSuperAdminAuthed() {
-  try { return localStorage.getItem(SUPERADMIN_AUTHED_KEY) === "1"; } catch { return false; }
+  return superAdminAuthed;
 }
 
 function feedbackItemHtml(p) {
@@ -1844,6 +1939,8 @@ async function refreshFeedbackBoard(listSel) {
     list.querySelectorAll(".feedback-del-btn").forEach((b) =>
       b.addEventListener("click", async () => {
         if (!(await confirmModal("이 버그 제보를 삭제할까요?"))) return;
+        if (!(await ensureRole("superadmin"))) return;
+        if (!useToken("reportOp")) return;
         try {
           await data.deleteFeedback(b.dataset.id);
           await refreshFeedbackBoard(listSel);
@@ -1865,6 +1962,7 @@ async function submitFeedback(btnSel, textareaSel, hintSel, listSel, identity) {
   const text = textEl.value;
   if (!identity) return setHint(hintSel, "학급에 먼저 입장해 주세요.");
   if (!text.trim()) return setHint(hintSel, "내용을 입력해주세요.");
+  if (!useToken("feedback", hintSel)) return;
   const btn = $(btnSel);
   busy(btn, true, "등록 중…");
   try {
@@ -2131,6 +2229,7 @@ $("#ad-send").addEventListener("click", async () => {
   const me = adSender();
   if (!me) return setHint("#ad-hint", "학급에 먼저 입장해 주세요.");
   if (!text.trim()) return setHint("#ad-hint", "광고할 내용을 적어주세요.");
+  if (!useToken("adInquiry", "#ad-hint")) return;
   busy(btn, true, "보내는 중…");
   try {
     await data.postAdInquiry(me.name, me.roleTag, text);
@@ -2344,13 +2443,20 @@ try {
 } catch {}
 
 (async function init() {
-  const saved = loadSession();
+  await refreshSuperAdminAuthed(); // 서명된 토큰에서만 관리자 권한을 인정
+  // 서명·유효기간이 확인된 세션만 복원한다. 손으로 고친 세션, 다른 기기에서
+  // 복사해온 세션, 기간이 지난 세션은 여기서 전부 걸러진다.
+  const saved = await guard.readSession();
   if (saved && isValidClassCode(saved.classCode)) {
     classCode = saved.classCode;
     setClassChip(classCode);
     try {
       if (saved.role === "admin") {
-        adminSession = {};
+        // 선생님 세션은 복원할 때 그 반에 관리자 코드가 실제로 등록돼 있는지
+        // 서버에 한 번 더 확인한다. (예전에는 아무 확인 없이 바로 열렸다)
+        const exists = await data.adminConfigExists(classCode);
+        if (!exists) throw new Error("관리자 설정 없음");
+        adminSession = { restored: true };
         await enterAdminHome();
         return;
       }
@@ -2360,13 +2466,21 @@ try {
         await enterSuperAdmin();
         return;
       }
-      if (saved.role === "student" && saved.studentId) {
-        student = { id: saved.studentId, name: saved.studentName };
+      if (saved.role === "student" && saved.subjectId) {
+        student = { id: saved.subjectId, name: saved.name };
         await enterStudentHome();
         return;
       }
-    } catch {
-      // 저장된 세션 복원 실패 시 조용히 초기 화면으로
+    } catch (e) {
+      // 데이터 불러오기 실패(네트워크·권한)로 로그아웃시키지는 않는다.
+      // 세션 자체가 잘못된 경우에만 정리한다.
+      if (e?.code !== "permission-denied") {
+        clearSession();
+        showView("class-gate");
+        return;
+      }
+      // 권한 문제였다면 화면은 유지하고 각 카드가 안내 문구를 보여준다.
+      return;
     }
     clearSession();
   }
