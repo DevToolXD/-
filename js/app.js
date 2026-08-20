@@ -1560,15 +1560,38 @@ blurTextIn(document.querySelector(".landing-main h1"));
 //  광고 문의 (푸터 버튼 → 모달 → 보내기)
 // =============================================================
 let adHideTimer = null;
+// 문의를 보낼 때 붙는 이름은 항상 "지금 로그인한 본인"이다.
+// 이름 입력칸이 없으므로 아무 이름이나 적어 남을 사칭하거나
+// 익명으로 숨는 경로 자체가 없다.
+function adSender() {
+  return currentIdentity();
+}
 function openAdModal(open) {
   const overlay = $("#ad-modal");
   clearTimeout(adHideTimer);
   if (open) {
     setHint("#ad-hint", "");
+    const me = adSender();
+    const senderEl = $("#ad-sender");
+    const sendBtn = $("#ad-send");
+    const textEl = $("#ad-text");
+    if (me) {
+      senderEl.innerHTML = `보내는 사람 <strong>${escapeHtml(me.name)}</strong>` +
+        `<span class="muted small"> · ${escapeHtml(me.roleTag)}</span>`;
+      senderEl.classList.remove("err");
+      sendBtn.disabled = false;
+      textEl.disabled = false;
+    } else {
+      // 이름 없이 들어오는 문의는 받지 않는다 — 정후교가 답할 수가 없다.
+      senderEl.textContent = "학급에 먼저 입장해 주세요. 누가 보냈는지 이름이 같이 가야 답을 줄 수 있어요.";
+      senderEl.classList.add("err");
+      sendBtn.disabled = true;
+      textEl.disabled = true;
+    }
     overlay.classList.remove("hidden");
     void overlay.offsetWidth;
     overlay.classList.add("show");
-    $("#ad-text").focus();
+    if (me) textEl.focus();
   } else {
     overlay.classList.remove("show");
     adHideTimer = setTimeout(() => overlay.classList.add("hidden"), 200);
@@ -1587,12 +1610,13 @@ document.addEventListener("keydown", (e) => {
 $("#ad-send").addEventListener("click", async () => {
   const btn = $("#ad-send");
   const text = $("#ad-text").value;
+  const me = adSender();
+  if (!me) return setHint("#ad-hint", "학급에 먼저 입장해 주세요.");
   if (!text.trim()) return setHint("#ad-hint", "광고할 내용을 적어주세요.");
   busy(btn, true, "보내는 중…");
   try {
-    await data.postAdInquiry($("#ad-name").value, text);
+    await data.postAdInquiry(me.name, me.roleTag, text);
     $("#ad-text").value = "";
-    $("#ad-name").value = "";
     openAdModal(false);
     toast("광고 문의를 보냈어요. 정후교가 확인할게요!");
   } catch (e) {
@@ -1611,7 +1635,9 @@ async function refreshAdInbox() {
     list.innerHTML = rows.length
       ? rows.map((r) => `<li class="feedback-item">
           <div class="row-between">
-            <span class="feedback-author">${escapeHtml(r.name || "익명")}</span>
+            <span class="feedback-author">${escapeHtml(r.name || "(이름 없는 예전 문의)")}${
+              r.roleTag ? `<span class="feedback-role"> · ${escapeHtml(r.roleTag)}</span>` : ""
+            }</span>
             <span class="feedback-time">${escapeHtml(formatFeedbackTime(r.createdAt))}</span>
           </div>
           <p class="feedback-message">${escapeHtml(r.message || "")}</p>

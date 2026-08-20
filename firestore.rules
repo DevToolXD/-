@@ -136,9 +136,12 @@ service cloud.firestore {
     match /adInquiries/{id} {
       allow get: if false;
       allow list: if true;
+      // 이름은 필수다. cleanStr 는 빈 문자열을 통과시키지 않으므로
+      // 익명(이름 없는) 광고 문의는 규칙 단에서 저장이 거부된다.
       allow create: if smallDoc()
-        && request.resource.data.keys().hasOnly(['name','message','createdAt'])
+        && request.resource.data.keys().hasOnly(['name','roleTag','message','createdAt'])
         && cleanStr(request.resource.data.name, 40)
+        && nullableStr(request.resource.data.get('roleTag', ''), 60)
         && request.resource.data.message is string
         && request.resource.data.message.size() >= 5
         && request.resource.data.message.size() <= 500

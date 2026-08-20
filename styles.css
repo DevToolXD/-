@@ -397,6 +397,7 @@ input:focus, select:focus, textarea:focus {
   background: var(--glass-bg-strong);
 }
 .feedback-author { font-weight: 700; font-size: 0.92rem; }
+.feedback-role { font-weight: 500; color: var(--muted); }
 .feedback-time { color: var(--muted); font-size: 0.78rem; }
 .feedback-message { margin: 8px 0 0; white-space: pre-wrap; word-break: break-word; }
 .feedback-del-btn { color: var(--err); font-size: 0.8rem; }
@@ -1100,4 +1101,12 @@ body.student-mode .topbar { z-index: 50; }
 /* ---- 푸터 광고 문의 버튼 ---- */
 .foot-ad-btn { margin-top: 10px; }
 #ad-modal .modal { max-width: 460px; text-align: left; }
+.ad-sender {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.ad-sender strong { color: var(--ink); }
+.ad-sender.err { color: var(--err); }
+#ad-text:disabled { opacity: 0.5; }
 #ad-modal h3 { margin-top: 0; }

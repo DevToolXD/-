@@ -390,13 +390,17 @@ export function sanitizeText(raw, max) {
 }
 
 // ---------- 광고 문의 ----------
-export async function postAdInquiry(name, message) {
+// 이름은 화면에서 입력받지 않고 로그인한 본인 정보가 넘어온다.
+// 익명 문의는 만들 수 없다 — 이름이 비면 저장 자체를 거부한다.
+export async function postAdInquiry(name, roleTag, message) {
   const cleanMsg = sanitizeText(message, APP.maxAdLength);
   if (!cleanMsg) throw new Error("광고할 내용을 적어주세요.");
   if (cleanMsg.length < 5) throw new Error("조금만 더 자세히 적어주세요. (5자 이상)");
-  const cleanName = sanitizeText(name, APP.maxNameLength) || "익명";
+  const cleanName = sanitizeText(name, APP.maxNameLength);
+  if (!cleanName) throw new Error("학급에 먼저 입장해 주세요.");
   await addDoc(adsCol(), {
     name: cleanName,
+    roleTag: sanitizeText(roleTag, 60),
     message: cleanMsg,
     createdAt: serverTimestamp(),
   });

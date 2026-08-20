@@ -426,9 +426,9 @@
       <div class="modal glass-card">
         <h3>광고 문의</h3>
         <p class="muted small">어떤 걸 광고하고 싶은지 적어주세요. 정후교가 직접 확인해요.</p>
-        <label><span class="label-text">이름(선택)</span>
-          <input id="ad-name" type="text" maxlength="40" placeholder="비워두면 '익명'" />
-        </label>
+        <!-- 이름은 따로 입력받지 않는다. 지금 로그인한 본인 이름이 그대로
+             붙어서 나가므로 익명 문의는 존재할 수 없다. -->
+        <p class="ad-sender" id="ad-sender"></p>
         <textarea id="ad-text" maxlength="500" rows="4" placeholder="예) 우리 반 학급 유튜브 채널을 광고하고 싶어요…"></textarea>
         <p class="hint" id="ad-hint"></p>
         <div class="row modal-actions">
