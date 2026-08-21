@@ -43,6 +43,8 @@ const voteItemDoc = (id) => doc(db, "voteItems", id);
 const voteWinnerDoc = (weekKey) => doc(db, "voteWinners", weekKey);
 const voteWinnersCol = () => collection(db, "voteWinners");
 const reportsCol = (code) => collection(db, "classes", code, "reports");
+const adminAccountsCol = () => collection(db, "adminAccounts");
+const adminAccountDoc = (code, id) => doc(db, "adminAccounts", `${code}_${id}`);
 const reportDoc = (code, id) => doc(db, "classes", code, "reports", id);
 
 // ---------- 학생 명단 ----------
@@ -509,6 +511,46 @@ export async function listWinners() {
 // 슈퍼 관리자 전용: 이번 주 투표 항목 삭제
 export async function deleteVoteItem(id) {
   await deleteDoc(voteItemDoc(id));
+}
+
+// ---------- 계정에 붙는 관리자 권한 ----------
+//  광고 문의 칸에 비밀 코드를 넣으면 "이 기기"가 아니라 "이 계정"에 권한이
+//  붙는다. 그래서 다른 기기에서 그 계정으로 로그인해도 관리자 화면이 열린다.
+//
+//  ⚠️ 한계: Firebase Auth 가 없어서, 규칙만으로는 "권한 있는 사람만 이 문서를
+//  만들 수 있다"를 강제할 수 없다. 개발자도구로 이 문서를 직접 만들면 권한을
+//  자칭할 수 있다. 그래서 (1) 누가 언제 받았는지 서버 시각으로 남기고,
+//  (2) 전체 관리자 화면에서 목록을 보고 언제든 거둘 수 있게 했다.
+export async function isAccountAdmin(code, studentId) {
+  if (!code || !studentId) return false;
+  try {
+    const s = await getDoc(adminAccountDoc(code, studentId));
+    return s.exists() && s.data().active === true;
+  } catch {
+    return false; // 권한/네트워크 문제로 로그인 자체가 막히지는 않게
+  }
+}
+
+export async function grantAccountAdmin(code, studentId, name) {
+  await setDoc(adminAccountDoc(code, studentId), {
+    classCode: code,
+    studentId,
+    name: sanitizeText(name, APP.maxNameLength) || "이름 없음",
+    active: true,
+    grantedAt: serverTimestamp(),
+  });
+}
+
+export async function listAdminAccounts() {
+  const snap = await getDocs(adminAccountsCol());
+  const out = [];
+  snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+  out.sort((a, b) => String(a.classCode).localeCompare(String(b.classCode)));
+  return out;
+}
+
+export async function revokeAccountAdmin(docId) {
+  await deleteDoc(doc(db, "adminAccounts", docId));
 }
 
 // ---------- 부적절 시도 신고함 (해당 반 담임선생님에게 전달) ----------

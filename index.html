@@ -26,7 +26,7 @@
       <button id="vote-nav-btn" class="link-btn">투표</button>
       <button id="feedback-nav-btn" class="link-btn">버그 제보</button>
       <button id="codex-nav-btn" class="link-btn hidden">도감</button>
-      <button id="pororo-toggle" class="pororo-toggle" aria-pressed="false">뽀로로 모드 (테무산)</button>
+      <button id="theme-nav-btn" class="link-btn">테마</button>
       <button id="btn-back" class="link-btn hidden">뒤로</button>
     </header>
 
@@ -124,6 +124,15 @@
             <button class="student-page-nav" data-page="feedback">
               <span class="side-nav-code">5</span>
               <span class="side-nav-label">버그 제보</span>
+            </button>
+            <button class="student-page-nav" data-page="theme">
+              <span class="side-nav-code">6</span>
+              <span class="side-nav-label">테마</span>
+            </button>
+            <!-- 관리자 권한이 있는 계정에만 나타나는 항목 -->
+            <button class="student-page-nav side-nav-admin hidden" id="side-nav-admin" data-page="admin">
+              <span class="side-nav-code">★</span>
+              <span class="side-nav-label">관리자</span>
             </button>
           </nav>
           <div class="app-sidebar-foot">
@@ -229,6 +238,13 @@
                 <button id="student-feedback-refresh" class="btn btn-ghost btn-sm">새로고침</button>
               </div>
               <ul class="feedback-list" id="student-feedback-list"></ul>
+            </div>
+
+            <!-- 페이지 6: 테마 고르기 -->
+            <div class="glass-card student-page hidden" data-page="theme">
+              <h3>테마</h3>
+              <p class="muted small">화면 전체의 색과 분위기를 바꿔요. 고른 테마는 이 기기에 저장돼요.</p>
+              <div id="student-theme-list"></div>
             </div>
           </div>
         </div>
@@ -394,6 +410,18 @@
 
         <div class="glass-card">
           <div class="row-between">
+            <h3>관리자 계정</h3>
+            <button id="sa-admins-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <p class="muted small">
+            광고 문의 칸에 비밀 코드를 넣어 관리자 권한을 받은 계정 목록이에요.
+            더 이상 필요 없는 계정은 여기서 권한을 거둘 수 있어요.
+          </p>
+          <ul class="feedback-list" id="sa-admins-list"></ul>
+        </div>
+
+        <div class="glass-card">
+          <div class="row-between">
             <h3>광고 문의함</h3>
             <button id="sa-ads-refresh" class="btn btn-ghost btn-sm">새로고침</button>
           </div>
@@ -455,6 +483,18 @@
             <button id="feedback-refresh" class="btn btn-ghost btn-sm">새로고침</button>
           </div>
           <ul class="feedback-list" id="feedback-list"></ul>
+        </div>
+      </section>
+
+      <!-- ============ 테마 고르기 ============ -->
+      <section data-view="theme-picker" class="view hidden">
+        <div class="glass-card">
+          <p class="eyebrow">화면 분위기 바꾸기</p>
+          <h2>테마</h2>
+          <p class="muted">마음에 드는 테마를 고르세요. 고른 테마는 이 기기에 저장돼요.</p>
+        </div>
+        <div class="glass-card">
+          <div id="theme-list"></div>
         </div>
       </section>
 

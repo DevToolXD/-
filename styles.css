@@ -694,7 +694,8 @@ body.pororo {
   --green-600: #106fcc;
   --green-700: #0a4f94;
   --ink: #0b2d4a;
-  --muted: #3d6f96;
+  /* 하늘색 배경 위라 #3d6f96 은 대비가 4.1 밖에 안 나왔다(권장 4.5) — 조금 진하게 */
+  --muted: #2c5878;
   --bg-base: #bfe6ff;
   --glass-bg: #eaf7ff;
   --glass-bg-strong: #ffffff;
@@ -1379,3 +1380,198 @@ body.student-mode .topbar { z-index: 50; }
 
 /* 확인 모달: 소원 등록 2차 확인처럼 여러 줄 문구를 그대로 보여준다 */
 #confirm-modal-text { white-space: pre-wrap; word-break: break-word; }
+
+/* =============================================================
+   독일 역사 테마 — 시대별 국기 배색
+   신성로마제국(제1제국) → 독일제국(제2제국) → 바이마르 → 연방공화국
+   각 테마는 CSS 변수만 갈아끼우고, 위쪽에 그 시대 국기 띠를 깐다.
+   ============================================================= */
+
+/* 화면 맨 위에 얇게 깔리는 국기 띠 (테마마다 색이 다름) */
+body.de-theme::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 6px;
+  z-index: 200;
+  pointer-events: none;
+  background: var(--flag-stripe);
+}
+body.de-theme .glass-card {
+  border-top: 3px solid var(--flag-accent);
+}
+body.de-theme h1,
+body.de-theme h2 {
+  letter-spacing: -0.015em;
+}
+
+/* ---- 신성로마제국 (962–1806) : 금빛 바탕 + 검은 쌍두수리 ---- */
+body.theme-hre {
+  --green-50: #fdf6e0;
+  --green-100: #f8e9b8;
+  --green-200: #efd77c;
+  --green-500: #8a6a12;
+  --green-600: #6d5310;
+  --green-700: #4d3a0b;
+  --ink: #1a1408;
+  --muted: #6d5f3c;
+  --bg-base: #f7e9bd;
+  --glass-bg: rgba(255, 251, 236, 0.72);
+  --glass-bg-strong: rgba(255, 252, 242, 0.9);
+  --glass-border: rgba(138, 106, 18, 0.28);
+  --card-shadow: 0 10px 30px rgba(90, 70, 10, 0.16);
+  --flag-stripe: linear-gradient(90deg, #f5c518 0 100%);
+  --flag-accent: #111111;
+}
+/* 쌍두수리를 아주 옅게 배경에 깐다 (인라인 SVG, 외부 이미지 없음) */
+body.theme-hre::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  background: no-repeat center / min(60vmin, 520px)
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g fill="%23111"><path d="M50 16c-3 0-5 2-5 5 0-3-3-6-7-6-5 0-8 4-8 8 0 3 2 6 5 7l-9 3 8 2-6 5 8-1-4 6 8-3-1 7 6-5 2 8 3-8 6 5-1-7 8 3-4-6 8 1-6-5 8-2-9-3c3-1 5-4 5-7 0-4-3-8-8-8-4 0-7 3-7 6 0-3-2-5-5-5z"/><path d="M46 52h8l-2 26h-4z"/></g></svg>');
+}
+
+/* ---- 독일제국 (1871–1918) : 흑·백·적 ---- */
+body.theme-kaiserreich {
+  --green-50: #fdf1f1;
+  --green-100: #fbdada;
+  --green-200: #f3a2a2;
+  --green-500: #c00000;
+  --green-600: #9c0000;
+  --green-700: #6f0000;
+  --ink: #14100f;
+  --muted: #6a5f5f;
+  --bg-base: #f1eeec;
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-bg-strong: rgba(255, 255, 255, 0.93);
+  --glass-border: rgba(20, 16, 15, 0.16);
+  --card-shadow: 0 10px 28px rgba(20, 10, 10, 0.14);
+  --flag-stripe: linear-gradient(180deg, #000 0 33.33%, #fff 33.33% 66.66%, #dd0000 66.66% 100%);
+  --flag-accent: #000000;
+}
+
+/* ---- 바이마르 공화국 (1919–1933) : 흑·적·금 (조금 바랜 종이 느낌) ---- */
+body.theme-weimar {
+  --green-50: #fdf7e6;
+  --green-100: #faedc7;
+  --green-200: #f0d98b;
+  --green-500: #b3392c;
+  --green-600: #8f2c22;
+  --green-700: #661f18;
+  --ink: #1c1712;
+  --muted: #6b6053;
+  --bg-base: #efe7d6;
+  --glass-bg: rgba(253, 250, 242, 0.76);
+  --glass-bg-strong: rgba(255, 253, 248, 0.92);
+  --glass-border: rgba(28, 23, 18, 0.16);
+  --card-shadow: 0 10px 28px rgba(60, 45, 20, 0.16);
+  --flag-stripe: linear-gradient(180deg, #000 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
+  --flag-accent: #b3392c;
+}
+
+/* ---- 독일연방공화국 (1949– ) : 흑·적·금, 오늘의 독일 ---- */
+body.theme-brd {
+  --green-50: #fff8e1;
+  --green-100: #ffefb8;
+  --green-200: #ffe173;
+  --green-500: #dd0000;
+  --green-600: #b30000;
+  --green-700: #800000;
+  --ink: #16161a;
+  --muted: #63636b;
+  --bg-base: #f4f4f6;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-strong: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.12);
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --flag-stripe: linear-gradient(180deg, #000 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
+  --flag-accent: #ffce00;
+}
+
+/* =============================================================
+   테마 고르기 화면
+   ============================================================= */
+.theme-group { margin-top: 22px; }
+.theme-group:first-of-type { margin-top: 0; }
+.theme-group-title {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.theme-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 16px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--glass-border);
+  background: var(--glass-bg-strong);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+  transition: transform 0.18s cubic-bezier(.34,1.4,.64,1), box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.theme-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.theme-card:active { transform: scale(0.985); }
+.theme-card.current {
+  border-color: var(--green-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-500) 22%, transparent);
+}
+.theme-swatch {
+  display: flex;
+  height: 34px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.14);
+}
+.theme-swatch span { flex: 1; }
+.theme-name { font-weight: 700; font-size: 1rem; }
+.theme-era {
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.theme-tagline { font-size: 0.84rem; color: var(--muted); line-height: 1.45; }
+.theme-pick {
+  margin-top: 6px;
+  align-self: flex-start;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 0;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--green-500);
+  color: #fff;
+}
+.theme-card.current .theme-pick {
+  background: transparent;
+  color: var(--green-600);
+  border: 1.5px solid var(--green-500);
+}
+.theme-note {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--muted);
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--glass-tint, rgba(120, 120, 128, 0.1));
+}

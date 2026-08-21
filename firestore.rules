@@ -107,6 +107,30 @@ service cloud.firestore {
       }
     }
 
+    // ---- 계정에 붙는 관리자 권한 ----
+    //  문서 ID 는 "{학급코드}_{학생문서ID}" 로 고정한다. 그래야 한 계정에
+    //  권한 문서가 하나만 생기고, 로그인할 때 한 번의 조회로 확인된다.
+    //
+    //  ⚠️ Auth 가 없어 "권한 있는 사람만 부여 가능"은 규칙으로 강제할 수 없다.
+    //  개발자도구로 이 문서를 직접 만들면 권한을 자칭할 수 있다. 대신
+    //  (1) 받은 시각을 서버 시각으로 못박고, (2) 전체 관리자 화면에서 목록을
+    //  전부 보고 언제든 거둘 수 있게 해 두었다.
+    match /adminAccounts/{docId} {
+      allow get, list: if true;
+      allow create: if smallDoc()
+        && docId.matches('^(060[1-9]|1889)_[A-Za-z0-9_-]{1,64}$')
+        && request.resource.data.keys().hasOnly(
+             ['classCode','studentId','name','active','grantedAt'])
+        && validClassCode(request.resource.data.classCode)
+        && cleanStr(request.resource.data.studentId, 64)
+        && cleanStr(request.resource.data.name, 40)
+        && request.resource.data.active == true
+        && serverTime(request.resource.data.grantedAt);
+      // 한 번 부여된 기록은 고칠 수 없다. 거둘 때는 삭제한다.
+      allow update: if false;
+      allow delete: if true;
+    }
+
     // ---- 주간 투표 항목 (사용자가 직접 올린다) ----
     //  검열은 클라이언트에서 하고 걸린 건 reports 로 보낸다. 규칙 단에서
     //  뜻까지 판단할 수는 없으므로 여기서는 형태(길이·필드·+1 증가)만 강제한다.

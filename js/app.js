@@ -4,6 +4,8 @@
 import * as data from "./data.js?v=DEV";
 import { BLOCK_MESSAGE } from "./moderation.js?v=DEV";
 import * as guard from "./guard.js?v=DEV";
+import { THEMES, THEME_IDS, THEME_GROUPS, DEFAULT_THEME, isTheme, getTheme, GERMANY_NOTE }
+  from "./themes.js?v=DEV";
 import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN } from "../config.js?v=DEV";
 
 const $ = (sel) => document.querySelector(sel);
@@ -390,7 +392,9 @@ async function logout() {
   student = null;
   adminSession = null;
   superAdminAuthed = false; // 관리자 바로가기 버튼도 함께 사라진다
+  accountIsAdmin = false;
   updateAdminQuickBtn();
+  updateAdminSideNav();
   showView("home");
 }
 
@@ -563,21 +567,88 @@ document.addEventListener("click", (e) => {
   spawnPororoPop(e.clientX, e.clientY);
 });
 
-function setPororo(on) {
-  document.body.classList.toggle("pororo", on);
-  const btn = $("#pororo-toggle");
-  btn.setAttribute("aria-pressed", String(on));
-  btn.textContent = on ? "뽀로로 모드 (테무산) ON" : "뽀로로 모드 (테무산)";
-  renderPororoLayer(on);
-  if (on) { startPororoNag(); findEgg("pororo"); }
-  else stopPororoNag();
-  try { localStorage.setItem(PORORO_KEY, on ? "1" : "0"); } catch {}
+// =============================================================
+//  테마 (예전 "뽀로로 모드" 토글을 테마 탭으로 확장)
+// =============================================================
+const THEME_KEY = "manito.theme";
+const DE_THEMES = ["hre", "kaiserreich", "weimar", "brd"];
+let themeChangeCount = 0;
+
+function currentTheme() {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    return isTheme(v) ? v : DEFAULT_THEME;
+  } catch { return DEFAULT_THEME; }
 }
 
-let pororoToggleCount = 0;
-$("#pororo-toggle").addEventListener("click", () => {
-  setPororo(!document.body.classList.contains("pororo"));
-  if (++pororoToggleCount >= 10) findEgg("flicker");
+function applyTheme(id, { remember = true, count = false } = {}) {
+  const themeId = isTheme(id) ? id : DEFAULT_THEME;
+  const body = document.body;
+  // 이전 테마 흔적을 모두 걷어낸다
+  THEME_IDS.forEach((t) => body.classList.remove(`theme-${t}`));
+  body.classList.remove("pororo", "de-theme");
+  if (themeId !== DEFAULT_THEME) body.classList.add(`theme-${themeId}`);
+  if (DE_THEMES.includes(themeId)) body.classList.add("de-theme");
+
+  // 뽀로로는 눈·마스코트·잔소리 같은 자기 동작이 따로 있다
+  const pororoOn = themeId === "pororo";
+  body.classList.toggle("pororo", pororoOn);
+  renderPororoLayer(pororoOn);
+  if (pororoOn) { startPororoNag(); findEgg("pororo"); }
+  else stopPororoNag();
+
+  if (remember) { try { localStorage.setItem(THEME_KEY, themeId); } catch {} }
+  if (count && ++themeChangeCount >= 10) findEgg("flicker");
+  renderThemeLists();
+}
+
+// 예전 이름을 쓰던 곳(이스터에그 등)이 있어 얇게 남겨둔다
+function setPororo(on) { applyTheme(on ? "pororo" : DEFAULT_THEME); }
+
+function themeCardHtml(t, active) {
+  const swatch = t.swatch.map((c) => `<span style="background:${escapeHtml(c)}"></span>`).join("");
+  return `<button class="theme-card ${active ? "current" : ""}" data-theme="${escapeHtml(t.id)}">
+    <span class="theme-swatch" aria-hidden="true">${swatch}</span>
+    <span class="theme-name">${escapeHtml(t.name)}</span>
+    ${t.era ? `<span class="theme-era">${escapeHtml(t.era)}</span>` : ""}
+    <span class="theme-tagline">${escapeHtml(t.tagline)}</span>
+    <span class="theme-pick">${active ? "사용 중" : "이 테마 쓰기"}</span>
+  </button>`;
+}
+
+function renderThemeInto(sel) {
+  const root = $(sel);
+  if (!root) return;
+  const active = currentTheme();
+  root.innerHTML = THEME_GROUPS.map((g) => {
+    const items = THEMES.filter((t) => t.group === g);
+    if (!items.length) return "";
+    return `<div class="theme-group">
+      <p class="theme-group-title">${escapeHtml(g)}</p>
+      <div class="theme-grid">${items.map((t) => themeCardHtml(t, t.id === active)).join("")}</div>
+      ${g === "독일" ? `<p class="theme-note">${escapeHtml(GERMANY_NOTE)}</p>` : ""}
+    </div>`;
+  }).join("");
+  root.querySelectorAll(".theme-card").forEach((b) =>
+    b.addEventListener("click", () => {
+      applyTheme(b.dataset.theme, { count: true });
+      toast(`${getTheme(b.dataset.theme).name} 테마로 바꿨어요.`);
+    })
+  );
+}
+
+function renderThemeLists() {
+  renderThemeInto("#theme-list");
+  renderThemeInto("#student-theme-list");
+}
+
+let viewBeforeTheme = null;
+$("#theme-nav-btn").addEventListener("click", () => {
+  // 학생으로 로그인해 있으면 사이드바를 유지한 채 페이지만 바꾼다
+  if (student && !superAdminAuthed) return openStudentPage("theme");
+  viewBeforeTheme = currentView;
+  showView("theme-picker");
+  renderThemeLists();
 });
 
 // =============================================================
@@ -759,7 +830,15 @@ $("#student-login-btn").addEventListener("click", async () => {
     $("#student-pw2").value = "";
     // 이름으로 전체 관리자가 되는 경로는 없앴다. 전체 관리자는 광고 문의 칸의
     // 비밀 코드로만 열린다.
-    await saveSession({ classCode, role: "student", studentId: id, studentName: name });
+    // 이 계정에 관리자 권한이 붙어 있으면 사이드바에 관리자 항목이 생긴다
+    accountIsAdmin = await data.isAccountAdmin(classCode, id);
+    superAdminAuthed = accountIsAdmin;
+    updateAdminQuickBtn();
+    await saveSession({
+      classCode,
+      role: accountIsAdmin ? "superadmin" : "student",
+      studentId: id, studentName: name,
+    });
     await enterStudentHome();
   } catch (e) {
     setHint("#student-login-hint", "오류: " + e.message);
@@ -787,6 +866,7 @@ async function enterStudentHome() {
   blurTextIn($("#student-greeting"), 60);
   $("#student-greeting-eyebrow").textContent = classLabel(classCode);
   $("#sidebar-student-name").textContent = `${classLabel(classCode)} · ${student.name}`;
+  updateAdminSideNav();
   // 페이지1(나의 소원)을 기본으로 보여줌. 페이지2(긁어서 확인하기)는
   // 사이드바에서 눌렀을 때만 불러온다 (독립된 큰 페이지로 분리).
   $$(".student-page-nav").forEach((b) => b.classList.toggle("active", b.dataset.page === "wish"));
@@ -819,10 +899,19 @@ async function openStudentPage(pageName) {
     );
     await refreshFeedbackBoard("#student-feedback-list");
   }
+  if (pageName === "theme") renderThemeLists();
 }
 
 $$(".student-page-nav").forEach((b) =>
-  b.addEventListener("click", () => openStudentPage(b.dataset.page))
+  b.addEventListener("click", async () => {
+    // "관리자"는 학생 페이지가 아니라 전체 관리자 패널로 넘어간다
+    if (b.dataset.page === "admin") {
+      if (!(await ensureRole("superadmin"))) return;
+      await enterSuperAdmin();
+      return;
+    }
+    await openStudentPage(b.dataset.page);
+  })
 );
 
 async function refreshMyWish() {
@@ -1487,7 +1576,7 @@ async function enterSuperAdmin() {
   showView("super-admin");
   $("#sa-detail").classList.add("hidden");
   saCurrentCode = null;
-  await Promise.all([refreshOverview(), refreshSaVotes(), refreshAdInbox()]);
+  await Promise.all([refreshOverview(), refreshSaVotes(), refreshAdInbox(), refreshAdminAccounts()]);
 }
 
 async function refreshOverview() {
@@ -1661,6 +1750,45 @@ async function refreshSaVotes() {
 }
 $("#sa-votes-refresh").addEventListener("click", refreshSaVotes);
 
+// ---- 관리자 권한을 가진 계정 목록 (누가 언제 받았는지 + 회수) ----
+async function refreshAdminAccounts() {
+  const list = $("#sa-admins-list");
+  list.innerHTML = `<li class="muted small">불러오는 중…</li>`;
+  try {
+    const rows = await data.listAdminAccounts();
+    list.innerHTML = rows.length
+      ? rows.map((r) => `<li class="feedback-item" data-id="${escapeHtml(r.id)}">
+          <div class="row-between">
+            <span class="feedback-author">${escapeHtml(r.name || "이름 없음")}
+              <span class="feedback-role"> · ${escapeHtml(classLabel(r.classCode))}</span></span>
+            <span class="feedback-time">${escapeHtml(formatFeedbackTime(r.grantedAt))}</span>
+          </div>
+          <div class="report-actions">
+            <button class="btn btn-ghost btn-sm sa-admin-revoke" data-id="${escapeHtml(r.id)}">권한 거두기</button>
+          </div>
+        </li>`).join("")
+      : `<li class="muted small">아직 관리자 권한을 받은 계정이 없어요.</li>`;
+    if (rows.length) revealChildren(list);
+    list.querySelectorAll(".sa-admin-revoke").forEach((b) =>
+      b.addEventListener("click", async () => {
+        if (!(await confirmModal("이 계정의 관리자 권한을 거둘까요?"))) return;
+        if (!(await ensureRole("superadmin"))) return;
+        if (!useToken("adminOp")) return;
+        try {
+          await data.revokeAccountAdmin(b.dataset.id);
+          toast("권한을 거뒀어요.");
+          await refreshAdminAccounts();
+        } catch (e) {
+          toast("실패: " + e.message, false);
+        }
+      })
+    );
+  } catch (e) {
+    list.innerHTML = `<li class="err">불러오기 실패: ${escapeHtml(e.message)}</li>`;
+  }
+}
+$("#sa-admins-refresh").addEventListener("click", refreshAdminAccounts);
+
 // =============================================================
 //  6) 전체 관리자 바로가기 버튼
 //  한 번이라도 슈퍼 관리자로 인증하면 이 기기에서는 어느 화면에 있든
@@ -1675,6 +1803,29 @@ let superAdminAuthed = false;
 // 새로고침해도 유지되고, 유효기간(1시간)이 지나면 자동으로 닫힌다.
 async function grantSuperAdmin() {
   if (!classCode) classCode = CREATOR_CLASS; // 학급 밖에서 입력했을 때의 기본값
+
+  // 학생으로 로그인한 상태에서 코드를 넣었다면 "그 계정"에 권한을 붙인다.
+  // 그러면 다른 기기에서 그 계정으로 로그인해도 관리자 화면이 열린다.
+  const target = student && student.id !== SUPER_ADMIN.studentId ? student : null;
+  if (target) {
+    try {
+      await data.grantAccountAdmin(classCode, target.id, target.name);
+      accountIsAdmin = true;
+      toast(`${target.name} 계정에 관리자 권한이 붙었어요.`);
+    } catch (e) {
+      toast("권한 저장 실패: " + e.message, false);
+    }
+    markSuperAdminAuthed();
+    updateAdminSideNav();
+    await saveSession({
+      classCode, role: "superadmin",
+      studentId: target.id, studentName: target.name,
+    });
+    await enterSuperAdmin();
+    return;
+  }
+
+  // 로그인 전에 넣었다면 이 기기에서만 열리는 임시 권한
   student = { id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name };
   adminSession = null;
   await saveSession({ classCode, role: "superadmin" });
@@ -1682,6 +1833,12 @@ async function grantSuperAdmin() {
   setClassChip(classCode);
   toast("전체 관리자 권한이 열렸어요.");
   await enterSuperAdmin();
+}
+
+// 이 계정에 관리자 권한이 붙어 있는지 (서버 기록 기준)
+let accountIsAdmin = false;
+function updateAdminSideNav() {
+  $("#side-nav-admin").classList.toggle("hidden", !accountIsAdmin);
 }
 
 async function refreshSuperAdminAuthed() {
@@ -2496,9 +2653,13 @@ updateCodexBtn();
 //  시작: 저장된 세션이 있으면 로그인 상태로 바로 복원
 // =============================================================
 try {
-  setPororo(localStorage.getItem(PORORO_KEY) === "1");
+  // 예전 뽀로로 토글 설정이 남아 있으면 테마로 옮겨준다 (1회 이관)
+  if (!localStorage.getItem(THEME_KEY) && localStorage.getItem(PORORO_KEY) === "1") {
+    localStorage.setItem(THEME_KEY, "pororo");
+  }
   localStorage.removeItem("manito.flashy"); // 예전 "쓸때없이 화려한 모드" 설정 정리
 } catch {}
+applyTheme(currentTheme(), { remember: false });
 
 (async function init() {
   await refreshSuperAdminAuthed(); // 서명된 토큰에서만 관리자 권한을 인정
@@ -2519,8 +2680,26 @@ try {
         return;
       }
       if (saved.role === "superadmin") {
-        student = { id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name };
+        // 계정에 붙은 권한이면 그 학생으로 돌아가고, 아니면 임시 권한
+        if (saved.subjectId) {
+          student = { id: saved.subjectId, name: saved.name };
+          accountIsAdmin = await data.isAccountAdmin(classCode, saved.subjectId);
+          if (!accountIsAdmin) {
+            // 권한이 회수됐으면 평범한 학생으로 되돌린다
+            superAdminAuthed = false;
+            updateAdminQuickBtn();
+            await saveSession({
+              classCode, role: "student",
+              studentId: saved.subjectId, studentName: saved.name,
+            });
+            await enterStudentHome();
+            return;
+          }
+        } else {
+          student = { id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name };
+        }
         markSuperAdminAuthed();
+        updateAdminSideNav();
         await enterSuperAdmin();
         return;
       }
