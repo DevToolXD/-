@@ -687,6 +687,7 @@ body.special-0603 #special-badge {
 
 /* ---- 쨍한 원색 짝퉁 배색으로 스킨 교체 ---- */
 body.pororo {
+  /* 이 테마는 아래에서 --ok 를 따로(짝퉁 느낌의 초록) 정해 쓴다 */
   --green-50: #dff2ff;
   --green-100: #b9e3ff;
   --green-200: #7fcaff;
@@ -1407,6 +1408,7 @@ body.de-theme h2 {
 
 /* ---- 신성로마제국 (962–1806) : 금빛 바탕 + 검은 쌍두수리 ---- */
 body.theme-hre {
+  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
   --green-50: #fdf6e0;
   --green-100: #f8e9b8;
   --green-200: #efd77c;
@@ -1437,6 +1439,7 @@ body.theme-hre::after {
 
 /* ---- 독일제국 (1871–1918) : 흑·백·적 ---- */
 body.theme-kaiserreich {
+  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
   --green-50: #fdf1f1;
   --green-100: #fbdada;
   --green-200: #f3a2a2;
@@ -1456,6 +1459,7 @@ body.theme-kaiserreich {
 
 /* ---- 바이마르 공화국 (1919–1933) : 흑·적·금 (조금 바랜 종이 느낌) ---- */
 body.theme-weimar {
+  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
   --green-50: #fdf7e6;
   --green-100: #faedc7;
   --green-200: #f0d98b;
@@ -1475,6 +1479,7 @@ body.theme-weimar {
 
 /* ---- 독일연방공화국 (1949– ) : 흑·적·금, 오늘의 독일 ---- */
 body.theme-brd {
+  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
   --green-50: #fff8e1;
   --green-100: #ffefb8;
   --green-200: #ffe173;
