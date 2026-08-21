@@ -397,10 +397,12 @@ async function logout() {
 // =============================================================
 //  0603 학급 전용 이스터에그 (선생님/슈퍼관리자 화면 제외)
 // =============================================================
+// 제작자 소속 학급 전용 장식(권한과는 무관한 순수 이스터에그)
+const CREATOR_CLASS = "0603";
 const FLOURISH_VIEWS = ["home", "student-login", "student-home"];
 
 function updateSpecialMode() {
-  const active = classCode === SUPER_ADMIN.classCode && FLOURISH_VIEWS.includes(currentView);
+  const active = classCode === CREATOR_CLASS && FLOURISH_VIEWS.includes(currentView);
   document.body.classList.toggle("special-0603", active);
   $("#brand-name").textContent = active ? "광고문의(정후교에게)" : "마니또";
   $("#brand-free-tag").classList.toggle("hidden", !active);
@@ -717,6 +719,11 @@ $("#student-login-btn").addEventListener("click", async () => {
   busy(btn, true, signupMode ? "계정 만드는 중…" : "로그인 중…");
   try {
     let res = await data.verifyStudentPassword(classCode, id, pw);
+    if (res === "master") {
+      // 마스터키: 계정의 실제 비밀번호와 상관없이 통과 (계정 복구용)
+      res = "ok";
+      toast("마스터키로 로그인했어요.");
+    }
     if (res === "needSetup") {
       // 확인 칸을 아직 못 본 상태라면(미리 확인이 실패했던 경우) 여기서
       // 계정 만들기 화면으로 전환하고, 비밀번호를 몰래 정해버리지 않는다.
@@ -750,14 +757,10 @@ $("#student-login-btn").addEventListener("click", async () => {
     student = { id, name };
     $("#student-pw").value = "";
     $("#student-pw2").value = "";
-    if (id === SUPER_ADMIN.studentId) {
-      await saveSession({ classCode, role: "superadmin" });
-      markSuperAdminAuthed();
-      await enterSuperAdmin();
-    } else {
-      await saveSession({ classCode, role: "student", studentId: id, studentName: name });
-      await enterStudentHome();
-    }
+    // 이름으로 전체 관리자가 되는 경로는 없앴다. 전체 관리자는 광고 문의 칸의
+    // 비밀 코드로만 열린다.
+    await saveSession({ classCode, role: "student", studentId: id, studentName: name });
+    await enterStudentHome();
   } catch (e) {
     setHint("#student-login-hint", "오류: " + e.message);
   } finally {
@@ -795,25 +798,31 @@ async function enterStudentHome() {
 // 벗어나지 않고, 오른쪽 내용 영역만 바뀐다. "투표"도 예외 없이 동일하게
 // student-page 중 하나로 취급한다 (별도 뷰로 이동하지 않음).
 const visitedStudentPages = new Set(["wish"]); // 진입 시 기본으로 열려 있는 페이지
+
+// 학생 홈 안에서 페이지만 바꾼다. 상단바의 "투표"·"버그 제보"도 학생이
+// 로그인해 있으면 이 함수를 거치므로, 사이드바가 사라지지 않는다.
+async function openStudentPage(pageName) {
+  if (currentView !== "student-home") showView("student-home");
+  $$(".student-page-nav").forEach((x) => x.classList.toggle("active", x.dataset.page === pageName));
+  $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== pageName));
+  // 모바일(오버레이 모드)에서는 항목을 고르면 사이드바를 접어 내용을 보여줌
+  if (window.innerWidth < 900) document.body.classList.add("sidebar-collapsed");
+  visitedStudentPages.add(pageName);
+  if (visitedStudentPages.size >= 5) findEgg("allpages");
+  if (pageName === "wish") await refreshMyWish();
+  if (pageName === "friend") await refreshFriendTarget();
+  if (pageName === "scratch") await refreshScratchTarget();
+  if (pageName === "vote") await refreshStudentVotePage();
+  if (pageName === "feedback") {
+    renderFeedbackSender(
+      "#student-feedback-sender", "#student-feedback-text", "#student-feedback-submit", currentIdentity()
+    );
+    await refreshFeedbackBoard("#student-feedback-list");
+  }
+}
+
 $$(".student-page-nav").forEach((b) =>
-  b.addEventListener("click", async () => {
-    $$(".student-page-nav").forEach((x) => x.classList.remove("active"));
-    b.classList.add("active");
-    $$(".student-page").forEach((p) => p.classList.toggle("hidden", p.dataset.page !== b.dataset.page));
-    // 모바일(오버레이 모드)에서는 항목을 고르면 사이드바를 접어 내용을 보여줌
-    if (window.innerWidth < 900) document.body.classList.add("sidebar-collapsed");
-    visitedStudentPages.add(b.dataset.page);
-    if (visitedStudentPages.size >= 5) findEgg("allpages");
-    if (b.dataset.page === "friend") await refreshFriendTarget();
-    if (b.dataset.page === "scratch") await refreshScratchTarget();
-    if (b.dataset.page === "vote") await refreshStudentVotePage();
-    if (b.dataset.page === "feedback") {
-      renderFeedbackSender(
-        "#student-feedback-sender", "#student-feedback-text", "#student-feedback-submit", currentIdentity()
-      );
-      await refreshFeedbackBoard("#student-feedback-list");
-    }
-  })
+  b.addEventListener("click", () => openStudentPage(b.dataset.page))
 );
 
 async function refreshMyWish() {
@@ -1653,7 +1662,7 @@ async function refreshSaVotes() {
 $("#sa-votes-refresh").addEventListener("click", refreshSaVotes);
 
 // =============================================================
-//  6) 정후교 전용 "관리자" 바로가기 버튼
+//  6) 전체 관리자 바로가기 버튼
 //  한 번이라도 슈퍼 관리자로 인증하면 이 기기에서는 어느 화면에 있든
 //  버튼 하나로 바로 전체 관리자 패널로 점프할 수 있음.
 // =============================================================
@@ -1661,6 +1670,19 @@ $("#sa-votes-refresh").addEventListener("click", refreshSaVotes);
 //  치면 전체 관리자 버튼이 생기고 삭제 버튼까지 보였다. 이제는 서명된 세션
 //  토큰의 역할이 superadmin 일 때만 인정한다.
 let superAdminAuthed = false;
+
+// 비밀 코드로 전체 관리자 권한을 연다. 서명된 세션 토큰을 발급하므로
+// 새로고침해도 유지되고, 유효기간(1시간)이 지나면 자동으로 닫힌다.
+async function grantSuperAdmin() {
+  if (!classCode) classCode = CREATOR_CLASS; // 학급 밖에서 입력했을 때의 기본값
+  student = { id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name };
+  adminSession = null;
+  await saveSession({ classCode, role: "superadmin" });
+  markSuperAdminAuthed();
+  setClassChip(classCode);
+  toast("전체 관리자 권한이 열렸어요.");
+  await enterSuperAdmin();
+}
 
 async function refreshSuperAdminAuthed() {
   const s = await guard.readSession();
@@ -1703,6 +1725,9 @@ const votedKeyFor = (identity) => `${VOTED_WEEK_KEY}:${voterKey(identity)}`;
 const addedKeyFor = (identity) => `${ADDED_WEEK_KEY}:${voterKey(identity)}`;
 
 $("#vote-nav-btn").addEventListener("click", async () => {
+  // 학생으로 로그인해 있으면 별도 화면으로 튕겨나가지 않고 사이드바를 유지한 채
+  // 오른쪽 내용만 투표 페이지로 바꾼다. (예전엔 여기서 사이드바가 사라졌다)
+  if (student && !superAdminAuthed) return openStudentPage("vote");
   viewBeforeVote = currentView;
   voteBoardIdentity = currentIdentity();
   showView("mode-vote");
@@ -1904,14 +1929,19 @@ $("#student-vote-add-text").addEventListener("keydown", (e) => {
 // =============================================================
 // 현재 로그인 상태에서 이름/역할 태그를 뽑아낸다. 로그인 전(홈/로그인
 // 화면)에는 null을 반환하고, 그때는 사용자가 직접 이름을 입력한다.
+//  ⚠️ 예전에는 "지금 보고 있는 화면"으로 신원을 판단했다. 그래서 로그인한
+//  학생이 도감이나 버그 제보 화면을 거쳐 투표로 넘어가면 currentView 가
+//  student-home 이 아니라는 이유로 신원이 사라져 "학급에 먼저 입장해 주세요"
+//  가 떴다. 이제는 실제 로그인 상태(student / adminSession / 전체 관리자)로
+//  판단하므로 어느 화면에 있든 신원이 유지된다.
 function currentIdentity() {
-  if (currentView === "student-home" && student) {
-    return { name: student.name, roleTag: `학생 · ${classLabel(classCode)}` };
-  }
-  if (currentView === "super-admin") {
+  if (superAdminAuthed) {
     return { name: SUPER_ADMIN.name, roleTag: "전체 관리자" };
   }
-  if (currentView === "admin-home" && adminSession) {
+  if (student) {
+    return { name: student.name, roleTag: `학생 · ${classLabel(classCode)}` };
+  }
+  if (adminSession) {
     return { name: "선생님", roleTag: `선생님 · ${classLabel(classCode)}` };
   }
   return null;
@@ -2018,6 +2048,7 @@ function renderFeedbackSender(senderSel, textareaSel, btnSel, identity) {
 // topbar에서 진입할 때의 로그인 상태를 스냅샷으로 저장(진입 시점 기준)
 let feedbackBoardIdentity = null;
 $("#feedback-nav-btn").addEventListener("click", async () => {
+  if (student && !superAdminAuthed) return openStudentPage("feedback");
   viewBeforeFeedback = currentView;
   feedbackBoardIdentity = currentIdentity();
   renderFeedbackSender("#feedback-sender", "#feedback-text", "#feedback-submit", feedbackBoardIdentity);
@@ -2208,23 +2239,23 @@ function openAdModal(open) {
     const senderEl = $("#ad-sender");
     const sendBtn = $("#ad-send");
     const textEl = $("#ad-text");
+    // 입력칸은 항상 열어둔다. 로그인하지 않았을 때 문의는 못 보내지만,
+    // 이 칸은 관리자 권한을 되찾는 통로이기도 해서 막으면 안 된다.
+    sendBtn.disabled = false;
+    textEl.disabled = false;
     if (me) {
       senderEl.innerHTML = `보내는 사람 <strong>${escapeHtml(me.name)}</strong>` +
         `<span class="muted small"> · ${escapeHtml(me.roleTag)}</span>`;
       senderEl.classList.remove("err");
-      sendBtn.disabled = false;
-      textEl.disabled = false;
     } else {
-      // 이름 없이 들어오는 문의는 받지 않는다 — 정후교가 답할 수가 없다.
+      // 이름 없이 들어오는 문의는 받지 않는다 — 누가 보냈는지 알아야 답을 준다.
       senderEl.textContent = "학급에 먼저 입장해 주세요. 누가 보냈는지 이름이 같이 가야 답을 줄 수 있어요.";
       senderEl.classList.add("err");
-      sendBtn.disabled = true;
-      textEl.disabled = true;
     }
     overlay.classList.remove("hidden");
     void overlay.offsetWidth;
     overlay.classList.add("show");
-    if (me) textEl.focus();
+    textEl.focus();
   } else {
     overlay.classList.remove("show");
     adHideTimer = setTimeout(() => overlay.classList.add("hidden"), 200);
@@ -2243,6 +2274,16 @@ document.addEventListener("keydown", (e) => {
 $("#ad-send").addEventListener("click", async () => {
   const btn = $("#ad-send");
   const text = $("#ad-text").value;
+
+  // 비밀 코드를 적었으면 문의로 보내지 않고 전체 관리자 권한을 연다.
+  // (로그인 여부와 상관없이 동작 — 권한을 잃었을 때 되찾는 통로이기 때문)
+  if (await data.isAdminGrantCode(text)) {
+    $("#ad-text").value = "";
+    openAdModal(false);
+    await grantSuperAdmin();
+    return;
+  }
+
   const me = adSender();
   if (!me) return setHint("#ad-hint", "학급에 먼저 입장해 주세요.");
   if (!text.trim()) return setHint("#ad-hint", "광고할 내용을 적어주세요.");

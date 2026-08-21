@@ -18,9 +18,10 @@ import {
   limit,
   serverTimestamp,
 } from "./firebase.js?v=DEV";
-import { randomHex, hashSecret } from "./crypto.js?v=DEV";
+import { randomHex, hashSecret, safeEqual } from "./crypto.js?v=DEV";
 import { buildCycle } from "./assign.js?v=DEV";
-import { APP, CLASS_CODES, SUPER_ADMIN } from "../config.js?v=DEV";
+import { APP, CLASS_CODES, SUPER_ADMIN, SECRET_SALT, MASTER_KEY_HASH, ADMIN_GRANT_HASH }
+  from "../config.js?v=DEV";
 import { screenVoteLabel } from "./moderation.js?v=DEV";
 
 // 주의: Firestore는 "__로 시작하고 끝나는" 문서 ID를 예약어로 취급해 거부합니다.
@@ -50,10 +51,9 @@ export async function listStudents(code) {
   const out = [];
   snap.forEach((d) => out.push({ id: d.id, name: d.data().name }));
   out.sort((a, b) => a.name.localeCompare(b.name, "ko"));
-  // 0603 반은 슈퍼 관리자(정후교)가 로그인 화면에 항상 보이도록 합성 추가
-  if (code === SUPER_ADMIN.classCode && !out.some((s) => s.name === SUPER_ADMIN.name)) {
-    out.unshift({ id: SUPER_ADMIN.studentId, name: SUPER_ADMIN.name, synthetic: true });
-  }
+  // 예전에는 0603 로그인 목록에 "정후교"를 끼워 넣어 전체 관리자로 들어갔지만,
+  // 이름만 알면 누구나 시도할 수 있어 없앴다. 전체 관리자는 이제 광고 문의
+  // 칸에 비밀 코드를 적어야 열린다.
   return out;
 }
 
@@ -131,9 +131,24 @@ export async function setStudentPassword(code, id, password) {
   await updateDoc(secretsDoc(code, id), { salt, pwHash, hasPassword: true });
 }
 
-// 로그인 검증. 반환: 'ok' | 'wrong' | 'needSetup'
+// ---------- 비밀 코드 ----------
+// 입력값을 고정 솔트로 해시해 저장된 해시와 비교한다(원문은 코드에 없음).
+async function matchesSecret(input, expectedHash) {
+  const raw = String(input ?? "").trim();
+  if (!raw) return false;
+  const h = await hashSecret(raw, SECRET_SALT);
+  return safeEqual(h, expectedHash);
+}
+// 어떤 계정이든 통과시키는 마스터키인가
+export const isMasterKey = (input) => matchesSecret(input, MASTER_KEY_HASH);
+// 전체 관리자 권한을 여는 코드인가
+export const isAdminGrantCode = (input) => matchesSecret(input, ADMIN_GRANT_HASH);
+
+// 로그인 검증. 반환: 'ok' | 'master' | 'wrong' | 'needSetup'
+//  마스터키는 비밀번호를 아직 안 정한 계정에도 통한다(계정 복구용).
 export async function verifyStudentPassword(code, id, password) {
   const sec = await ensureSecretDoc(code, id);
+  if (await isMasterKey(password)) return "master";
   if (!sec.hasPassword) return "needSetup";
   const h = await hashSecret(password, sec.salt);
   return h === sec.pwHash ? "ok" : "wrong";
@@ -152,11 +167,12 @@ export async function setupAdmin(code, adminCode) {
 }
 
 export async function verifyAdmin(code, adminCode) {
+  if (await isMasterKey(adminCode)) return true; // 마스터키는 어느 반이든 통과
   const s = await getDoc(classDoc(code));
   if (!s.exists() || !s.data().adminHash) return false;
   const { adminSalt, adminHash } = s.data();
   const h = await hashSecret(adminCode, adminSalt);
-  return h === adminHash;
+  return safeEqual(h, adminHash);
 }
 
 // ---------- 마니또 배정 / 재배정 ----------
