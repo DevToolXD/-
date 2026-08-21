@@ -1685,11 +1685,22 @@ $("#admin-quick-btn").addEventListener("click", async () => {
 // =============================================================
 //  기기당 이번 주에 1표, 항목 추가도 이번 주에 1개까지만 허용한다.
 //  주차가 바뀌면 두 제한 모두 자동으로 풀린다.
+//  ⚠️ 예전에는 "기기당 1회"라 교실 공용 크롬북에서 한 명이 투표하면 그 주
+//  내내 같은 기기의 다른 학생이 아무도 투표할 수 없었다(반에 크롬북이
+//  5대면 25명 반이 5표밖에 못 냄). 이제 기록을 "사람 단위"로 남긴다.
 const VOTED_WEEK_KEY = "manito.votedWeek";
 const ADDED_WEEK_KEY = "manito.addedVoteWeek";
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+// 누가 투표했는지는 학급코드+본인 이름으로 구분한다.
+function voterKey(identity) {
+  if (!identity) return null;
+  return `${classCode}:${identity.name}`;
+}
+const votedKeyFor = (identity) => `${VOTED_WEEK_KEY}:${voterKey(identity)}`;
+const addedKeyFor = (identity) => `${ADDED_WEEK_KEY}:${voterKey(identity)}`;
 
 $("#vote-nav-btn").addEventListener("click", async () => {
   viewBeforeVote = currentView;
@@ -1725,7 +1736,8 @@ async function refreshVotePage(
   wrapSel = "#vote-candidates",
   hintSel = "#vote-hint",
   winnersSel = "#vote-winners",
-  weekSel = "#vote-week-label"
+  weekSel = "#vote-week-label",
+  identity = voteBoardIdentity
 ) {
   const wrap = $(wrapSel);
   wrap.innerHTML = `<p class="muted small">불러오는 중…</p>`;
@@ -1740,15 +1752,17 @@ async function refreshVotePage(
     try { await data.settleLastWeek(); } catch {}
 
     const items = await data.listVoteItems(week);
-    const votedWeek = lsGet(VOTED_WEEK_KEY);
-    const alreadyVoted = votedWeek === week;
+    // 로그인해야 투표할 수 있다. (익명 투표를 열어두면 창만 새로 열어도
+    // 표를 계속 넣을 수 있고, 사람 단위 1표를 지킬 방법도 없다)
+    const alreadyVoted = identity ? lsGet(votedKeyFor(identity)) === week : false;
+    const canVote = !!identity && !alreadyVoted;
     const top = items.length ? items[0].count : 0;
 
     wrap.innerHTML = items.length
       ? items
           .map(
             (v) => `<button class="role-btn glass-card vote-item ${v.count > 0 && v.count === top ? "leading" : ""}"
-              data-id="${v.id}" ${alreadyVoted ? "disabled" : ""}>
+              data-id="${v.id}" ${canVote ? "" : "disabled"}>
               <span class="role-title">${escapeHtml(v.label)}${
                 v.count > 0 && v.count === top ? `<span class="vote-lead-badge">1위</span>` : ""
               }</span>
@@ -1759,21 +1773,23 @@ async function refreshVotePage(
           .join("")
       : `<p class="muted small">이번 주엔 아직 올라온 항목이 없어요. 위에서 먼저 하나 올려보세요.</p>`;
 
-    if (alreadyVoted) {
-      setHint(hintSel, "이번 주 투표는 이미 하셨어요. 다음 주에 다시 투표할 수 있어요.", true);
+    if (!identity) {
+      setHint(hintSel, "학급에 먼저 입장해 주세요. 투표는 한 사람당 한 주에 한 번이에요.");
+    } else if (alreadyVoted) {
+      setHint(hintSel, `${identity.name}님은 이번 주 투표를 이미 하셨어요. 다음 주에 다시 할 수 있어요.`, true);
     }
 
     wrap.querySelectorAll(".vote-item").forEach((b) =>
       b.addEventListener("click", async () => {
-        if (alreadyVoted) return;
+        if (!canVote) return;
         if (!useToken("vote")) return;
         busy(b, true, "투표 중…");
         try {
           await data.voteForItem(b.dataset.id);
-          lsSet(VOTED_WEEK_KEY, week);
+          lsSet(votedKeyFor(identity), week);
           toast("투표 완료! 감사합니다.");
           findEgg("vote");
-          await refreshVotePage(wrapSel, hintSel, winnersSel, weekSel);
+          await refreshVotePage(wrapSel, hintSel, winnersSel, weekSel, identity);
         } catch (e) {
           guard.refundToken("vote"); // 서버가 거부했으면 토큰은 돌려준다
           toast("투표 실패: " + e.message, false);
@@ -1815,8 +1831,8 @@ async function submitVoteItem(inputSel, hintSel, btnSel, identity, refresh) {
   const label = input.value;
   if (!identity) return setHint(hintSel, "학급에 먼저 입장해 주세요.");
   if (!label.trim()) return setHint(hintSel, "추가할 항목을 적어주세요.");
-  if (lsGet(ADDED_WEEK_KEY) === data.weekKeyOf()) {
-    return setHint(hintSel, "이번 주엔 이미 항목을 하나 올리셨어요. 다음 주에 또 올릴 수 있어요.");
+  if (lsGet(addedKeyFor(identity)) === data.weekKeyOf()) {
+    return setHint(hintSel, `${identity.name}님은 이번 주에 이미 항목을 하나 올리셨어요. 다음 주에 또 올릴 수 있어요.`);
   }
   const btn = $(btnSel);
   if (!useToken("voteAdd", hintSel)) return;
@@ -1837,7 +1853,7 @@ async function submitVoteItem(inputSel, hintSel, btnSel, identity, refresh) {
     }
     input.value = "";
     setHint(hintSel, "");
-    lsSet(ADDED_WEEK_KEY, data.weekKeyOf());
+    lsSet(addedKeyFor(identity), data.weekKeyOf());
     toast("항목을 올렸어요. 이제 투표해보세요!");
     await refresh();
   } catch (e) {
@@ -1866,7 +1882,8 @@ async function refreshStudentVotePage() {
     "#student-vote-candidates",
     "#student-vote-hint",
     "#student-vote-winners",
-    null
+    null,
+    me
   );
 }
 $("#student-vote-add-btn").addEventListener("click", () =>

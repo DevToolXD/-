@@ -46,6 +46,22 @@ const list = async (path) => (await get(path)).documents || [];
 // 자동 ID 문서 생성 (POST). 반환값에 name(문서 경로)이 들어온다.
 const post = (path, obj) =>
   curlJSON(["-X", "POST", `${BASE}/${path}`, "-H", "Content-Type: application/json", "-d", JSON.stringify(toFields(obj))]);
+
+// 보안 규칙이 createdAt 에 "서버 시각"만 허용하므로(시각 위조 차단), REST 로도
+// 서버 시각으로 써야 한다. 일반 POST/PATCH 로는 불가능하고 :commit 의
+// updateTransforms(REQUEST_TIME) 를 써야 한다. 앱은 serverTimestamp() 로 같은 일을 한다.
+async function postServerTime(path, obj, tsField = "createdAt", fixedId = null) {
+  const id = fixedId || ("t" + randomHex(8));
+  const name = `projects/manito-e14c1/databases/(default)/documents/${path}/${id}`;
+  const body = {
+    writes: [{
+      update: { name, ...toFields(obj) },
+      updateTransforms: [{ fieldPath: tsField, setToServerValue: "REQUEST_TIME" }],
+    }],
+  };
+  const res = await curlJSON(["-X", "POST", `${BASE}:commit`, "-H", "Content-Type: application/json", "-d", JSON.stringify(body)]);
+  return { res, id };
+}
 // list() 는 원본 문서를 주므로 필드를 쓰려면 이걸로 편다
 const listFields = async (path) => (await list(path)).map(fromFields);
 // 규칙이 아직 게시되지 않았는지 판별 (새 컬렉션은 기본 거부에 걸린다)
@@ -183,15 +199,22 @@ async function main() {
     check("주차 키 형식", /^\d{4}-\d{2}-\d{2}$/.test(weekKey));
 
     const label = TAG + "테마";
-    const created2 = await post(`voteItems`, {
-      label, count: 0, weekKey, addedBy: TAG + "학생", addedByRole: "학생 · 테스트",
-      createdAt: new Date(),
+
+    // 먼저 "클라이언트가 마음대로 정한 시각"으로는 못 쓴다는 것부터 확인한다
+    const forged = await post(`voteItems`, {
+      label: TAG + "위조", count: 0, weekKey, addedBy: TAG + "학생",
+      addedByRole: "학생 · 테스트", createdAt: new Date("2020-01-01T00:00:00Z"),
     });
-    const itemId = created2.name ? created2.name.split("/").pop() : null;
+    check("시각을 위조한 쓰기는 규칙이 거부함", denied(forged));
+
+    const { res: created2, id: itemId0 } = await postServerTime(`voteItems`, {
+      label, count: 0, weekKey, addedBy: TAG + "학생", addedByRole: "학생 · 테스트",
+    });
+    const itemId = created2.error ? null : itemId0;
     if (!itemId && denied(created2)) {
       skip("voteItems 규칙이 아직 게시되지 않았습니다 → Firebase 콘솔에 firestore.rules 를 게시하세요");
     } else {
-      check("투표 항목이 만들어짐", !!itemId);
+      check("서버 시각으로는 투표 항목이 만들어짐", !!itemId, created2.error?.message);
     }
 
     if (itemId) {
@@ -218,24 +241,44 @@ async function main() {
 
   console.log("\n[6-2] 부적절 시도 신고가 해당 반으로 전달되는지");
   {
-    const created3 = await post(`classes/${TEST_CODE}/reports`, {
+    // 신고는 규칙상 삭제가 막혀 있을 수 있어(구 규칙) 실행할 때마다 문서가
+    // 쌓인다. 고정 ID 하나만 재사용해서 남더라도 딱 1건으로 묶어 둔다.
+    const FIXED = "e2e-report-probe";
+    await del(`classes/${TEST_CODE}/reports/${FIXED}`); // 있으면 지우고 새로 시작
+    const { res: created3, id: rid0 } = await postServerTime(`classes/${TEST_CODE}/reports`, {
       name: TAG + "학생", roleTag: "학생 · 테스트", text: TAG + "차단된항목",
-      reason: "욕설·비속어", status: "pending", createdAt: new Date(),
-    });
-    const rid = created3.name ? created3.name.split("/").pop() : null;
+      reason: "부적절한 항목", status: "pending",
+    }, "createdAt", FIXED);
+    const rid = created3.error ? null : rid0;
     if (!rid && denied(created3)) {
       skip("reports 규칙이 아직 게시되지 않았습니다 → Firebase 콘솔에 firestore.rules 를 게시하세요");
     } else {
-      check("신고 문서 생성", !!rid);
+      check("신고 문서 생성", !!rid, created3.error?.message);
     }
     if (rid) {
       const rows = await listFields(`classes/${TEST_CODE}/reports`);
-      check("선생님이 신고 목록을 읽을 수 있음", rows.some((r) => r.text === TAG + "차단된항목"));
-      await patch(`classes/${TEST_CODE}/reports/${rid}`, { status: "approved" }, ["status"]);
-      const after = fromFields(await get(`classes/${TEST_CODE}/reports/${rid}`));
-      check("선생님이 상태를 approved 로 바꿀 수 있음", after.status === "approved");
-      await del(`classes/${TEST_CODE}/reports/${rid}`);
-      check("신고 정리 완료", !!(await get(`classes/${TEST_CODE}/reports/${rid}`)).error);
+      check("선생님이 신고 목록을 읽을 수 있음", rows.some((r) => (r.text||"").endsWith("차단된항목")));
+
+      // 문서 하나를 ID로 콕 집어 읽는 건 규칙상 막혀 있다(목록만 허용).
+      check("신고를 ID로 직접 조회하는 건 차단됨", !!(await get(`classes/${TEST_CODE}/reports/${rid}`)).error);
+
+      const upd = await patch(`classes/${TEST_CODE}/reports/${rid}`, { status: "approved" }, ["status"]);
+      check("선생님이 상태를 approved 로 바꿀 수 있음", !upd.error, upd.error?.message);
+      // 읽기는 get 이 막혀 있으므로 목록으로 확인한다
+      const after = (await listFields(`classes/${TEST_CODE}/reports`)).find((r) => r.text === TAG + "차단된항목");
+      check("상태가 실제로 approved 로 바뀜", after?.status === "approved", after?.status);
+
+      // 신고 "내용"은 못 고친다 (감사 기록 보존)
+      const tamper = await patch(`classes/${TEST_CODE}/reports/${rid}`, { text: "몰래 수정" }, ["text"]);
+      check("신고 내용 위조는 거부됨", !!tamper.error);
+
+      const delRes = await del(`classes/${TEST_CODE}/reports/${rid}`);
+      const left = (await listFields(`classes/${TEST_CODE}/reports`)).filter((r) => r.text === TAG + "차단된항목");
+      if (left.length && denied(delRes)) {
+        skip("신고 삭제 허용은 새 규칙에 있습니다 → firestore.rules 를 다시 게시하세요 (그전까지 신고함이 계속 쌓입니다)");
+      } else {
+        check("처리한 신고를 지울 수 있음(신고함이 무한히 쌓이지 않음)", left.length === 0, left.length);
+      }
     }
   }
 
