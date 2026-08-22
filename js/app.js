@@ -608,11 +608,43 @@ function applyTheme(id, { remember = true, count = false } = {}) {
 // 예전 이름을 쓰던 곳(이스터에그 등)이 있어 얇게 남겨둔다
 function setPororo(on) { applyTheme(on ? "pororo" : DEFAULT_THEME); }
 
+// 미리보기 축소판에 흘려 넣을 CSS 변수 묶음.
+// 값은 themes.js 가 들고 있고, 여기서는 style 속성 문자열로만 바꾼다.
+function previewVars(p) {
+  return Object.entries({
+    "--tp-bg": p.bg, "--tp-ink": p.ink, "--tp-muted": p.muted,
+    "--tp-card": p.card, "--tp-edge": p.edge, "--tp-accent": p.accent,
+    "--tp-on-accent": p.onAccent, "--tp-radius": p.radius,
+    "--tp-blur": p.blur, "--tp-shadow": p.shadow, "--tp-spec": p.spec,
+  }).map(([k, v]) => `${k}:${String(v).replace(/[;"<>]/g, "")}`).join(";");
+}
+
+// 테마 카드 = 그 테마로 칠한 작은 화면.
+// 상단바(브랜드 + 메뉴) · 유리 카드(제목/본문 두 줄) · 기본 버튼까지
+// 실제 화면과 같은 구성으로 그려서, 색만이 아니라 UI 전체가 보이게 한다.
+function themePreviewHtml(t) {
+  const p = t.preview;
+  return `<span class="theme-preview tp-${escapeHtml(p.kind)}"
+    style="${escapeHtml(previewVars(p))}" aria-hidden="true">
+    <span class="tp-deco"></span>
+    <span class="tp-bar"><b class="tp-brand"></b><i></i><i></i><i></i></span>
+    <span class="tp-card">
+      <b class="tp-h"></b>
+      <i class="tp-l"></i><i class="tp-l tp-l-short"></i>
+      <em class="tp-btn"></em>
+    </span>
+  </span>`;
+}
+
 function themeCardHtml(t, active) {
-  const swatch = t.swatch.map((c) => `<span style="background:${escapeHtml(c)}"></span>`).join("");
-  return `<button class="theme-card ${active ? "current" : ""}" data-theme="${escapeHtml(t.id)}">
-    <span class="theme-swatch" aria-hidden="true">${swatch}</span>
-    <span class="theme-name">${escapeHtml(t.name)}</span>
+  return `<button class="theme-card ${active ? "current" : ""}"
+    data-theme="${escapeHtml(t.id)}" data-kind="${escapeHtml(t.preview.kind)}"
+    style="${escapeHtml(previewVars(t.preview))}">
+    ${themePreviewHtml(t)}
+    <span class="theme-head">
+      <span class="theme-name">${escapeHtml(t.name)}</span>
+      <span class="theme-group-tag">${escapeHtml(t.group)}</span>
+    </span>
     ${t.era ? `<span class="theme-era">${escapeHtml(t.era)}</span>` : ""}
     <span class="theme-tagline">${escapeHtml(t.tagline)}</span>
     <span class="theme-pick">${active ? "사용 중" : "이 테마 쓰기"}</span>
@@ -623,14 +655,13 @@ function renderThemeInto(sel) {
   const root = $(sel);
   if (!root) return;
   const active = currentTheme();
-  root.innerHTML = THEME_GROUPS.map((g) => {
-    const items = THEMES.filter((t) => t.group === g);
-    if (!items.length) return "";
-    return `<div class="theme-group">
-      <p class="theme-group-title">${escapeHtml(g)}</p>
-      <div class="theme-grid">${items.map((t) => themeCardHtml(t, t.id === active)).join("")}</div>
-    </div>`;
-  }).join("");
+  // 테마마다 묶음이 하나씩뿐이라 묶음별로 줄을 나누면 화면이 텅 비어 보인다.
+  // 한 줄에 나란히 놓고, 묶음 이름은 카드 안의 작은 딱지로 보여준다.
+  const ordered = THEME_GROUPS.flatMap((g) => THEMES.filter((t) => t.group === g))
+    .concat(THEMES.filter((t) => !THEME_GROUPS.includes(t.group)));
+  root.innerHTML = `<div class="theme-grid">${
+    ordered.map((t) => themeCardHtml(t, t.id === active)).join("")
+  }</div>`;
   root.querySelectorAll(".theme-card").forEach((b) =>
     b.addEventListener("click", () => {
       applyTheme(b.dataset.theme, { count: true });

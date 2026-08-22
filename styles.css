@@ -25,6 +25,11 @@
   --glass-spec: rgba(255, 255, 255, 0.75);
   --glass-spec-low: rgba(20, 40, 70, 0.16);
   --glass-edge: rgba(255, 255, 255, 0.55);
+  /* 유리의 세기 — 테마마다 다르게 준다 (뽀로로는 성에, 독일은 밤유리) */
+  --glass-blur: 28px;
+  --glass-sat: 190%;
+  /* 카드 윗면을 훑는 빛의 세기 */
+  --glass-sheen: rgba(255, 255, 255, 0.30);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -45,6 +50,7 @@
     --glass-spec: rgba(255, 255, 255, 0.14);
     --glass-spec-low: rgba(0, 0, 0, 0.5);
     --glass-edge: rgba(255, 255, 255, 0.14);
+    --glass-sheen: rgba(255, 255, 255, 0.07);
   }
 }
 
@@ -151,8 +157,8 @@ body::after {
 .student-page-nav,
 .btn-ghost,
 .chip {
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 
 .glass-card {
@@ -194,17 +200,8 @@ body.glass-refract .app-sidebar::before {
   height: 46%;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.30),
-    rgba(255, 255, 255, 0) 78%
-  );
+  background: linear-gradient(to bottom, var(--glass-sheen), transparent 78%);
   opacity: 0.9;
-}
-@media (prefers-color-scheme: dark) {
-  .glass-card::after {
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 78%);
-  }
 }
 
 .form-card { max-width: 460px; margin: 4vh auto 0; }
@@ -698,10 +695,17 @@ body.pororo {
   /* 하늘색 배경 위라 #3d6f96 은 대비가 4.1 밖에 안 나왔다(권장 4.5) — 조금 진하게 */
   --muted: #2c5878;
   --bg-base: #bfe6ff;
-  --glass-bg: #eaf7ff;
-  --glass-bg-strong: #ffffff;
-  --glass-border: #000;
-  --card-shadow: 4px 4px 0 #000;
+  --glass-bg: rgba(255, 255, 255, 0.52);
+  --glass-bg-strong: rgba(255, 255, 255, 0.74);
+  --glass-border: rgba(11, 45, 74, 0.55);
+  --glass-edge: rgba(255, 255, 255, 0.85);
+  --glass-spec: rgba(255, 255, 255, 0.95);
+  --glass-spec-low: rgba(16, 111, 204, 0.2);
+  /* 눈 내리는 테마답게 성에처럼 뿌옇게 */
+  --glass-blur: 22px;
+  --glass-sat: 150%;
+  --glass-sheen: rgba(255, 255, 255, 0.55);
+  --card-shadow: 4px 4px 0 rgba(11, 45, 74, 0.85);
   --ok: #0a8f4d;
   --err: #e0433f;
 }
@@ -710,18 +714,29 @@ body.pororo::before, body.pororo::after {
   filter: blur(60px) saturate(220%);
   opacity: 0.6;
 }
-/* 유리 블러 대신 굵은 검은 테두리 + 뚝뚝 떨어지는 그림자, 살짝 삐뚤어진
-   스티커 낱장 느낌(카드마다 미세하게 다른 각도) */
+/* 얼음 유리: 성에처럼 뿌옇게 비치되, 뽀로로다운 굵은 남색 테두리와
+   뚝뚝 떨어지는 그림자, 살짝 삐뚤어진 낱장 느낌은 그대로 둔다 */
 body.pororo .glass-card,
 body.pororo input, body.pororo select, body.pororo textarea,
 body.pororo .toast, body.pororo .modal {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border: 3px solid #000;
-  box-shadow: 4px 4px 0 #000;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  background: var(--glass-bg-strong);
+  border: 3px solid #0b2d4a;
+  box-shadow: 4px 4px 0 rgba(11, 45, 74, 0.85),
+              inset 0 1px 0 var(--glass-spec);
   border-radius: 12px;
 }
-body.pororo .glass-card::before { display: none; }
+body.pororo .glass-card { background: var(--glass-bg); }
+/* 유리 윗면의 빛 + 성에가 낀 아래쪽 가장자리 */
+body.pororo .glass-card::after { opacity: 1; }
+body.pororo .glass-card::before {
+  content: "";
+  inset: auto 0 0 0;
+  height: 34%;
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.5), transparent);
+  z-index: 0;
+}
 body.pororo .glass-card:nth-of-type(odd) { transform: rotate(-0.4deg); }
 body.pororo .glass-card:nth-of-type(even) { transform: rotate(0.4deg); }
 body.pororo .btn { border-radius: 8px; border: 2px solid #000; }
@@ -1387,23 +1402,42 @@ body.student-mode .topbar { z-index: 50; }
    외부 이미지 없이 전부 인라인 SVG + CSS.
    내용 가독성이 먼저라, 무대는 뒤로 깔고 카드는 또렷하게 둔다.
    ============================================================= */
+/* 밤빛 위에 금박을 올린 유리 화면.
+   밝은 베이지에서 어두운 무대로 바꾼 이유: 금색은 흰 바탕에서는 그냥
+   누런 색이지만, 어두운 바탕에서는 실제로 빛나 보인다. */
 body.theme-germany {
-  --green-50: #fff9e6;
-  --green-100: #ffefbf;
-  --green-200: #ffe07a;
-  --green-500: #c8102e;
-  --green-600: #a20d25;
-  --green-700: #6f0919;
-  --ok: var(--green-600);
-  --ink: #14131a;
-  --muted: #5d5a66;
-  --bg-base: #e9e6e0;
-  --glass-bg: rgba(255, 254, 250, 0.86);
-  --glass-bg-strong: rgba(255, 255, 253, 0.95);
-  --glass-border: rgba(20, 19, 26, 0.14);
-  --card-shadow: 0 16px 44px rgba(20, 15, 5, 0.18), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --green-50: #17130d;
+  --green-100: #201a10;
+  --green-200: #3b2f16;
+  --green-500: #d4a417;
+  --green-600: #e8c463;
+  --green-700: #f2dda0;
+  --ok: #6fd6a0;
+  --err: #ff8478;
+  --ink: #f6f1e6;
+  --muted: #a89c85;
+  --bg-base: #0a0910;
+  --glass-bg: rgba(23, 20, 30, 0.46);
+  --glass-bg-strong: rgba(27, 23, 34, 0.72);
+  --glass-border: rgba(212, 164, 23, 0.3);
+  --glass-edge: rgba(232, 196, 99, 0.34);
+  --glass-spec: rgba(255, 238, 198, 0.16);
+  --glass-spec-low: rgba(0, 0, 0, 0.55);
+  --glass-sheen: rgba(255, 238, 198, 0.09);
+  /* 밤유리: 더 깊게 흐리고 채도는 낮춰 차분하게 */
+  --glass-blur: 36px;
+  --glass-sat: 130%;
+  --card-shadow: 0 28px 70px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.45);
+  --radius: 20px;
   --gold: #d4a417;
-  --gold-lite: #ffce00;
+  --gold-lite: #f2dda0;
+  color-scheme: dark;
+}
+/* 배경 블롭도 금빛 노을로 */
+body.theme-germany::before,
+body.theme-germany::after {
+  background: radial-gradient(circle, rgba(212, 164, 23, 0.5), transparent 70%);
+  opacity: 0.4;
 }
 
 /* 무대: 화면 전체를 덮는 고정 배경 */
@@ -1429,15 +1463,17 @@ body.theme-germany .foot { position: relative; z-index: 2; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 45%, transparent 52%, rgba(40, 30, 10, 0.22) 100%);
+  background: radial-gradient(120% 90% at 50% 42%, transparent 46%, rgba(0, 0, 0, 0.55) 100%);
 }
 .de-sky {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 80% at 50% 108%, rgba(212, 164, 23, 0.5) 0%, rgba(212, 164, 23, 0) 62%),
-    radial-gradient(90% 60% at 50% 0%, rgba(200, 16, 46, 0.16) 0%, rgba(200, 16, 46, 0) 60%),
-    linear-gradient(180deg, #f4f1ea 0%, #e9e6e0 46%, #ddd7cb 100%);
+    /* 지평선에 걸린 금빛 노을 — 실루엣이 역광으로 서게 된다 */
+    radial-gradient(130% 62% at 50% 104%, rgba(240, 196, 90, 0.55) 0%,
+                    rgba(190, 130, 30, 0.18) 38%, transparent 68%),
+    radial-gradient(80% 46% at 50% 0%, rgba(200, 16, 46, 0.16) 0%, transparent 62%),
+    linear-gradient(180deg, #08070d 0%, #0e0c15 34%, #171220 62%, #241a17 100%);
 }
 
 /* --- 제국 독수리: 중앙 워터마크 --- */
@@ -1448,9 +1484,9 @@ body.theme-germany .foot { position: relative; z-index: 2; }
   width: min(66vmin, 620px);
   height: auto;
   transform: translateX(-50%);
-  color: #14131a;
+  color: #e8c463;
   /* 카드 뒤로 넓게 깔리는 문장(紋章) 워터마크 */
-  opacity: 0.055;
+  opacity: 0.07;
 }
 
 /* --- 스카이라인: 바닥에 깔리는 실루엣 --- */
@@ -1462,9 +1498,11 @@ body.theme-germany .foot { position: relative; z-index: 2; }
   width: 100%;
   /* viewBox 비율(1600:420)대로 전체가 보이게 — slice 로 자르면 문만 확대돼 버린다 */
   height: auto;
-  color: #241f2b;
-  opacity: 0.55;
-  filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.4));
+  color: #06050b;
+  opacity: 0.92;
+  /* 노을을 등지고 선 실루엣의 금빛 윤곽 */
+  filter: drop-shadow(0 -1px 0 rgba(240, 205, 120, 0.55))
+          drop-shadow(0 0 14px rgba(212, 164, 23, 0.25));
 }
 
 /* --- 비스마르크 메달: 오른쪽 아래 --- */
@@ -1475,8 +1513,8 @@ body.theme-germany .foot { position: relative; z-index: 2; }
   width: min(22vmin, 210px);
   height: auto;
   transform: translateY(-58%);
-  color: #1a1720;
-  opacity: 0.4;
+  color: #cbb583;
+  opacity: 0.34;
 }
 /* 스카이라인이 높이 올라오는 화면에서는 비스마르크를 조금 위로 */
 @media (max-height: 780px) {
@@ -1502,19 +1540,23 @@ body.theme-germany .foot { position: relative; z-index: 2; }
 }
 .de-ribbon-modern {
   top: 0;
-  background: linear-gradient(90deg, #000 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
+  background: linear-gradient(90deg, #2f2c38 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
 }
 .de-ribbon-empire {
   bottom: 0;
   height: 6px;
-  background: linear-gradient(90deg, #000 0 33.33%, #fff 33.33% 66.66%, #dd0000 66.66% 100%);
+  background: linear-gradient(90deg, #2f2c38 0 33.33%, #f2ece0 33.33% 66.66%, #dd0000 66.66% 100%);
   opacity: 0.9;
 }
 
 /* --- 카드: 금박 테두리 + 위쪽 국기 실선 --- */
 body.theme-germany .glass-card {
-  border: 1px solid rgba(212, 164, 23, 0.42);
-  box-shadow: var(--card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(212, 164, 23, 0.34);
+  box-shadow:
+    var(--card-shadow),
+    inset 0 1px 0 rgba(255, 238, 198, 0.22),
+    inset 0 0 0 1px rgba(212, 164, 23, 0.08);
+  padding: 30px 32px;
 }
 body.theme-germany .glass-card::before {
   content: "";
@@ -1522,7 +1564,7 @@ body.theme-germany .glass-card::before {
   inset: 0 0 auto 0;
   height: 4px;
   border-radius: var(--radius) var(--radius) 0 0;
-  background: linear-gradient(90deg, #14131a 0 33.33%, #c8102e 33.33% 66.66%, var(--gold-lite) 66.66% 100%);
+  background: linear-gradient(90deg, #3a3644 0 33.33%, #c8102e 33.33% 66.66%, var(--gold-lite) 66.66% 100%);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   opacity: 1;
@@ -1530,9 +1572,17 @@ body.theme-germany .glass-card::before {
 
 /* --- 제목: 금박이 흐르는 각인 --- */
 body.theme-germany h1,
+body.theme-germany h2,
+body.theme-germany .brand-name {
+  font-family: "Iowan Old Style", "Apple Garamond", Garamond, "Times New Roman",
+    "Nanum Myeongjo", "Batang", serif;
+  font-weight: 600;
+}
+body.theme-germany h1,
 body.theme-germany h2 {
-  letter-spacing: -0.02em;
-  background: linear-gradient(100deg, #14131a 0%, #6f0919 34%, #c8102e 52%, #d4a417 74%, #14131a 100%);
+  letter-spacing: 0.005em;
+  background: linear-gradient(100deg, #b98f22 0%, #f2dda0 26%, #fffaf0 46%,
+                              #e8c463 62%, #c8102e 82%, #b98f22 100%);
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -1543,13 +1593,48 @@ body.theme-germany h2 {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
-body.theme-germany .eyebrow { color: var(--green-600); letter-spacing: 0.2em; }
+body.theme-germany .eyebrow {
+  color: var(--gold-lite);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+/* 브랜드 이름 옆의 금색 실선 */
+body.theme-germany .brand-name { color: var(--ink); letter-spacing: 0.06em; }
+/* 상단 메뉴: 금테가 은은하게 도는 알약 */
+body.theme-germany .link-btn { letter-spacing: 0.04em; }
+body.theme-germany .link-btn:hover {
+  background: rgba(212, 164, 23, 0.14);
+  color: var(--gold-lite);
+}
+/* 입력칸도 밤유리로 */
+body.theme-germany input,
+body.theme-germany select,
+body.theme-germany textarea {
+  background: rgba(12, 10, 16, 0.55);
+  border-color: rgba(212, 164, 23, 0.3);
+  color: var(--ink);
+}
+body.theme-germany input::placeholder,
+body.theme-germany textarea::placeholder { color: rgba(168, 156, 133, 0.7); }
+body.theme-germany .tbl th { color: var(--gold-lite); letter-spacing: 0.06em; }
 
 /* --- 버튼: 금테 두른 제국 적색 --- */
 body.theme-germany .btn-primary {
-  background: linear-gradient(180deg, #d21331 0%, #a20d25 100%);
+  background: linear-gradient(180deg, #d21331 0%, #8f0b20 100%);
+  color: #ffeec9;
   border: 1px solid var(--gold);
-  box-shadow: 0 6px 18px rgba(162, 13, 37, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  letter-spacing: 0.03em;
+  box-shadow:
+    0 10px 26px rgba(140, 10, 30, 0.42),
+    inset 0 1px 0 rgba(255, 236, 190, 0.35),
+    0 0 0 1px rgba(212, 164, 23, 0.16);
+}
+body.theme-germany .btn-primary:hover { filter: brightness(1.1); }
+/* 보조 버튼은 금테만 두른 투명 유리 */
+body.theme-germany .btn-ghost {
+  border: 1px solid rgba(212, 164, 23, 0.42);
+  color: var(--gold-lite);
 }
 body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
 
@@ -1568,21 +1653,25 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
 /* =============================================================
    테마 고르기 화면
    ============================================================= */
-.theme-group { margin-top: 22px; }
-.theme-group:first-of-type { margin-top: 0; }
-.theme-group-title {
-  margin: 0 0 4px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  text-transform: uppercase;
-}
 .theme-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 14px;
-  margin-top: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.theme-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.theme-group-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--glass-tint, rgba(120, 120, 128, 0.12));
 }
 .theme-card {
   position: relative;
@@ -1605,14 +1694,137 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   border-color: var(--green-500);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-500) 22%, transparent);
 }
-.theme-swatch {
-  display: flex;
-  height: 34px;
-  border-radius: 8px;
+/* 미리보기가 커진 만큼 카드도 조금 넉넉하게 */
+.theme-card { padding: 14px 14px 15px; gap: 7px; }
+/* ---- 미리보기: 그 테마로 칠한 작은 화면 ----
+   색 막대가 아니라 상단바 · 유리 카드 · 버튼까지 갖춘 축소판이다.
+   값은 전부 themes.js 가 흘려 넣는 --tp-* 변수에서 온다. */
+.theme-preview {
+  position: relative;
+  display: block;
+  height: 126px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: var(--tp-bg);
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  isolation: isolate;
 }
-.theme-swatch span { flex: 1; }
+/* 테마별 배경 장식이 들어가는 자리 */
+.tp-deco { position: absolute; inset: 0; pointer-events: none; }
+
+/* 상단바: 브랜드 한 덩이 + 메뉴 세 개 */
+.tp-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+}
+.tp-brand {
+  width: 22px; height: 6px; border-radius: 2px;
+  background: var(--tp-ink); opacity: 0.85;
+}
+.tp-bar i {
+  width: 12px; height: 4px; border-radius: 2px;
+  background: var(--tp-muted);
+}
+.tp-bar i:first-of-type { margin-left: auto; }
+
+/* 유리 카드: 실제 .glass-card 와 같은 구조(제목 · 본문 두 줄 · 버튼) */
+.tp-card {
+  position: absolute;
+  left: 11px; right: 11px; top: 30px;
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-radius: var(--tp-radius);
+  background: var(--tp-card);
+  border: 1px solid var(--tp-edge);
+  box-shadow: var(--tp-shadow), inset 0 1px 0 var(--tp-spec);
+  backdrop-filter: blur(var(--tp-blur)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--tp-blur)) saturate(160%);
+}
+.tp-h { width: 46%; height: 7px; border-radius: 3px; background: var(--tp-ink); }
+.tp-l { height: 4px; border-radius: 2px; background: var(--tp-muted); }
+.tp-l-short { width: 62%; }
+.tp-btn {
+  margin-top: 3px;
+  width: 52px; height: 13px;
+  border-radius: 999px;
+  background: var(--tp-accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+}
+
+/* 기본 테마: 은은한 파란 블롭 두 개 */
+.tp-default .tp-deco {
+  background:
+    radial-gradient(38% 44% at 12% 6%, rgba(184, 216, 255, 0.85), transparent 70%),
+    radial-gradient(40% 46% at 92% 96%, rgba(184, 216, 255, 0.7), transparent 70%);
+}
+
+/* 뽀로로: 내리는 눈 + 살짝 삐뚤어진 낱장 */
+.tp-pororo .tp-deco {
+  background-image:
+    radial-gradient(circle, #fff 1.6px, transparent 1.8px),
+    radial-gradient(circle, #fff 1.2px, transparent 1.4px);
+  background-size: 26px 26px, 17px 17px;
+  background-position: 0 0, 9px 8px;
+  opacity: 0.85;
+}
+.tp-pororo .tp-card { transform: rotate(-1.1deg); border-width: 2px; }
+.tp-pororo .tp-btn {
+  border: 1.5px solid #0b2d4a;
+  border-radius: 5px;
+  box-shadow: 2px 2px 0 #0b2d4a;
+}
+
+/* 독일: 금빛 지평선 · 문 실루엣 · 위아래 국기 띠 */
+.tp-germany .tp-deco {
+  background:
+    radial-gradient(120% 52% at 50% 104%, rgba(240, 196, 90, 0.5) 0%, transparent 66%);
+}
+.tp-germany .tp-deco::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 26px;
+  background: #06050b;
+  /* 브란덴부르크 문 실루엣: 기둥 여섯 개 위에 얹힌 지붕 */
+  clip-path: polygon(
+    0% 100%, 0% 62%, 14% 62%, 14% 100%, 24% 100%, 24% 38%,
+    22% 38%, 22% 26%, 78% 26%, 78% 38%, 76% 38%, 76% 100%,
+    86% 100%, 86% 62%, 100% 62%, 100% 100%);
+  opacity: 0.92;
+  filter: drop-shadow(0 -1px 0 rgba(240, 205, 120, 0.6));
+}
+.tp-germany .tp-card {
+  border-width: 1px;
+  overflow: hidden;
+}
+/* 카드 머리의 흑·적·금 실선 — 실제 화면의 .glass-card::before 와 같다 */
+.tp-germany .tp-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3a3644 0 33.33%, #c8102e 33.33% 66.66%, #f2dda0 66.66% 100%);
+}
+.tp-germany .tp-btn { border: 1px solid rgba(212, 164, 23, 0.85); }
+.tp-germany .tp-h {
+  background: linear-gradient(100deg, #f2dda0, #fffaf0 45%, #d4a417);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-card:hover .tp-card { transform: translateY(-2px); }
+  .tp-pororo .tp-card,
+  .theme-card:hover .tp-pororo .tp-card { transition: transform 0.2s ease; }
+  .tp-card { transition: transform 0.2s ease; }
+  .theme-card:hover .tp-pororo .tp-card { transform: translateY(-2px) rotate(-1.1deg); }
+}
 .theme-name { font-weight: 700; font-size: 1rem; }
 .theme-era {
   font-size: 0.74rem;
@@ -1640,15 +1852,15 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   border: 1.5px solid var(--green-500);
 }
 /* ---- 독일 테마: 작은 문양들 ---- */
-.de-motif { position: absolute; color: #241f2b; }
-.de-pretzel { left: 6vw; top: 16%; width: min(11vmin, 110px); opacity: 0.13; transform: rotate(-9deg); }
-.de-stein { right: 6vw; bottom: 34%; width: min(10vmin, 96px); opacity: 0.14; transform: rotate(7deg); }
-.de-clock { left: 8vw; bottom: 30%; width: min(9vmin, 86px); opacity: 0.12; }
-.de-edelweiss { left: 24vw; top: 24%; width: min(8vmin, 76px); opacity: 0.13; }
-.de-oak { left: 20vw; bottom: 42%; width: min(9vmin, 88px); opacity: 0.12; transform: rotate(6deg); }
-.de-bear { right: 30vw; top: 12%; width: min(9vmin, 84px); opacity: 0.12; }
-.de-note { left: 33vw; bottom: 34%; width: min(8vmin, 74px); opacity: 0.11; transform: rotate(-6deg); }
-.de-car { right: 13vw; top: 34%; width: min(11vmin, 104px); opacity: 0.12; }
+.de-motif { position: absolute; color: #e8c463; }
+.de-pretzel { left: 6vw; top: 16%; width: min(11vmin, 110px); opacity: 0.17; transform: rotate(-9deg); }
+.de-stein { right: 6vw; bottom: 34%; width: min(10vmin, 96px); opacity: 0.17; transform: rotate(7deg); }
+.de-clock { left: 8vw; bottom: 30%; width: min(9vmin, 86px); opacity: 0.15; }
+.de-edelweiss { left: 24vw; top: 24%; width: min(8vmin, 76px); opacity: 0.16; }
+.de-oak { left: 20vw; bottom: 42%; width: min(9vmin, 88px); opacity: 0.15; transform: rotate(6deg); }
+.de-bear { right: 30vw; top: 12%; width: min(9vmin, 84px); opacity: 0.15; }
+.de-note { left: 33vw; bottom: 34%; width: min(8vmin, 74px); opacity: 0.14; transform: rotate(-6deg); }
+.de-car { right: 13vw; top: 34%; width: min(11vmin, 104px); opacity: 0.15; }
 
 /* 독일 지도 윤곽 */
 .de-map {
@@ -1657,8 +1869,8 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   top: 48%;
   width: min(22vmin, 200px);
   transform: translateY(-50%);
-  color: #241f2b;
-  opacity: 0.1;
+  color: #e8c463;
+  opacity: 0.13;
 }
 
 /* 오늘의 연방 독수리 — 제국 독수리 반대편에 */
@@ -1667,8 +1879,8 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   right: 7vw;
   top: 9%;
   width: min(20vmin, 180px);
-  color: #14131a;
-  opacity: 0.075;
+  color: #e8c463;
+  opacity: 0.1;
 }
 
 /* 바이에른 마름모(청·백) 띠 — 왼쪽 세로 */
@@ -1678,7 +1890,8 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   top: 0;
   width: 30px;
   height: 100%;
-  opacity: 0.4;
+  opacity: 0.12;
+  filter: sepia(0.35) saturate(0.7);
 }
 
 @media (max-width: 900px) {
