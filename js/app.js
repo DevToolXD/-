@@ -571,7 +571,7 @@ document.addEventListener("click", (e) => {
 //  테마 (예전 "뽀로로 모드" 토글을 테마 탭으로 확장)
 // =============================================================
 const THEME_KEY = "manito.theme";
-const DE_THEMES = ["hre", "kaiserreich", "weimar", "brd"];
+const DE_THEMES = ["germany"];
 let themeChangeCount = 0;
 
 function currentTheme() {
@@ -589,6 +589,9 @@ function applyTheme(id, { remember = true, count = false } = {}) {
   body.classList.remove("pororo", "de-theme");
   if (themeId !== DEFAULT_THEME) body.classList.add(`theme-${themeId}`);
   if (DE_THEMES.includes(themeId)) body.classList.add("de-theme");
+  // 독일 테마의 배경 무대(랜드마크·독수리·비스마르크)를 함께 켠다
+  const scene = $("#de-scene");
+  if (scene) scene.classList.toggle("hidden", !DE_THEMES.includes(themeId));
 
   // 뽀로로는 눈·마스코트·잔소리 같은 자기 동작이 따로 있다
   const pororoOn = themeId === "pororo";

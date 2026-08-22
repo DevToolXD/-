@@ -1383,118 +1383,185 @@ body.student-mode .topbar { z-index: 50; }
 #confirm-modal-text { white-space: pre-wrap; word-break: break-word; }
 
 /* =============================================================
-   독일 역사 테마 — 시대별 국기 배색
-   신성로마제국(제1제국) → 독일제국(제2제국) → 바이마르 → 연방공화국
-   각 테마는 CSS 변수만 갈아끼우고, 위쪽에 그 시대 국기 띠를 깐다.
+   독일 테마 — 국기 · 독일제국기 · 비스마르크 · 랜드마크
+   외부 이미지 없이 전부 인라인 SVG + CSS.
+   내용 가독성이 먼저라, 무대는 뒤로 깔고 카드는 또렷하게 둔다.
    ============================================================= */
+body.theme-germany {
+  --green-50: #fff9e6;
+  --green-100: #ffefbf;
+  --green-200: #ffe07a;
+  --green-500: #c8102e;
+  --green-600: #a20d25;
+  --green-700: #6f0919;
+  --ok: var(--green-600);
+  --ink: #14131a;
+  --muted: #5d5a66;
+  --bg-base: #e9e6e0;
+  --glass-bg: rgba(255, 254, 250, 0.86);
+  --glass-bg-strong: rgba(255, 255, 253, 0.95);
+  --glass-border: rgba(20, 19, 26, 0.14);
+  --card-shadow: 0 16px 44px rgba(20, 15, 5, 0.18), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --gold: #d4a417;
+  --gold-lite: #ffce00;
+}
 
-/* 화면 맨 위에 얇게 깔리는 국기 띠 (테마마다 색이 다름) */
-body.de-theme::before {
-  content: "";
-  position: fixed;
-  inset: 0 0 auto 0;
-  height: 6px;
-  z-index: 200;
-  pointer-events: none;
-  background: var(--flag-stripe);
-}
-body.de-theme .glass-card {
-  border-top: 3px solid var(--flag-accent);
-}
-body.de-theme h1,
-body.de-theme h2 {
-  letter-spacing: -0.015em;
-}
-
-/* ---- 신성로마제국 (962–1806) : 금빛 바탕 + 검은 쌍두수리 ---- */
-body.theme-hre {
-  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
-  --green-50: #fdf6e0;
-  --green-100: #f8e9b8;
-  --green-200: #efd77c;
-  --green-500: #8a6a12;
-  --green-600: #6d5310;
-  --green-700: #4d3a0b;
-  --ink: #1a1408;
-  --muted: #6d5f3c;
-  --bg-base: #f7e9bd;
-  --glass-bg: rgba(255, 251, 236, 0.72);
-  --glass-bg-strong: rgba(255, 252, 242, 0.9);
-  --glass-border: rgba(138, 106, 18, 0.28);
-  --card-shadow: 0 10px 30px rgba(90, 70, 10, 0.16);
-  --flag-stripe: linear-gradient(90deg, #f5c518 0 100%);
-  --flag-accent: #111111;
-}
-/* 쌍두수리를 아주 옅게 배경에 깐다 (인라인 SVG, 외부 이미지 없음) */
-body.theme-hre::after {
-  content: "";
+/* 무대: 화면 전체를 덮는 고정 배경 */
+.de-scene {
   position: fixed;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   pointer-events: none;
-  opacity: 0.07;
-  background: no-repeat center / min(60vmin, 520px)
-    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><g fill="%23111"><path d="M50 16c-3 0-5 2-5 5 0-3-3-6-7-6-5 0-8 4-8 8 0 3 2 6 5 7l-9 3 8 2-6 5 8-1-4 6 8-3-1 7 6-5 2 8 3-8 6 5-1-7 8 3-4-6 8 1-6-5 8-2-9-3c3-1 5-4 5-7 0-4-3-8-8-8-4 0-7 3-7 6 0-3-2-5-5-5z"/><path d="M46 52h8l-2 26h-4z"/></g></svg>');
+}
+.de-scene.hidden { display: none; }
+/* 테마가 꺼져 있으면 무대도 숨긴다 */
+body:not(.theme-germany) .de-scene { display: none; }
+/* 본문은 무대 위로 */
+body.theme-germany .topbar,
+body.theme-germany #app,
+body.theme-germany .foot { position: relative; z-index: 2; }
+
+/* --- 하늘: 아래로 갈수록 따뜻한 금빛이 번지는 그라디언트 --- */
+/* 가장자리를 살짝 눌러 무대처럼 보이게 */
+.de-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 52%, rgba(40, 30, 10, 0.22) 100%);
+}
+.de-sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 80% at 50% 108%, rgba(212, 164, 23, 0.5) 0%, rgba(212, 164, 23, 0) 62%),
+    radial-gradient(90% 60% at 50% 0%, rgba(200, 16, 46, 0.16) 0%, rgba(200, 16, 46, 0) 60%),
+    linear-gradient(180deg, #f4f1ea 0%, #e9e6e0 46%, #ddd7cb 100%);
 }
 
-/* ---- 독일제국 (1871–1918) : 흑·백·적 ---- */
-body.theme-kaiserreich {
-  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
-  --green-50: #fdf1f1;
-  --green-100: #fbdada;
-  --green-200: #f3a2a2;
-  --green-500: #c00000;
-  --green-600: #9c0000;
-  --green-700: #6f0000;
-  --ink: #14100f;
-  --muted: #6a5f5f;
-  --bg-base: #f1eeec;
-  --glass-bg: rgba(255, 255, 255, 0.78);
-  --glass-bg-strong: rgba(255, 255, 255, 0.93);
-  --glass-border: rgba(20, 16, 15, 0.16);
-  --card-shadow: 0 10px 28px rgba(20, 10, 10, 0.14);
-  --flag-stripe: linear-gradient(180deg, #000 0 33.33%, #fff 33.33% 66.66%, #dd0000 66.66% 100%);
-  --flag-accent: #000000;
+/* --- 제국 독수리: 중앙 워터마크 --- */
+.de-eagle {
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  width: min(52vmin, 480px);
+  height: auto;
+  transform: translateX(-50%);
+  color: #14131a;
+  opacity: 0.1;
 }
 
-/* ---- 바이마르 공화국 (1919–1933) : 흑·적·금 (조금 바랜 종이 느낌) ---- */
-body.theme-weimar {
-  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
-  --green-50: #fdf7e6;
-  --green-100: #faedc7;
-  --green-200: #f0d98b;
-  --green-500: #b3392c;
-  --green-600: #8f2c22;
-  --green-700: #661f18;
-  --ink: #1c1712;
-  --muted: #6b6053;
-  --bg-base: #efe7d6;
-  --glass-bg: rgba(253, 250, 242, 0.76);
-  --glass-bg-strong: rgba(255, 253, 248, 0.92);
-  --glass-border: rgba(28, 23, 18, 0.16);
-  --card-shadow: 0 10px 28px rgba(60, 45, 20, 0.16);
-  --flag-stripe: linear-gradient(180deg, #000 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
-  --flag-accent: #b3392c;
+/* --- 스카이라인: 바닥에 깔리는 실루엣 --- */
+.de-skyline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  /* viewBox 비율(1600:420)대로 전체가 보이게 — slice 로 자르면 문만 확대돼 버린다 */
+  height: auto;
+  color: #241f2b;
+  opacity: 0.55;
+  filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.4));
 }
 
-/* ---- 독일연방공화국 (1949– ) : 흑·적·금, 오늘의 독일 ---- */
-body.theme-brd {
-  --ok: var(--green-600);  /* :root 에서 상속되면 기본 파란색으로 굳는다 */
-  --green-50: #fff8e1;
-  --green-100: #ffefb8;
-  --green-200: #ffe173;
-  --green-500: #dd0000;
-  --green-600: #b30000;
-  --green-700: #800000;
-  --ink: #16161a;
-  --muted: #63636b;
-  --bg-base: #f4f4f6;
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-bg-strong: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(0, 0, 0, 0.12);
-  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-  --flag-stripe: linear-gradient(180deg, #000 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
-  --flag-accent: #ffce00;
+/* --- 비스마르크 메달: 오른쪽 아래 --- */
+.de-bismarck {
+  position: absolute;
+  left: 4vw;
+  top: 50%;
+  width: min(22vmin, 210px);
+  height: auto;
+  transform: translateY(-58%);
+  color: #1a1720;
+  opacity: 0.4;
+}
+/* 스카이라인이 높이 올라오는 화면에서는 비스마르크를 조금 위로 */
+@media (max-height: 780px) {
+  .de-bismarck { top: 42%; width: min(18vmin, 170px); }
+}
+.de-medal-face {
+  fill: rgba(212, 164, 23, 0.1);
+}
+.de-medal-ring {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 5;
+  opacity: 0.9;
+}
+.de-medal-ring-inner { stroke-width: 1.5; opacity: 0.55; }
+
+/* --- 국기 리본: 위(오늘의 흑적금) / 아래(독일제국 흑백적) --- */
+.de-ribbon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7px;
+}
+.de-ribbon-modern {
+  top: 0;
+  background: linear-gradient(90deg, #000 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
+}
+.de-ribbon-empire {
+  bottom: 0;
+  height: 6px;
+  background: linear-gradient(90deg, #000 0 33.33%, #fff 33.33% 66.66%, #dd0000 66.66% 100%);
+  opacity: 0.9;
+}
+
+/* --- 카드: 금박 테두리 + 위쪽 국기 실선 --- */
+body.theme-germany .glass-card {
+  border: 1px solid rgba(212, 164, 23, 0.42);
+  box-shadow: var(--card-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+body.theme-germany .glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: linear-gradient(90deg, #14131a 0 33.33%, #c8102e 33.33% 66.66%, var(--gold-lite) 66.66% 100%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  opacity: 1;
+}
+
+/* --- 제목: 금박이 흐르는 각인 --- */
+body.theme-germany h1,
+body.theme-germany h2 {
+  letter-spacing: -0.02em;
+  background: linear-gradient(100deg, #14131a 0%, #6f0919 34%, #c8102e 52%, #d4a417 74%, #14131a 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: de-gild 9s ease-in-out infinite;
+}
+@keyframes de-gild {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+body.theme-germany .eyebrow { color: var(--green-600); letter-spacing: 0.2em; }
+
+/* --- 버튼: 금테 두른 제국 적색 --- */
+body.theme-germany .btn-primary {
+  background: linear-gradient(180deg, #d21331 0%, #a20d25 100%);
+  border: 1px solid var(--gold);
+  box-shadow: 0 6px 18px rgba(162, 13, 37, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
+
+/* 움직임을 줄여달라고 한 사용자에게는 금박 흐름을 멈춘다 */
+@media (prefers-reduced-motion: reduce) {
+  body.theme-germany h1, body.theme-germany h2 { animation: none; }
+}
+
+/* 좁은 화면에서는 무대를 덜어내 본문이 답답하지 않게 */
+@media (max-width: 700px) {
+  .de-bismarck { display: none; }
+  .de-eagle { width: 78vmin; opacity: 0.06; }
+  .de-skyline { opacity: 0.3; }
 }
 
 /* =============================================================
