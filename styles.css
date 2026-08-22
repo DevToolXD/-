@@ -1081,7 +1081,7 @@ body.student-mode .topbar { z-index: 50; }
 
 /* =============================================================
    CSS 효과 모음
-   border-beam / shine 기법은 Magic UI(MIT License, Copyright (c) Magic UI,
+   shine(광택 스윕) 기법은 Magic UI(MIT License, Copyright (c) Magic UI,
    https://github.com/magicuidesign/magicui)를 참고해 이 프로젝트의 순수
    CSS 구조에 맞게 다시 구현했습니다. React·Tailwind 의존성은 없습니다.
    ============================================================= */
@@ -1108,7 +1108,7 @@ body.student-mode .topbar { z-index: 50; }
     transition-duration: 0.001ms !important;
   }
   .reveal { opacity: 1; transform: none; filter: none; }
-  .pororo-snow, .pororo-mascot, .beam::after { animation: none !important; }
+  .pororo-snow, .pororo-mascot { animation: none !important; }
 }
 
 /* =============================================================
@@ -1443,13 +1443,14 @@ body.theme-germany .foot { position: relative; z-index: 2; }
 /* --- 제국 독수리: 중앙 워터마크 --- */
 .de-eagle {
   position: absolute;
-  top: 6%;
+  top: 7%;
   left: 50%;
-  width: min(52vmin, 480px);
+  width: min(66vmin, 620px);
   height: auto;
   transform: translateX(-50%);
   color: #14131a;
-  opacity: 0.1;
+  /* 카드 뒤로 넓게 깔리는 문장(紋章) 워터마크 */
+  opacity: 0.055;
 }
 
 /* --- 스카이라인: 바닥에 깔리는 실루엣 --- */
@@ -1638,12 +1639,48 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   color: var(--green-600);
   border: 1.5px solid var(--green-500);
 }
-.theme-note {
-  margin: 10px 0 0;
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: var(--muted);
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--glass-tint, rgba(120, 120, 128, 0.1));
+/* ---- 독일 테마: 작은 문양들 ---- */
+.de-motif { position: absolute; color: #241f2b; }
+.de-pretzel { left: 6vw; top: 16%; width: min(11vmin, 110px); opacity: 0.13; transform: rotate(-9deg); }
+.de-stein { right: 6vw; bottom: 34%; width: min(10vmin, 96px); opacity: 0.14; transform: rotate(7deg); }
+.de-clock { left: 8vw; bottom: 30%; width: min(9vmin, 86px); opacity: 0.12; }
+.de-edelweiss { left: 24vw; top: 24%; width: min(8vmin, 76px); opacity: 0.13; }
+.de-oak { left: 20vw; bottom: 42%; width: min(9vmin, 88px); opacity: 0.12; transform: rotate(6deg); }
+.de-bear { right: 30vw; top: 12%; width: min(9vmin, 84px); opacity: 0.12; }
+.de-note { left: 33vw; bottom: 34%; width: min(8vmin, 74px); opacity: 0.11; transform: rotate(-6deg); }
+.de-car { right: 13vw; top: 34%; width: min(11vmin, 104px); opacity: 0.12; }
+
+/* 독일 지도 윤곽 */
+.de-map {
+  position: absolute;
+  right: 22vw;
+  top: 48%;
+  width: min(22vmin, 200px);
+  transform: translateY(-50%);
+  color: #241f2b;
+  opacity: 0.1;
+}
+
+/* 오늘의 연방 독수리 — 제국 독수리 반대편에 */
+.de-bundesadler {
+  position: absolute;
+  right: 7vw;
+  top: 9%;
+  width: min(20vmin, 180px);
+  color: #14131a;
+  opacity: 0.075;
+}
+
+/* 바이에른 마름모(청·백) 띠 — 왼쪽 세로 */
+.de-bavaria {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 100%;
+  opacity: 0.4;
+}
+
+@media (max-width: 900px) {
+  .de-motif, .de-map, .de-bundesadler, .de-bavaria { display: none; }
 }

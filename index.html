@@ -21,15 +21,27 @@
       <div class="de-sky"></div>
 
       <!-- 제국 독수리 (배경 워터마크) -->
-      <svg class="de-eagle" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+      <svg class="de-eagle" viewBox="0 0 240 190" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <g fill="currentColor">
-          <path d="M100 34c-6 0-10 4-10 9 0 3 1 5 3 7-9-6-20-9-31-9-14 0-27 5-37 14 8-2 16-2 24 0-10 2-19 7-26 15 9-3 18-4 27-2-9 4-17 11-22 20 10-5 20-7 31-6-9 6-16 14-20 24 11-7 23-11 36-11-7 7-12 16-14 26 10-9 22-15 35-17l-6 10 12-4-3 12 10-8 2 13 7-11 7 11 2-13 10 8-3-12 12 4-6-10c13 2 25 8 35 17-2-10-7-19-14-26 13 0 25 4 36 11-4-10-11-18-20-24 11-1 21 1 31 6-5-9-13-16-22-20 9-2 18-1 27 2-7-8-16-13-26-15 8-2 16-2 24 0-10-9-23-14-37-14-11 0-22 3-31 9 2-2 3-4 3-7 0-5-4-9-10-9z"/>
-          <path d="M92 104h16l-3 46h-10z"/>
-          <path d="M86 152h28v6H86zM90 160h20v5H90z"/>
+          <!-- 오른쪽 날개: 위로 펼치고 아래 깃 세 겹 -->
+          <path d="M128 82c12-30 40-54 74-60 12-2 20 4 18 14-4 14-12 24-22 30 10 2 16 8 18 18-8 8-18 12-28 12 8 6 12 14 12 24-10 4-20 4-30 0 6 8 8 16 6 26-12-4-24-12-32-22-8-12-14-26-16-42z"/>
+          <!-- 왼쪽 날개: 좌우 대칭 -->
+          <path transform="translate(240 0) scale(-1 1)" d="M128 82c12-30 40-54 74-60 12-2 20 4 18 14-4 14-12 24-22 30 10 2 16 8 18 18-8 8-18 12-28 12 8 6 12 14 12 24-10 4-20 4-30 0 6 8 8 16 6 26-12-4-24-12-32-22-8-12-14-26-16-42z"/>
+          <!-- 갈라진 꼬리 -->
+          <path d="M104 132h32l-5 40-11-14-11 14z"/>
+          <!-- 두 다리와 발톱 -->
+          <path d="M110 136l-8 26 7 2 7-26zM130 136l8 26-7 2-7-26z"/>
+          <path d="M94 160h22v7H94zM124 160h22v7h-22z"/>
+          <!-- 몸통 -->
+          <path d="M120 62c11 0 19 8 20 19l3 38c1 10-7 18-17 18h-12c-10 0-18-8-17-18l3-38c1-11 9-19 20-19z"/>
+          <!-- 머리(문장 규칙대로 왼쪽을 본다)와 부리 -->
+          <path d="M120 30c12 0 21 9 21 21 0 7-3 13-8 17h-26c-5-4-8-10-8-17 0-12 9-21 21-21z"/>
+          <path d="M101 44l-23 7 23 8z"/>
+          <circle cx="112" cy="44" r="3.4" fill="#f6f2e8" opacity="0.7"/>
         </g>
       </svg>
 
-      <!-- 스카이라인 -->
+      <!-- 스카이라인: 알프스 → 랜드마크 → 검은숲 전나무 순으로 겹친다 -->
       <svg class="de-skyline" viewBox="0 0 1600 420" preserveAspectRatio="xMidYMax meet">
         <defs>
           <linearGradient id="deStone" x1="0" y1="0" x2="0" y2="1">
@@ -37,9 +49,36 @@
             <stop offset="100%" stop-color="currentColor" stop-opacity="0.62"/>
           </linearGradient>
         </defs>
+
+        <!-- 알프스 (추크슈피체) — 가장 뒤 -->
+        <g fill="currentColor" opacity="0.26">
+          <path d="M0 420V300l120-96 92 74 70-56 96 78 84-66 110 88v98z"/>
+          <path d="M1010 420V318l104-84 78 62 66-52 92 74 80-64 170 136v30z"/>
+          <path d="M120 204l30 24-30 18-28-18z" opacity="0.7"/>
+          <path d="M1114 234l26 21-26 15-24-15z" opacity="0.7"/>
+        </g>
+
         <g fill="url(#deStone)">
+          <!-- 노이슈반슈타인 성 (바이에른) -->
+          <g transform="translate(-6 0)">
+            <path d="M40 420V236h104v184z"/>
+            <path d="M52 236V184h26v52zM108 236V166h26v70z"/>
+            <path d="M65 184l-14-26 14-26 14 26z"/>
+            <path d="M121 166l-16-30 16-30 16 30z"/>
+            <path d="M144 420V262h44v158z"/>
+            <path d="M166 262l-24-34 24-30 24 30z"/>
+            <path d="M28 420v-96h16v96z"/>
+            <path d="M36 324l-12-20 12-18 12 18z"/>
+            <g fill="#000" opacity="0.3">
+              <rect x="58" y="284" width="12" height="22"/><rect x="86" y="284" width="12" height="22"/>
+              <rect x="114" y="284" width="12" height="22"/><rect x="156" y="308" width="12" height="22"/>
+              <rect x="58" y="336" width="12" height="22"/><rect x="86" y="336" width="12" height="22"/>
+              <rect x="114" y="336" width="12" height="22"/><rect x="156" y="356" width="12" height="22"/>
+            </g>
+          </g>
+
           <!-- 쾰른 대성당: 고딕 쌍탑 -->
-          <g transform="translate(120 0)">
+          <g transform="translate(232 0)">
             <path d="M40 420V190l14-52 8-46 8 46 14 52v230z"/>
             <path d="M120 420V190l14-52 8-46 8 46 14 52v230z"/>
             <path d="M62 246h96v174H62z"/>
@@ -49,9 +88,18 @@
             <path d="M62 246l48-34 48 34z"/>
           </g>
 
-          <!-- 브란덴부르크 문 (가운데 주인공) -->
+          <!-- 베를린 TV타워 (페른제투름) — 가장 높다 -->
+          <g transform="translate(470 0)">
+            <path d="M26 420l8-198h12l8 198z"/>
+            <circle cx="40" cy="196" r="30"/>
+            <path d="M18 196h44v10H18z" fill="#000" opacity="0.28"/>
+            <path d="M36 166h8l-4-40z"/>
+            <path d="M38 126h4l-2-38z"/>
+            <path d="M14 420h52v10H14z"/>
+          </g>
+
+          <!-- 브란덴부르크 문 -->
           <g transform="translate(600 0)">
-            <!-- 콰드리가: 말 네 마리가 끄는 전차 위에 승리의 여신 -->
             <g>
               <g opacity="0.72">
                 <ellipse cx="114" cy="104" rx="29" ry="11"/>
@@ -93,27 +141,21 @@
                 <rect x="202" y="110" width="5" height="18"/>
                 <path d="M208 96 q11 8 8 24 l-5 -2 q2 -12 -7 -17z"/>
               </g>
-              <!-- 전차 -->
               <path d="M212 128v-24h46v24z"/>
               <circle cx="236" cy="120" r="11"/>
               <circle cx="236" cy="120" r="4" fill="#000" opacity="0.3"/>
-              <!-- 승리의 여신 (빅토리아) -->
               <circle cx="234" cy="62" r="6"/>
               <path d="M228 70h12l4 34h-20z"/>
               <path d="M240 74l14-8 3 5-15 9z"/>
               <path d="M228 74l-10 6 2 5 10-5z"/>
-              <!-- 날개 -->
               <path d="M240 72c14-6 24-2 30 8-12 2-22 1-30-3z" opacity="0.85"/>
-              <!-- 승리의 지팡이 + 독수리 -->
               <rect x="254" y="34" width="3" height="42"/>
               <path d="M249 34c3-6 9-9 14-7-2 6-8 9-14 7z"/>
               <path d="M256 26l4 6h-8z"/>
             </g>
-            <!-- 상부 구조 -->
             <rect x="30" y="128" width="300" height="16"/>
             <rect x="20" y="144" width="320" height="34"/>
             <rect x="34" y="178" width="292" height="12"/>
-            <!-- 도리스식 기둥 6개 -->
             <g>
               <rect x="44" y="190" width="26" height="230"/>
               <rect x="100" y="190" width="26" height="230"/>
@@ -122,7 +164,6 @@
               <rect x="268" y="190" width="26" height="230"/>
               <rect x="290" y="190" width="26" height="230"/>
             </g>
-            <!-- 기둥 홈 (세로 줄) -->
             <g opacity="0.35" fill="#000">
               <rect x="52" y="196" width="2" height="218"/><rect x="60" y="196" width="2" height="218"/>
               <rect x="108" y="196" width="2" height="218"/><rect x="116" y="196" width="2" height="218"/>
@@ -133,8 +174,8 @@
             <rect x="20" y="404" width="320" height="16"/>
           </g>
 
-          <!-- 라이히스탁: 유리 돔 + 박공 -->
-          <g transform="translate(1120 0)">
+          <!-- 라이히스탁 -->
+          <g transform="translate(980 0)">
             <path d="M120 150a56 56 0 0 1 112 0z"/>
             <path d="M150 150a26 26 0 0 1 52 0z" fill="#000" opacity="0.25"/>
             <rect x="112" y="150" width="128" height="14"/>
@@ -148,6 +189,35 @@
               <rect x="278" y="248" width="14" height="150"/>
             </g>
           </g>
+
+          <!-- 라인강 고성 (오른쪽 끝) -->
+          <g transform="translate(1360 0)">
+            <path d="M20 420V300h130v120z"/>
+            <path d="M34 300v-46h22v46zM114 300v-58h22v58z"/>
+            <path d="M45 254l-13-22 13-20 13 20z"/>
+            <path d="M125 242l-15-24 15-22 15 22z"/>
+            <path d="M150 420V326h58v94z"/>
+            <path d="M179 326l-30-28 30-24 30 24z"/>
+            <g fill="#000" opacity="0.3">
+              <rect x="40" y="332" width="12" height="20"/><rect x="70" y="332" width="12" height="20"/>
+              <rect x="100" y="332" width="12" height="20"/><rect x="166" y="356" width="12" height="20"/>
+            </g>
+          </g>
+        </g>
+
+        <!-- 검은숲 전나무 — 가장 앞 -->
+        <g fill="currentColor" opacity="0.55">
+          <path d="M60 420 l-46 0 l23 -37 l-13 0 l20 -35 l-11 0 l25 -37 l25 37 l-11 0 l20 35 l-13 0 l23 37 z" opacity="0.95"/>
+          <path d="M100 420 l-36 0 l18 -29 l-10 0 l15 -28 l-9 0 l20 -29 l20 29 l-9 0 l15 28 l-10 0 l18 29 z" opacity="0.8"/>
+          <path d="M300 420 l-40 0 l20 -33 l-12 0 l17 -31 l-10 0 l22 -33 l22 33 l-10 0 l17 31 l-12 0 l20 33 z" opacity="0.9"/>
+          <path d="M340 420 l-31 0 l16 -25 l-9 0 l13 -24 l-7 0 l17 -25 l17 25 l-7 0 l13 24 l-9 0 l16 25 z" opacity="0.75"/>
+          <path d="M520 420 l-37 0 l18 -30 l-11 0 l16 -28 l-9 0 l20 -30 l20 30 l-9 0 l16 28 l-11 0 l18 30 z" opacity="0.85"/>
+          <path d="M770 420 l-34 0 l17 -27 l-10 0 l14 -26 l-8 0 l18 -27 l18 27 l-8 0 l14 26 l-10 0 l17 27 z" opacity="0.78"/>
+          <path d="M985 420 l-44 0 l22 -35 l-12 0 l19 -33 l-10 0 l24 -35 l24 35 l-10 0 l19 33 l-12 0 l22 35 z" opacity="0.92"/>
+          <path d="M1025 420 l-34 0 l17 -27 l-10 0 l14 -26 l-8 0 l18 -27 l18 27 l-8 0 l14 26 l-10 0 l17 27 z" opacity="0.75"/>
+          <path d="M1305 420 l-39 0 l19 -31 l-11 0 l17 -29 l-9 0 l21 -31 l21 31 l-9 0 l17 29 l-11 0 l19 31 z" opacity="0.85"/>
+          <path d="M1520 420 l-47 0 l24 -38 l-13 0 l20 -36 l-11 0 l26 -38 l26 38 l-11 0 l20 36 l-13 0 l24 38 z" opacity="0.95"/>
+          <path d="M1560 420 l-35 0 l18 -29 l-10 0 l15 -27 l-8 0 l19 -29 l19 29 l-8 0 l15 27 l-10 0 l18 29 z" opacity="0.78"/>
         </g>
       </svg>
 
@@ -194,6 +264,153 @@
         <circle class="de-medal-ring de-medal-ring-inner" cx="120" cy="120" r="94"/>
       </svg>
 
+      <!-- ---- 독일다운 작은 문양들 (전부 인라인 SVG) ---- -->
+
+      <!-- 바이에른 마름모 (청·백) 띠 -->
+      <svg class="de-bavaria" aria-hidden="true" preserveAspectRatio="none">
+        <defs>
+          <pattern id="deLozenge" width="40" height="40" patternUnits="userSpaceOnUse">
+            <rect width="40" height="40" fill="#ffffff"/>
+            <path d="M20 0 40 20 20 40 0 20z" fill="#0e64b4"/>
+            <path d="M0 0 20 20 0 40z" fill="#0e64b4"/>
+            <path d="M40 0 20 20 40 40z" fill="#0e64b4"/>
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#deLozenge)"/>
+      </svg>
+
+      <!-- 독일 지도 윤곽 (옅은 워터마크) -->
+      <svg class="de-map" viewBox="0 0 100 132" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <path fill="none" stroke="currentColor" stroke-width="2.6"
+          stroke-linejoin="round" stroke-linecap="round"
+          d="M27.6 1 L40.7 3.6 L54.9 18 L68 14.6 L82.1 9.5 L93 19.7 L95.2 46.8 L98.5 67.1
+             L86.5 73.9 L72.3 79 L82.1 109.5 L76.7 124.8 L77.8 128.2 L59.2 129.9 L36.3 126.5
+             L18.9 126.5 L18.9 109.5 L24.3 102.7 L11.2 99.3 L5.8 89.2 L1.4 72.2 L3.6 62
+             L9.1 41.6 L12.3 28.1 L24.3 23.1 L33 19.7 L31.9 9.5 Z"/>
+      </svg>
+
+      <!-- 프레첼 (브레첼) -->
+      <svg class="de-motif de-pretzel" viewBox="0 0 120 108" aria-hidden="true">
+        <g fill="none" stroke="currentColor" stroke-width="9"
+           stroke-linecap="round" stroke-linejoin="round">
+          <!-- 아래 큰 고리 -->
+          <path d="M20 54c0 28 18 42 40 42s40-14 40-42"/>
+          <!-- 위에서 X자로 엇갈렸다가 고리 안으로 들어가는 두 팔 -->
+          <path d="M20 54C14 26 22 8 40 8 54 8 60 22 64 40 68 58 76 66 88 68"/>
+          <path d="M100 54C106 26 98 8 80 8 66 8 60 22 56 40 52 58 44 66 32 68"/>
+        </g>
+      </svg>
+
+      <!-- 맥주잔 (마스크루크) -->
+      <svg class="de-motif de-stein" viewBox="0 0 100 110" aria-hidden="true">
+        <path d="M20 30h48v66a10 10 0 0 1-10 10H30a10 10 0 0 1-10-10z"/>
+        <g opacity="0.8">
+          <circle cx="29" cy="26" r="10"/><circle cx="44" cy="20" r="11"/><circle cx="59" cy="25" r="10"/>
+          <rect x="18" y="24" width="52" height="10" rx="3"/>
+        </g>
+        <path fill="none" stroke="currentColor" stroke-width="8"
+          d="M70 46h8a12 12 0 0 1 0 24h-8"/>
+        <g fill="#000" opacity="0.22">
+          <rect x="28" y="44" width="32" height="6"/><rect x="28" y="58" width="32" height="6"/>
+          <rect x="28" y="72" width="32" height="6"/>
+        </g>
+      </svg>
+
+      <!-- 뻐꾸기 시계 (검은숲) -->
+      <svg class="de-motif de-clock" viewBox="0 0 100 120" aria-hidden="true">
+        <path d="M50 6L14 34h72z"/>
+        <rect x="18" y="34" width="64" height="54" rx="4"/>
+        <circle cx="50" cy="60" r="18" fill="#000" opacity="0.25"/>
+        <path fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"
+          d="M50 60V48M50 60l9 7"/>
+        <rect x="46" y="88" width="8" height="22"/>
+        <circle cx="50" cy="114" r="7"/>
+        <path d="M26 88l-6 18h8l6-18zM74 88l6 18h-8l-6-18z" opacity="0.7"/>
+      </svg>
+
+      <!-- 에델바이스 -->
+      <svg class="de-motif de-edelweiss" viewBox="0 0 100 100" aria-hidden="true">
+        <g>
+          <ellipse cx="50" cy="22" rx="8" ry="20"/><ellipse cx="50" cy="78" rx="8" ry="20"/>
+          <ellipse cx="22" cy="50" rx="20" ry="8"/><ellipse cx="78" cy="50" rx="20" ry="8"/>
+          <ellipse cx="30" cy="30" rx="16" ry="7" transform="rotate(45 30 30)"/>
+          <ellipse cx="70" cy="70" rx="16" ry="7" transform="rotate(45 70 70)"/>
+          <ellipse cx="70" cy="30" rx="16" ry="7" transform="rotate(-45 70 30)"/>
+          <ellipse cx="30" cy="70" rx="16" ry="7" transform="rotate(-45 30 70)"/>
+        </g>
+        <circle cx="50" cy="50" r="9" fill="#000" opacity="0.3"/>
+      </svg>
+
+      <!-- 오늘의 연방 독수리 (제국 독수리와 짝) -->
+      <svg class="de-bundesadler" viewBox="0 0 240 190" aria-hidden="true">
+        <g fill="currentColor">
+          <!-- 오른쪽 날개: 위로 펼치고 아래 깃 세 겹 -->
+          <path d="M128 82c12-30 40-54 74-60 12-2 20 4 18 14-4 14-12 24-22 30 10 2 16 8 18 18-8 8-18 12-28 12 8 6 12 14 12 24-10 4-20 4-30 0 6 8 8 16 6 26-12-4-24-12-32-22-8-12-14-26-16-42z"/>
+          <!-- 왼쪽 날개: 좌우 대칭 -->
+          <path transform="translate(240 0) scale(-1 1)" d="M128 82c12-30 40-54 74-60 12-2 20 4 18 14-4 14-12 24-22 30 10 2 16 8 18 18-8 8-18 12-28 12 8 6 12 14 12 24-10 4-20 4-30 0 6 8 8 16 6 26-12-4-24-12-32-22-8-12-14-26-16-42z"/>
+          <!-- 갈라진 꼬리 -->
+          <path d="M104 132h32l-5 40-11-14-11 14z"/>
+          <!-- 두 다리와 발톱 -->
+          <path d="M110 136l-8 26 7 2 7-26zM130 136l8 26-7 2-7-26z"/>
+          <path d="M94 160h22v7H94zM124 160h22v7h-22z"/>
+          <!-- 몸통 -->
+          <path d="M120 62c11 0 19 8 20 19l3 38c1 10-7 18-17 18h-12c-10 0-18-8-17-18l3-38c1-11 9-19 20-19z"/>
+          <!-- 머리(문장 규칙대로 왼쪽을 본다)와 부리 -->
+          <path d="M120 30c12 0 21 9 21 21 0 7-3 13-8 17h-26c-5-4-8-10-8-17 0-12 9-21 21-21z"/>
+          <path d="M101 44l-23 7 23 8z"/>
+          <circle cx="112" cy="44" r="3.4" fill="#f6f2e8" opacity="0.7"/>
+        </g>
+      </svg>
+
+      <!-- 참나무 잎과 도토리 (독일 동전에도 새겨진 국민 나무) -->
+      <svg class="de-motif de-oak" viewBox="0 0 80 132" aria-hidden="true">
+        <g fill="currentColor">
+          <path d="M40 6c7 6 10 12 8 19 8-4 16 0 15 8 -1 7-9 10-16 8c9 3 16 9 14 17-2 7-11 10-17 7 9 5 14 12 11 20-3 7-11 9-15 5l0 10 L40 6Z"/>
+          <path transform="translate(80 0) scale(-1 1)" d="M40 6c7 6 10 12 8 19 8-4 16 0 15 8 -1 7-9 10-16 8c9 3 16 9 14 17-2 7-11 10-17 7 9 5 14 12 11 20-3 7-11 9-15 5l0 10 L40 6Z"/>
+          <rect x="37" y="86" width="6" height="40" rx="3"/>
+          <path d="M40 22v70" stroke="#f6f2e8" stroke-width="2.4" opacity="0.45" fill="none"/>
+        </g>
+        <g fill="currentColor" opacity="0.9">
+          <ellipse cx="17" cy="118" rx="7" ry="9"/>
+          <path d="M9 112h16v-3a8 8 0 0 0-16 0z"/>
+          <path d="M17 106v-8" stroke="currentColor" stroke-width="3" fill="none"/>
+          <ellipse cx="63" cy="122" rx="6" ry="8"/>
+          <path d="M56 117h14v-3a7 7 0 0 0-14 0z"/>
+          <path d="M63 111v-9" stroke="currentColor" stroke-width="3" fill="none"/>
+        </g>
+      </svg>
+
+      <!-- 베를린 곰 (베를린 문장) -->
+      <svg class="de-motif de-bear" viewBox="0 0 100 122" aria-hidden="true">
+        <path d="M34 78h14v34a7 7 0 0 1-14 0z"/><path d="M54 78h14v34a7 7 0 0 1-14 0z"/>
+        <ellipse cx="41" cy="114" rx="10" ry="6"/><ellipse cx="61" cy="114" rx="10" ry="6"/>
+        <path d="M51 34c15 0 25 12 25 28v18c0 10-11 16-25 16s-25-6-25-16V62c0-16 10-28 25-28z"/>
+        <path d="M28 56c-8-6-14-14-16-24l12-5c3 9 8 15 14 19z"/>
+        <path d="M74 56c8-6 14-14 16-24l-12-5c-3 9-8 15-14 19z"/>
+        <circle cx="51" cy="26" r="18"/>
+        <circle cx="35" cy="12" r="7"/><circle cx="67" cy="12" r="7"/>
+        <ellipse cx="51" cy="34" rx="9" ry="7" fill="#f6f2e8" opacity="0.5"/>
+        <circle cx="51" cy="30" r="3" fill="#f6f2e8" opacity="0.75"/>
+      </svg>
+
+      <!-- 음표 (바흐·베토벤·브람스의 나라) -->
+      <svg class="de-motif de-note" viewBox="0 0 100 100" aria-hidden="true">
+        <rect x="34" y="16" width="6" height="62" rx="3"/>
+        <rect x="72" y="8" width="6" height="62" rx="3"/>
+        <path d="M34 16l44-10v15L34 31z"/>
+        <ellipse cx="25" cy="80" rx="14" ry="10" transform="rotate(-20 25 80)"/>
+        <ellipse cx="63" cy="72" rx="14" ry="10" transform="rotate(-20 63 72)"/>
+      </svg>
+
+      <!-- 딱정벌레 모양 국민차 -->
+      <svg class="de-motif de-car" viewBox="0 0 140 84" aria-hidden="true">
+        <path d="M14 56c0-10 6-18 16-22 6-14 18-22 34-22s28 8 34 22c10 4 16 12 16 22 0 6-4 10-10 10H24c-6 0-10-4-10-10z"/>
+        <path d="M46 34c3-8 10-13 18-13s15 5 18 13z" fill="#f6f2e8" opacity="0.5"/>
+        <circle cx="40" cy="66" r="12"/><circle cx="100" cy="66" r="12"/>
+        <circle cx="40" cy="66" r="5" fill="#f6f2e8" opacity="0.6"/>
+        <circle cx="100" cy="66" r="5" fill="#f6f2e8" opacity="0.6"/>
+      </svg>
+
       <!-- 두 국기 리본: 오늘의 흑·적·금 / 독일제국의 흑·백·적 -->
       <div class="de-ribbon de-ribbon-modern" title="독일연방공화국"></div>
       <div class="de-ribbon de-ribbon-empire" title="독일제국"></div>
@@ -231,7 +448,7 @@
             <button id="other-code-toggle" class="link-btn side-other-toggle">다른 학급코드 입력</button>
           </aside>
 
-          <div class="landing-main glass-card beam">
+          <div class="landing-main glass-card">
             <p class="eyebrow">시작하기 전에</p>
             <h1>학급을 선택해주세요</h1>
             <p class="muted">왼쪽 목록에서 학급을 누르면 바로 시작할 수 있어요.</p>
@@ -617,7 +834,7 @@
 
       <!-- ============ 주간 투표 ============ -->
       <section data-view="mode-vote" class="view hidden">
-        <div class="glass-card beam">
+        <div class="glass-card">
           <p class="eyebrow">매주 1위는 실제로 만들어져요</p>
           <h2>이번 주 투표</h2>
           <p class="muted">
@@ -686,7 +903,7 @@
 
       <!-- ============ 이스터에그 도감 ============ -->
       <section data-view="codex" class="view hidden">
-        <div class="glass-card beam">
+        <div class="glass-card">
           <p class="eyebrow">숨겨진 것들</p>
           <h2>이스터에그 도감</h2>
           <p class="muted" id="codex-summary"></p>

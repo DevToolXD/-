@@ -4,7 +4,7 @@
 import * as data from "./data.js?v=DEV";
 import { BLOCK_MESSAGE } from "./moderation.js?v=DEV";
 import * as guard from "./guard.js?v=DEV";
-import { THEMES, THEME_IDS, THEME_GROUPS, DEFAULT_THEME, isTheme, getTheme, GERMANY_NOTE }
+import { THEMES, THEME_IDS, THEME_GROUPS, DEFAULT_THEME, isTheme, getTheme }
   from "./themes.js?v=DEV";
 import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN } from "../config.js?v=DEV";
 
@@ -629,7 +629,6 @@ function renderThemeInto(sel) {
     return `<div class="theme-group">
       <p class="theme-group-title">${escapeHtml(g)}</p>
       <div class="theme-grid">${items.map((t) => themeCardHtml(t, t.id === active)).join("")}</div>
-      ${g === "독일" ? `<p class="theme-note">${escapeHtml(GERMANY_NOTE)}</p>` : ""}
     </div>`;
   }).join("");
   root.querySelectorAll(".theme-card").forEach((b) =>
