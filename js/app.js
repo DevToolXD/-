@@ -683,7 +683,7 @@ function themeCardHtml(t, active) {
       <span class="theme-group-tag">${escapeHtml(t.group)}</span>
     </span>` : ""}
     ${t.era ? `<span class="theme-era">${escapeHtml(t.era)}</span>` : ""}
-    <span class="theme-tagline">${escapeHtml(t.tagline)}</span>
+    ${t.tagline ? `<span class="theme-tagline">${escapeHtml(t.tagline)}</span>` : ""}
     <span class="theme-pick">${active ? "사용 중" : "이 테마 쓰기"}</span>
   </button>`;
 }

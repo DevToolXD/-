@@ -83,32 +83,31 @@ export const THEMES = [
     },
   },
 
-  // ---- 이름 없는 테마 ----
-  //  Vesper.ai 랜딩 페이지의 배색·질감을 그대로 옮긴 단색 테마.
-  //  · 순검정 배경, 흰 글자, 회색 두 단계(#9a9a9a / #d8d8d8)뿐이고
-  //    파랑·금색 같은 강조색이 화면 어디에도 남지 않는다.
+  // ---- 리퀴드 글라스 ----
+  //  테두리를 긋지 않고 위아래 가장자리만 눌러 유리처럼 보이게 하는 단색 테마.
+  //  · 흰 배경, 검은 글자, 회색 한 단계뿐이고 파랑·금색 같은 강조색이
+  //    화면 어디에도 남지 않는다.
   //  · 다른 테마와 달리 화면에 요소를 새로 얹지 않는다(독일 테마의 무대,
   //    뽀로로의 눈·마스코트 같은 것이 없다). 배색과 질감만 바꾼다.
-  //  · 이름을 두지 않아서 카드에는 "200시간" 한 줄만 나온다.
   {
     id: "mono",
-    name: "",
+    name: "리퀴드 글라스",
     group: "기본",
-    tagline: "200시간",
-    swatch: ["#000000", "#9a9a9a", "#ffffff"],
+    tagline: "",
+    swatch: ["#ffffff", "#6b6b6b", "#0a0a0a"],
     preview: {
       kind: "mono",
-      bg: "#000000",
-      ink: "#ffffff",
-      muted: "#9a9a9a",
-      card: "rgba(255, 255, 255, 0.05)",
-      edge: "rgba(255, 255, 255, 0.16)",
-      accent: "linear-gradient(180deg, #ffffff 0%, #e7e7e7 48%, #cfcfcf 100%)",
-      onAccent: "#111111",
+      bg: "#ffffff",
+      ink: "#0a0a0a",
+      muted: "#a6a6a6",
+      card: "rgba(255, 255, 255, 0.6)",
+      edge: "rgba(0, 0, 0, 0.14)",
+      accent: "rgba(255, 255, 255, 0.75)",
+      onAccent: "#0a0a0a",
       radius: "6px",
       blur: "8px",
-      shadow: "0 6px 16px rgba(0, 0, 0, 0.6)",
-      spec: "rgba(255, 255, 255, 0.22)",
+      shadow: "0 5px 14px rgba(0, 0, 0, 0.1)",
+      spec: "rgba(255, 255, 255, 0.95)",
     },
   },
 ];

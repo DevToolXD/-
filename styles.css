@@ -1684,31 +1684,31 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
    뽀로로의 눈·마스코트 같은 전용 DOM 이 없고, 배색과 질감만 바꾼다.
    그래서 입자(grain)도 새 요소 대신 body::after 로 깐다. */
 body.theme-mono {
-  --green-50: #0a0a0a;
-  --green-100: #141414;
-  --green-200: #242424;
-  --green-500: #ffffff;
-  --green-600: #d8d8d8;
-  --green-700: #9a9a9a;
-  --ok: #ffffff;
-  --err: #d8d8d8;
-  --ink: #ffffff;
-  --muted: #9a9a9a;
-  --bg-base: #000000;
-  --glass-bg: rgba(255, 255, 255, 0.04);
-  --glass-bg-strong: rgba(255, 255, 255, 0.06);
-  --glass-border: rgba(255, 255, 255, 0.16);
-  --glass-edge: rgba(255, 255, 255, 0.16);
-  --glass-spec: rgba(255, 255, 255, 0.14);
-  --glass-spec-low: rgba(0, 0, 0, 0.6);
-  --glass-sheen: rgba(255, 255, 255, 0.05);
+  --green-50: #f4f4f4;
+  --green-100: #ededed;
+  --green-200: #dcdcdc;
+  --green-500: #0a0a0a;
+  --green-600: #2a2a2a;
+  --green-700: #4a4a4a;
+  --ok: #0a0a0a;
+  --err: #4a4a4a;
+  --ink: #0a0a0a;
+  --muted: #6b6b6b;
+  --bg-base: #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.5);
+  --glass-bg-strong: rgba(255, 255, 255, 0.66);
+  --glass-border: rgba(0, 0, 0, 0.12);
+  --glass-edge: rgba(0, 0, 0, 0.12);
+  --glass-spec: rgba(255, 255, 255, 0.9);
+  --glass-spec-low: rgba(0, 0, 0, 0.06);
+  --glass-sheen: rgba(255, 255, 255, 0.5);
   --glass-blur: 16px;
   --glass-sat: 120%;
-  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
   --radius: 10px;
   --radius-sm: 6px;
-  color-scheme: dark;
-  background: #000000;
+  color-scheme: light;
+  background: #ffffff;
   font-family: "Barlow", system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", "Malgun Gothic", sans-serif;
   font-weight: 300;
@@ -1724,7 +1724,7 @@ body.theme-mono::after {
   inset: 0;
   z-index: 100;
   pointer-events: none;
-  opacity: 0.05;
+  opacity: 0.045;
   width: auto; height: auto;
   border-radius: 0;
   filter: none;
@@ -1766,11 +1766,12 @@ body.theme-mono .app-sidebar,
 body.theme-mono .modal {
   position: relative;
   border: none;
-  background: rgba(255, 255, 255, 0.01);
+  background: rgba(255, 255, 255, 0.55);
   background-blend-mode: luminosity;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9),
+              0 6px 20px rgba(0, 0, 0, 0.06);
 }
 body.theme-mono .glass-card::before,
 body.theme-mono .link-btn::before,
@@ -1791,12 +1792,12 @@ body.theme-mono .modal::before {
   transform: none;
   animation: none;
   background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.45) 0%,
-    rgba(255, 255, 255, 0.15) 20%,
-    rgba(255, 255, 255, 0) 40%,
-    rgba(255, 255, 255, 0) 60%,
-    rgba(255, 255, 255, 0.15) 80%,
-    rgba(255, 255, 255, 0.45) 100%);
+    rgba(0, 0, 0, 0.22) 0%,
+    rgba(0, 0, 0, 0.08) 20%,
+    rgba(0, 0, 0, 0) 40%,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.08) 80%,
+    rgba(0, 0, 0, 0.22) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1806,29 +1807,32 @@ body.theme-mono .modal::before {
   pointer-events: none;
 }
 /* 기본 버튼만 더 두꺼운 유리 */
+/* 기본 버튼만 더 두꺼운 유리 */
 body.theme-mono .btn-primary {
   backdrop-filter: blur(50px);
   -webkit-backdrop-filter: blur(50px);
-  background: rgba(255, 255, 255, 0.01);
-  color: #fff;
-  box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.66);
+  color: #0a0a0a;
+  box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05),
+              inset 0 1px 1px rgba(255, 255, 255, 0.95);
 }
 body.theme-mono .btn-primary::before {
   background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(255, 255, 255, 0.2) 20%,
-    rgba(255, 255, 255, 0) 40%,
-    rgba(255, 255, 255, 0) 60%,
-    rgba(255, 255, 255, 0.2) 80%,
-    rgba(255, 255, 255, 0.5) 100%);
+    rgba(0, 0, 0, 0.26) 0%,
+    rgba(0, 0, 0, 0.1) 20%,
+    rgba(0, 0, 0, 0) 40%,
+    rgba(0, 0, 0, 0) 60%,
+    rgba(0, 0, 0, 0.1) 80%,
+    rgba(0, 0, 0, 0.26) 100%);
 }
 body.theme-mono .btn-primary:hover,
 body.theme-mono .btn-ghost:hover,
 body.theme-mono .link-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.85);
+  color: #0a0a0a;
   filter: none;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95),
+              0 6px 20px rgba(0, 0, 0, 0.08);
 }
 /* 알약 반지름: 버튼·칩은 완전한 알약, 카드는 20px */
 body.theme-mono .btn,
@@ -1837,7 +1841,7 @@ body.theme-mono .chip { border-radius: 9999px; }
 body.theme-mono .glass-card,
 body.theme-mono .side-nav-item,
 body.theme-mono .student-page-nav { border-radius: 1.25rem; }
-body.theme-mono .btn-ghost { background: rgba(255, 255, 255, 0.01); color: #fff; }
+body.theme-mono .btn-ghost { background: rgba(255, 255, 255, 0.5); color: #0a0a0a; }
 body.theme-mono .btn::after { display: none; }
 body.theme-mono .glass-card::after { display: none; }
 body.theme-mono .link-btn {
@@ -1845,59 +1849,44 @@ body.theme-mono .link-btn {
   padding: 8px 14px;
   font-size: 0.9rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: #1a1a1a;
   letter-spacing: 0;
 }
 
 /* ---- 나머지 UI 에서도 고유 색을 걷어낸다 ---- */
-body.theme-mono .chip {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #d8d8d8;
-  font-weight: 400;
-}
+body.theme-mono .chip { color: #2a2a2a; font-weight: 400; }
 body.theme-mono input,
 body.theme-mono select,
 body.theme-mono textarea {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #0a0a0a;
 }
-body.theme-mono .side-nav-item,
-body.theme-mono .student-page-nav {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.12);
-}
-body.theme-mono .side-nav-item:hover,
-body.theme-mono .student-page-nav:hover { border-color: rgba(255, 255, 255, 0.32); }
-body.theme-mono .student-page-nav.active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.4);
-}
+body.theme-mono .student-page-nav.active { background: rgba(255, 255, 255, 0.9); }
 body.theme-mono .free-tag,
 body.theme-mono .vote-lead-badge {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #d8d8d8;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #2a2a2a;
 }
-body.theme-mono .codex-count { color: #d8d8d8; }
-body.theme-mono .err { color: #d8d8d8; }
+body.theme-mono .codex-count { color: #2a2a2a; }
+body.theme-mono .err { color: #4a4a4a; }
 /* 0603 전용 금빛 반짝임도 이 테마에서는 색을 뺀다 */
 body.theme-mono.special-0603 .brand-name,
 body.theme-mono.special-0603 .class-chip {
-  background: linear-gradient(90deg, #9a9a9a, #ffffff, #9a9a9a, #9a9a9a);
+  background: linear-gradient(90deg, #6b6b6b, #0a0a0a, #6b6b6b, #6b6b6b);
   background-size: 300% 100%;
 }
 /* 강조색을 흰색으로 바꾼 탓에 '이 테마 쓰기'가 흰 바탕에 흰 글자가 된다 */
-body.theme-mono .theme-pick { background: #ffffff; color: #111111; }
+body.theme-mono .theme-pick { background: #0a0a0a; color: #ffffff; }
 body.theme-mono .theme-card.current .theme-pick {
   background: transparent;
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.6);
+  color: #0a0a0a;
+  border-color: rgba(0, 0, 0, 0.45);
 }
 body.theme-mono .theme-card.current {
-  border-color: rgba(255, 255, 255, 0.6);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+  border-color: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
 }
 /* 소원 연출의 빛줄기도 흰빛 한 가지로 */
 body.theme-mono .wish-cinema-rays { filter: grayscale(1); }
@@ -2081,15 +2070,37 @@ body.theme-mono .scratch-dust { filter: grayscale(1); }
 .tp-germany .tp-btn { border: 1px solid rgba(138, 106, 18, 0.6); }
 .tp-germany .tp-h { background: #6f550e; }
 
-/* 이름 없는 테마: 순검정에 흰 버튼 하나, 장식 없음 */
+/* 리퀴드 글라스: 흰 바탕, 가장자리만 눌린 유리, 장식 없음 */
 .tp-mono .tp-deco { background: none; }
 .tp-mono .tp-bar i {
-  background: linear-gradient(105deg, #050505, #4a4a4a);
-  border: 1px solid rgba(198, 198, 198, 0.45);
-  width: 14px; height: 7px; border-radius: 2px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  width: 14px; height: 7px; border-radius: 999px;
 }
-.tp-mono .tp-card { border-width: 1px; }
-.tp-mono .tp-btn { border: 1px solid #fff; border-radius: 4px; }
+.tp-mono .tp-card {
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 4px 12px rgba(0, 0, 0, 0.07);
+  position: relative;
+}
+/* 실제 화면과 같은 방식: 위아래 가장자리만 눌러 유리처럼 */
+.tp-mono .tp-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.06) 22%,
+              transparent 42%, transparent 58%, rgba(0,0,0,0.06) 78%, rgba(0,0,0,0.22) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.tp-mono .tp-btn {
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 999px;
+}
 
 @media (prefers-reduced-motion: no-preference) {
   .theme-card:hover .tp-card { transform: translateY(-2px); }
