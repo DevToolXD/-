@@ -30,6 +30,10 @@ const CHECKS = [
     why: "전체 관리자 화면의 '관리자 계정' 목록" },
   { name: "eggStats 목록 읽기", run: () => list("eggStats"),
     why: "이스터에그 발견자 수(문서 하나씩 읽기로 우회 중)" },
+  { name: "voteBallots 목록 읽기", run: () => list("voteBallots"),
+    why: "같은 사람이 두 번 투표하지 못하게 하는 기록" },
+  { name: "securityLog 목록 읽기", run: () => list("securityLog"),
+    why: "개발자 도구를 열어 본 흔적" },
 ];
 // 이미 열려 있어야 정상인 자리들 — 여기서 막히면 규칙이 잘못 올라간 것이다.
 const SHOULD_WORK = [

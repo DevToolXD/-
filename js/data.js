@@ -584,19 +584,104 @@ export async function revokeAccountAdmin(docId) {
 
 // ---------- 서버 규칙이 최신인지 직접 확인 ----------
 //  firestore.rules 를 콘솔에 붙여 넣었는지 사람이 눈으로 확인할 방법이 없어서,
-//  실제로 두 군데를 읽어 본다. 둘 다 최신 규칙에서만 열리는 자리다.
-//    · adminAccounts  — 최신 규칙에서 새로 생긴 컬렉션
+//  실제로 네 군데를 읽어 본다. 모두 최신 규칙에서만 열리는 자리다.
+//    · adminAccounts  — 계정에 붙는 관리자 권한
 //    · eggStats(목록) — 예전 규칙은 목록 읽기를 막고 있었다
+//    · voteBallots    — 같은 사람이 두 번 투표하지 못하게 하는 기록
+//    · securityLog    — 개발자 도구를 열어 본 흔적
 //  하나라도 막히면 콘솔에 붙여 넣은 규칙이 예전 버전이라는 뜻이다.
 export async function checkRulesPublished() {
   const probe = async (name) => {
     try { await getDocs(collection(db, name)); return true; }
     catch { return false; }
   };
-  const [adminAccounts, eggStats] = await Promise.all([
+  const [adminAccounts, eggStats, voteBallots, securityLog] = await Promise.all([
     probe("adminAccounts"), probe("eggStats"),
+    probe("voteBallots"), probe("securityLog"),
   ]);
-  return { adminAccounts, eggStats, ok: adminAccounts && eggStats };
+  return {
+    adminAccounts, eggStats, voteBallots, securityLog,
+    ok: adminAccounts && eggStats && voteBallots && securityLog,
+  };
+}
+
+// ---------- 투표 기록 (같은 사람이 두 번 투표하지 못하게) ----------
+//  브라우저 저장소에만 남기면 저장소를 지우거나 다른 브라우저를 쓰면
+//  그만이다. 문서 ID를 "{주차}_{학급}_{사람}" 으로 고정하고 create 만
+//  허용해 두면 같은 사람이 같은 주에 두 번째 문서를 만들 수 없다.
+//  규칙이 아직 이 컬렉션을 안 열었으면 null 을 돌려주고, 그때는 앱이
+//  예전처럼 브라우저 저장소만 보고 판단한다.
+const ballotId = (week, code, voterId) => `${week}_${code}_${voterId}`;
+
+export async function hasVotedOnServer(week, code, voterId) {
+  if (!week || !code || !voterId) return null;
+  try {
+    const d = await getDoc(doc(db, "voteBallots", ballotId(week, code, voterId)));
+    return d.exists();
+  } catch {
+    return null; // 규칙이 아직 없음 → 판단 불가
+  }
+}
+
+export async function recordBallot(week, code, voterId) {
+  if (!week || !code || !voterId) return false;
+  try {
+    await setDoc(doc(db, "voteBallots", ballotId(week, code, voterId)), {
+      weekKey: week, classCode: code, voterId, votedAt: serverTimestamp(),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearBallots(week) {
+  const snap = await getDocs(collection(db, "voteBallots"));
+  const jobs = [];
+  snap.forEach((d) => {
+    if (!week || d.data().weekKey === week) jobs.push(deleteDoc(d.ref));
+  });
+  await Promise.all(jobs);
+  return jobs.length;
+}
+
+// ---------- 보안 기록: 개발자 도구를 열어 보려 한 흔적 ----------
+//  ⚠️ 콘솔에 무엇을 입력했는지는 웹 페이지가 알 수 없다. 페이지가 감지할 수
+//  있는 신호(단축키·우클릭·창 크기 변화)만 남는다.
+export async function logSecurityEvent(name, classCode, roleTag, action, detail) {
+  try {
+    await addDoc(collection(db, "securityLog"), {
+      name: sanitizeText(name, APP.maxNameLength) || "이름 없음",
+      classCode: String(classCode || ""),
+      roleTag: sanitizeText(roleTag, 60) || "",
+      action: sanitizeText(action, 40),
+      detail: sanitizeText(detail, 120) || "",
+      at: serverTimestamp(),
+    });
+    return true;
+  } catch {
+    return false; // 규칙이 아직 없으면 조용히 넘어간다
+  }
+}
+
+export async function listSecurityLog(max = 100) {
+  try {
+    const snap = await getDocs(
+      query(collection(db, "securityLog"), orderBy("at", "desc"), limit(max)));
+    const out = [];
+    snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+export async function clearSecurityLog() {
+  const snap = await getDocs(collection(db, "securityLog"));
+  const jobs = [];
+  snap.forEach((d) => jobs.push(deleteDoc(d.ref)));
+  await Promise.all(jobs);
+  return jobs.length;
 }
 
 // ---------- 부적절 시도 신고함 (해당 반 담임선생님에게 전달) ----------

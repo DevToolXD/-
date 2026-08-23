@@ -170,21 +170,56 @@ function escapeHtml(s) {
 }
 
 // =============================================================
-//  개발자 도구 접근 억제 (완전한 차단은 불가능하지만 진입 장벽을 둠)
+//  개발자 도구: 막지 않고 기록만 남긴다
 // =============================================================
-document.addEventListener("contextmenu", (e) => e.preventDefault());
+//  막아 봐야 메뉴로 열면 그만이고, 우클릭까지 막으면 복사·붙여넣기 같은
+//  평범한 사용만 불편해진다. 그래서 차단은 걷어내고, 대신 "누가 언제
+//  무엇을 눌렀는지"를 전체 관리자만 보는 기록으로 남긴다.
+//
+//  ⚠️ 페이지가 알 수 있는 건 여기까지다. 콘솔에 무엇을 입력했는지,
+//  무엇을 고쳤는지는 웹 페이지에서 볼 수 없다. 아래 신호만 남는다.
+//    · 개발자 도구 단축키(F12 / Ctrl+Shift+I·J·C / Ctrl+U)
+//    · 우클릭(검사 메뉴로 가는 첫걸음)
+//    · 창 안쪽과 바깥쪽 크기가 갑자기 벌어짐 = 도구가 열림(붙여 열었을 때)
+const SEC_SEEN = new Set();          // 같은 행동을 연달아 여러 번 안 남긴다
+function noteSecurity(action, detail) {
+  const stamp = `${action}|${detail || ""}`;
+  if (SEC_SEEN.has(stamp)) return;
+  SEC_SEEN.add(stamp);
+  setTimeout(() => SEC_SEEN.delete(stamp), 60000);
+  const me = currentIdentity();
+  data.logSecurityEvent(
+    me?.name || "로그인 안 한 사람", classCode, me?.roleTag || "", action, detail || "",
+  ).catch(() => {});
+}
+
 document.addEventListener("keydown", (e) => {
   const k = e.key;
-  const blocked =
-    k === "F12" ||
-    (e.ctrlKey && e.shiftKey && ["I", "J", "C", "i", "j", "c"].includes(k)) ||
-    (e.metaKey && e.altKey && ["I", "J", "C", "i", "j", "c"].includes(k)) ||
-    (e.ctrlKey && (k === "u" || k === "U"));
-  if (blocked) {
-    e.preventDefault();
-    findEgg("f12"); // 막아둔 키를 눌러본 사람에게 주는 이스터에그
-  }
+  const combo =
+    (k === "F12" && "F12") ||
+    (e.ctrlKey && e.shiftKey && ["I","J","C","i","j","c"].includes(k) && `Ctrl+Shift+${k.toUpperCase()}`) ||
+    (e.metaKey && e.altKey && ["I","J","C","i","j","c"].includes(k) && `Cmd+Option+${k.toUpperCase()}`) ||
+    (e.ctrlKey && (k === "u" || k === "U") && "Ctrl+U");
+  if (!combo) return;
+  // 막지 않는다 — 그대로 열리게 두고 기록만 남긴다.
+  // 이스터에그도 조용히 넣는다. 여기서 토스트가 뜨면 누른 사람이
+  // "앱이 눈치챘다"는 걸 그 자리에서 알게 된다.
+  noteSecurity("개발자 도구 단축키", combo);
+  findEgg("f12", { quiet: true });
 });
+
+document.addEventListener("contextmenu", () => noteSecurity("우클릭", ""));
+
+// 도구가 실제로 열렸는지: 창 바깥쪽과 안쪽 크기 차이로 짐작한다.
+// (붙여서 열었을 때만 잡히고, 따로 떼서 열면 잡히지 않는다)
+let devtoolsWasOpen = false;
+setInterval(() => {
+  const gapW = window.outerWidth - window.innerWidth;
+  const gapH = window.outerHeight - window.innerHeight;
+  const open = gapW > 200 || gapH > 200;
+  if (open && !devtoolsWasOpen) noteSecurity("개발자 도구 열림", `${gapW}x${gapH}`);
+  devtoolsWasOpen = open;
+}, 2000);
 
 // =============================================================
 //  소원 등록 연출 (영화 오프닝처럼)
@@ -1611,7 +1646,7 @@ async function enterSuperAdmin() {
   $("#sa-detail").classList.add("hidden");
   saCurrentCode = null;
   await Promise.all([refreshOverview(), refreshSaVotes(), refreshAdInbox(),
-                     refreshAdminAccounts(), refreshRulesState()]);
+                     refreshAdminAccounts(), refreshSecurityLog(), refreshRulesState()]);
 }
 
 async function refreshOverview() {
@@ -1849,7 +1884,9 @@ async function refreshRulesState() {
   }
   // 오류가 아니라 '할 일'이다. 빨간 경고로 띄우면 앱이 고장 난 것처럼 보인다.
   const missing = [!r.adminAccounts && "계정에 붙는 관리자 권한",
-                   !r.eggStats && "이스터에그 발견자 수"].filter(Boolean).join(" · ");
+                   !r.eggStats && "이스터에그 발견자 수",
+                   !r.voteBallots && "투표 1회 제한(기기 바꿔도 유지)",
+                   !r.securityLog && "개발자 도구 기록"].filter(Boolean).join(" · ");
   state.textContent =
     `아직 안 올린 규칙이 있어요. 지금도 앱은 정상이지만, 아래 기능은 이 기기에서만 동작해요 — ${missing}`;
   state.classList.add("todo");
@@ -1858,6 +1895,41 @@ async function refreshRulesState() {
 }
 
 $("#sa-rules-check").addEventListener("click", refreshRulesState);
+
+// ---- 개발자 도구를 열어 본 흔적 ----
+async function refreshSecurityLog() {
+  const list = $("#sa-seclog-list");
+  list.innerHTML = `<li class="muted small">불러오는 중…</li>`;
+  const rows = await data.listSecurityLog(100);
+  list.innerHTML = rows.length
+    ? rows.map((r) => `<li class="feedback-item">
+        <div class="row-between">
+          <span class="feedback-author">${escapeHtml(r.name || "이름 없음")}
+            <span class="feedback-role"> · ${escapeHtml(
+              r.classCode ? classLabel(r.classCode) : (r.roleTag || "학급 밖")
+            )}</span></span>
+          <span class="feedback-time">${escapeHtml(formatFeedbackTime(r.at))}</span>
+        </div>
+        <p class="feedback-text">${escapeHtml(r.action)}${
+          r.detail ? ` — ${escapeHtml(r.detail)}` : ""
+        }</p>
+      </li>`).join("")
+    : `<li class="muted small">아직 기록이 없어요.</li>`;
+  if (rows.length) revealChildren(list);
+}
+$("#sa-seclog-refresh").addEventListener("click", refreshSecurityLog);
+$("#sa-seclog-clear").addEventListener("click", async () => {
+  if (!(await confirmModal("개발자 도구 기록을 모두 지울까요?"))) return;
+  if (!(await ensureRole("superadmin"))) return;
+  if (!useToken("reportOp")) return;
+  try {
+    const n = await data.clearSecurityLog();
+    toast(`${n}건을 지웠어요.`);
+  } catch (e) {
+    toast("지우기 실패: " + e.message, false);
+  }
+  await refreshSecurityLog();
+});
 
 $("#sa-rules-copy").addEventListener("click", async (e) => {
   // e.currentTarget 은 await 를 한 번 넘기면 null 이 된다. 먼저 붙잡아 둔다.
@@ -1982,10 +2054,17 @@ const ADDED_WEEK_KEY = "manito.addedVoteWeek";
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 
-// 누가 투표했는지는 학급코드+본인 이름으로 구분한다.
-function voterKey(identity) {
+// 누가 투표했는지 가리는 값.
+// 이름은 바뀔 수 있고 같은 이름이 겹칠 수도 있어서, 학생 문서 ID 가 있으면
+// 그것을 쓴다(로그인한 학생). 선생님처럼 문서가 없으면 역할 이름을 쓴다.
+function voterId(identity) {
   if (!identity) return null;
-  return `${classCode}:${identity.name}`;
+  if (student && student.id && identity.name === student.name) return student.id;
+  return `n_${identity.name}`;
+}
+function voterKey(identity) {
+  if (!identity || !classCode) return null;
+  return `${classCode}:${voterId(identity)}`;
 }
 const votedKeyFor = (identity) => `${VOTED_WEEK_KEY}:${voterKey(identity)}`;
 const addedKeyFor = (identity) => `${ADDED_WEEK_KEY}:${voterKey(identity)}`;
@@ -2045,7 +2124,18 @@ async function refreshVotePage(
     const items = await data.listVoteItems(week);
     // 로그인해야 투표할 수 있다. (익명 투표를 열어두면 창만 새로 열어도
     // 표를 계속 넣을 수 있고, 사람 단위 1표를 지킬 방법도 없다)
-    const alreadyVoted = identity ? lsGet(votedKeyFor(identity)) === week : false;
+    // 저장소만 보면 지우거나 다른 브라우저를 쓰면 그만이라, 서버 기록을
+    // 먼저 본다. 규칙이 아직 없으면 null 이 오고 그때만 저장소로 판단한다.
+    const localVoted = identity ? lsGet(votedKeyFor(identity)) === week : false;
+    let alreadyVoted = localVoted;
+    if (identity) {
+      const onServer = await data.hasVotedOnServer(week, classCode, voterId(identity));
+      if (onServer !== null) {
+        alreadyVoted = onServer;
+        // 서버에 이미 있으면 저장소도 맞춰 둔다(다음 조회를 빠르게)
+        if (onServer) lsSet(votedKeyFor(identity), week);
+      }
+    }
     const canVote = !!identity && !alreadyVoted;
     const top = items.length ? items[0].count : 0;
 
@@ -2078,6 +2168,7 @@ async function refreshVotePage(
         try {
           await data.voteForItem(b.dataset.id);
           lsSet(votedKeyFor(identity), week);
+          await data.recordBallot(week, classCode, voterId(identity));
           toast("투표 완료! 감사합니다.");
           findEgg("vote");
           await refreshVotePage(wrapSel, hintSel, winnersSel, weekSel, identity);
@@ -2605,7 +2696,7 @@ const EGGS = [
   { id: "logo",     d: "쉬움",   name: "로고를 괴롭힘",   hint: "왼쪽 위 이름을 계속 두드리면?" },
   { id: "footad",   d: "쉬움",   name: "진짜 광고문의",   hint: "맨 아래 광고문의는 진짜 눌러집니다." },
   { id: "mascot",   d: "쉬움",   name: "펭귄 찌르기",     hint: "짝퉁 펭귄도 만지면 반응합니다." },
-  { id: "f12",      d: "쉬움",   name: "개발자 지망생",   hint: "열지 못하게 막아둔 그 키를 눌러보세요." },
+  { id: "f12",      d: "쉬움",   name: "개발자 지망생",   hint: "개발자 도구를 여는 그 키를 눌러보세요." },
   // ---- 중간 ----
   { id: "vote",     d: "중간",   name: "소중한 한 표",    hint: "다음에 추가할 모드를 직접 정해보세요." },
   { id: "test1889", d: "중간",   name: "비밀 교실",       hint: "명단에 없는 네 자리 학급코드가 하나 더 있어요." },
@@ -2641,14 +2732,17 @@ function updateCodexBtn() {
   syncTopbarHeight();
 }
 
-async function findEgg(id) {
+//  quiet: 발견은 기록하되 그 자리에서 알리지 않는다. 개발자 도구 단축키처럼
+//  "눌렀다는 걸 앱이 알아챘다"는 신호를 그 순간 보여주면 안 되는 경우에 쓴다.
+//  도감을 열어 보면 그때 확인할 수 있다.
+async function findEgg(id, { quiet = false } = {}) {
   const egg = EGGS.find((e) => e.id === id);
   if (!egg || hasEgg(id)) return;
   const found = loadFoundEggs();
   found.push(id);
   try { localStorage.setItem(EGGS_KEY, JSON.stringify(found)); } catch {}
   updateCodexBtn();
-  toast(`이스터에그 발견 — ${egg.name} (${found.length}/${EGG_TOTAL})`);
+  if (!quiet) toast(`이스터에그 발견 — ${egg.name} (${found.length}/${EGG_TOTAL})`);
   try { await data.recordEggFound(id); } catch {}
 }
 
