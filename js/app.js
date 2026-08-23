@@ -677,10 +677,10 @@ function themeCardHtml(t, active) {
     data-theme="${escapeHtml(t.id)}" data-kind="${escapeHtml(t.preview.kind)}"
     style="${escapeHtml(previewVars(t.preview))}">
     ${themePreviewHtml(t)}
-    <span class="theme-head">
+    ${t.name ? `<span class="theme-head">
       <span class="theme-name">${escapeHtml(t.name)}</span>
       <span class="theme-group-tag">${escapeHtml(t.group)}</span>
-    </span>
+    </span>` : ""}
     ${t.era ? `<span class="theme-era">${escapeHtml(t.era)}</span>` : ""}
     <span class="theme-tagline">${escapeHtml(t.tagline)}</span>
     <span class="theme-pick">${active ? "사용 중" : "이 테마 쓰기"}</span>
@@ -701,7 +701,8 @@ function renderThemeInto(sel) {
   root.querySelectorAll(".theme-card").forEach((b) =>
     b.addEventListener("click", () => {
       applyTheme(b.dataset.theme, { count: true });
-      toast(`${getTheme(b.dataset.theme).name} 테마로 바꿨어요.`);
+      const picked = getTheme(b.dataset.theme).name;
+      toast(picked ? `${picked} 테마로 바꿨어요.` : "테마를 바꿨어요.");
     })
   );
 }

@@ -82,6 +82,35 @@ export const THEMES = [
       spec: "rgba(255, 255, 255, 0.9)",
     },
   },
+
+  // ---- 이름 없는 테마 ----
+  //  Vesper.ai 랜딩 페이지의 배색·질감을 그대로 옮긴 단색 테마.
+  //  · 순검정 배경, 흰 글자, 회색 두 단계(#9a9a9a / #d8d8d8)뿐이고
+  //    파랑·금색 같은 강조색이 화면 어디에도 남지 않는다.
+  //  · 다른 테마와 달리 화면에 요소를 새로 얹지 않는다(독일 테마의 무대,
+  //    뽀로로의 눈·마스코트 같은 것이 없다). 배색과 질감만 바꾼다.
+  //  · 이름을 두지 않아서 카드에는 "200시간" 한 줄만 나온다.
+  {
+    id: "mono",
+    name: "",
+    group: "기본",
+    tagline: "200시간",
+    swatch: ["#000000", "#9a9a9a", "#ffffff"],
+    preview: {
+      kind: "mono",
+      bg: "#000000",
+      ink: "#ffffff",
+      muted: "#9a9a9a",
+      card: "rgba(255, 255, 255, 0.05)",
+      edge: "rgba(255, 255, 255, 0.16)",
+      accent: "linear-gradient(180deg, #ffffff 0%, #e7e7e7 48%, #cfcfcf 100%)",
+      onAccent: "#111111",
+      radius: "6px",
+      blur: "8px",
+      shadow: "0 6px 16px rgba(0, 0, 0, 0.6)",
+      spec: "rgba(255, 255, 255, 0.22)",
+    },
+  },
 ];
 
 export const THEME_IDS = THEMES.map((t) => t.id);

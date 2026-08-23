@@ -1644,6 +1644,213 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   .student-page-nav.just-added { animation: none; box-shadow: 0 0 0 2px var(--green-500); }
 }
 
+/* =============================================================
+   이름 없는 테마 (Vesper 배색)
+   =============================================================
+   순검정 위에 흰 글자와 회색 두 단계뿐이다. 파랑·금색·주황 같은
+   강조색을 한 군데도 남기지 않으려고 --green-* 계열까지 전부 무채색으로
+   덮는다(이름은 초록 시절 그대로지만 값만 바꾸는 기존 방식과 같다).
+
+   다른 테마와 달리 화면에 요소를 새로 얹지 않는다. 독일 테마의 무대나
+   뽀로로의 눈·마스코트 같은 전용 DOM 이 없고, 배색과 질감만 바꾼다.
+   그래서 입자(grain)도 새 요소 대신 body::after 로 깐다. */
+body.theme-mono {
+  --green-50: #0a0a0a;
+  --green-100: #141414;
+  --green-200: #242424;
+  --green-500: #ffffff;
+  --green-600: #d8d8d8;
+  --green-700: #9a9a9a;
+  --ok: #ffffff;
+  --err: #d8d8d8;
+  --ink: #ffffff;
+  --muted: #9a9a9a;
+  --bg-base: #000000;
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-bg-strong: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-edge: rgba(255, 255, 255, 0.16);
+  --glass-spec: rgba(255, 255, 255, 0.14);
+  --glass-spec-low: rgba(0, 0, 0, 0.6);
+  --glass-sheen: rgba(255, 255, 255, 0.05);
+  --glass-blur: 16px;
+  --glass-sat: 120%;
+  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  --radius: 10px;
+  --radius-sm: 6px;
+  color-scheme: dark;
+  background: #000000;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Malgun Gothic", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+/* 떠다니는 블롭 대신 고운 입자 한 겹 */
+body.theme-mono::before { display: none; }
+body.theme-mono::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0.05;
+  width: auto; height: auto;
+  border-radius: 0;
+  filter: none;
+  animation: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 글자 굵기와 자간을 Vesper 쪽으로 */
+body.theme-mono h1,
+body.theme-mono h2,
+body.theme-mono h3,
+body.theme-mono .brand-name {
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+body.theme-mono .eyebrow { color: var(--muted); letter-spacing: 0.02em; }
+
+/* ---- 상단 메뉴: 액체 금속 알약 ---- */
+body.theme-mono .link-btn {
+  position: relative;
+  overflow: hidden;
+  height: 40px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 7px;
+  border: 1px solid rgba(198, 198, 198, 0.55);
+  background: linear-gradient(105deg, #050505 0%, #2a2a2a 48%, #4a4a4a 100%);
+  color: #f3f3f3;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+body.theme-mono .link-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  transition: transform 0.6s ease;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%);
+}
+body.theme-mono .link-btn:hover::before { transform: translateX(120%); }
+body.theme-mono .link-btn:hover {
+  border-color: rgba(235, 235, 235, 0.9);
+  background: linear-gradient(105deg, #111 0%, #3a3a3a 45%, #6a6a6a 100%);
+  box-shadow: 0 0 18px rgba(200, 210, 230, 0.18);
+  color: #fff;
+}
+
+/* ---- 버튼: 액체 유리 ---- */
+body.theme-mono .btn {
+  border-radius: 6px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  transition: background 0.35s ease, border-color 0.35s ease,
+              box-shadow 0.35s ease, color 0.35s ease, filter 0.35s ease;
+}
+body.theme-mono .btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: translateX(-130%);
+  transition: transform 0.65s ease;
+  background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.45) 48%, transparent 76%);
+}
+body.theme-mono .btn:hover::after { transform: translateX(130%); }
+
+body.theme-mono .btn-primary {
+  background: linear-gradient(180deg, #ffffff 0%, #e7e7e7 48%, #cfcfcf 100%);
+  color: #111;
+  border: 1px solid #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+body.theme-mono .btn-primary:hover {
+  background: linear-gradient(180deg, #fff 0%, #f3f6ff 42%, #d5def2 100%);
+  border-color: #f2f6ff;
+  filter: none;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 0 22px rgba(186, 208, 255, 0.35),
+    0 8px 18px rgba(255, 255, 255, 0.12);
+}
+body.theme-mono .btn-ghost {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12),
+              rgba(0, 0, 0, 0.5) 46%, rgba(150, 170, 200, 0.1));
+  color: #fff;
+  border: 1px solid rgba(198, 198, 198, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+body.theme-mono .btn-ghost:hover {
+  background: linear-gradient(135deg, rgba(210, 225, 255, 0.18),
+              rgba(0, 0, 0, 0.35) 48%, rgba(180, 195, 220, 0.16));
+  border-color: rgba(220, 230, 255, 0.8);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 24px rgba(170, 200, 255, 0.28);
+}
+
+/* ---- 나머지 UI 에서도 고유 색을 걷어낸다 ---- */
+body.theme-mono .chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #d8d8d8;
+  font-weight: 400;
+}
+body.theme-mono input,
+body.theme-mono select,
+body.theme-mono textarea {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+body.theme-mono .side-nav-item,
+body.theme-mono .student-page-nav {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+body.theme-mono .side-nav-item:hover,
+body.theme-mono .student-page-nav:hover { border-color: rgba(255, 255, 255, 0.32); }
+body.theme-mono .student-page-nav.active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+body.theme-mono .free-tag,
+body.theme-mono .vote-lead-badge {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #d8d8d8;
+}
+body.theme-mono .codex-count { color: #d8d8d8; }
+body.theme-mono .err { color: #d8d8d8; }
+/* 0603 전용 금빛 반짝임도 이 테마에서는 색을 뺀다 */
+body.theme-mono.special-0603 .brand-name,
+body.theme-mono.special-0603 .class-chip {
+  background: linear-gradient(90deg, #9a9a9a, #ffffff, #9a9a9a, #9a9a9a);
+  background-size: 300% 100%;
+}
+/* 강조색을 흰색으로 바꾼 탓에 '이 테마 쓰기'가 흰 바탕에 흰 글자가 된다 */
+body.theme-mono .theme-pick { background: #ffffff; color: #111111; }
+body.theme-mono .theme-card.current .theme-pick {
+  background: transparent;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+body.theme-mono .theme-card.current {
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+}
+/* 소원 연출의 빛줄기도 흰빛 한 가지로 */
+body.theme-mono .wish-cinema-rays { filter: grayscale(1); }
+body.theme-mono .scratch-dust { filter: grayscale(1); }
+
 /* ---- 전체 관리자: 서버 규칙 상태 ---- */
 .rules-state {
   margin: 4px 0 12px;
@@ -1821,6 +2028,16 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
 }
 .tp-germany .tp-btn { border: 1px solid rgba(138, 106, 18, 0.6); }
 .tp-germany .tp-h { background: #6f550e; }
+
+/* 이름 없는 테마: 순검정에 흰 버튼 하나, 장식 없음 */
+.tp-mono .tp-deco { background: none; }
+.tp-mono .tp-bar i {
+  background: linear-gradient(105deg, #050505, #4a4a4a);
+  border: 1px solid rgba(198, 198, 198, 0.45);
+  width: 14px; height: 7px; border-radius: 2px;
+}
+.tp-mono .tp-card { border-width: 1px; }
+.tp-mono .tp-btn { border: 1px solid #fff; border-radius: 4px; }
 
 @media (prefers-reduced-motion: no-preference) {
   .theme-card:hover .tp-card { transform: translateY(-2px); }
