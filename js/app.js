@@ -639,6 +639,7 @@ function applyTheme(id, { remember = true, count = false } = {}) {
   if (remember) { try { localStorage.setItem(THEME_KEY, themeId); } catch {} }
   if (count && ++themeChangeCount >= 10) findEgg("flicker");
   renderThemeLists();
+  if (typeof runHeadlineIntro === "function") runHeadlineIntro();
 }
 
 // 예전 이름을 쓰던 곳(이스터에그 등)이 있어 얇게 남겨둔다
@@ -2563,11 +2564,26 @@ attachTilt(".role-btn");
 })();
 
 // BlurText: 요소의 글자를 한 자씩 흐릿→또렷하게 등장시킨다
-function blurTextIn(el, step = 34) {
+//  mode "char": 글자 하나씩 (기본)
+//  mode "word": 낱말 하나씩 — 흐릿하고 아래에서 올라오다가 중간에 반쯤
+//               또렷해진 뒤 제자리에 앉는다. 낱말 간 100ms 씩 밀린다.
+function blurTextIn(el, { step = 34, mode = "char" } = {}) {
   if (!el) return;
   const text = el.dataset.btText ?? (el.dataset.btText = el.textContent);
+  el.classList.remove("bt-words");
   if (reduceMotion()) { el.textContent = text; return; }
   el.textContent = "";
+  if (mode === "word") {
+    el.classList.add("bt-words");
+    text.split(/\s+/).filter(Boolean).forEach((word, i) => {
+      const sp = document.createElement("span");
+      sp.className = "bt-word";
+      sp.style.setProperty("--d", i * 100 + "ms");
+      sp.textContent = word;
+      el.appendChild(sp);
+    });
+    return;
+  }
   [...text].forEach((ch, i) => {
     const sp = document.createElement("span");
     sp.className = "bt-char";
@@ -2576,7 +2592,12 @@ function blurTextIn(el, step = 34) {
     el.appendChild(sp);
   });
 }
-blurTextIn(document.querySelector(".landing-main h1"));
+// 테마마다 제목이 들어오는 방식이 다르다 (이름 없는 테마는 낱말 단위)
+function runHeadlineIntro() {
+  blurTextIn(document.querySelector(".landing-main h1"),
+             { mode: currentTheme() === "mono" ? "word" : "char" });
+}
+runHeadlineIntro();
 
 // =============================================================
 //  광고 문의 (푸터 버튼 → 모달 → 보내기)

@@ -1156,6 +1156,35 @@ body.student-mode .topbar { z-index: 50; }
 }
 @keyframes bt-char-in { to { opacity: 1; filter: blur(0); transform: none; } }
 
+/* 낱말 단위: 세 단계로 들어온다.
+   흐리게 아래에서 → 중간에 반쯤 또렷해지며 살짝 위로 지나쳤다가 → 제자리.
+   letter-spacing 이 음수라 낱말 사이를 공백 대신 margin 으로 벌린다. */
+.bt-words {
+  display: flex;
+  flex-wrap: wrap;
+  /* 원본은 가운데 정렬이지만 이 앱의 제목은 왼쪽 정렬이라, 가운데로 두면
+     바로 아래 본문과 축이 어긋난다. 가운데 정렬한 곳에서만 가운데로 간다. */
+  justify-content: flex-start;
+  row-gap: 0.1em;
+}
+[style*="text-align: center"] .bt-words,
+.text-center .bt-words,
+.hero-copy .bt-words { justify-content: center; }
+.bt-word {
+  display: inline-block;
+  margin-right: 0.28em;
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(50px);
+  animation: bt-word-in 0.7s ease-out both;
+  animation-delay: var(--d, 0ms);
+}
+@keyframes bt-word-in {
+  0%   { opacity: 0;   filter: blur(10px); transform: translateY(50px); }
+  50%  { opacity: 0.5; filter: blur(5px);  transform: translateY(-5px); }
+  100% { opacity: 1;   filter: blur(0);    transform: translateY(0); }
+}
+
 /* ---- Magnet: 상단바 버튼이 커서 쪽으로 살짝 끌려옴 ---- */
 .topbar .link-btn, .pororo-toggle { will-change: transform; }
 
@@ -1680,8 +1709,9 @@ body.theme-mono {
   --radius-sm: 6px;
   color-scheme: dark;
   background: #000000;
-  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+  font-family: "Barlow", system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", "Malgun Gothic", sans-serif;
+  font-weight: 300;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -1703,98 +1733,120 @@ body.theme-mono::after {
 }
 
 /* 글자 굵기와 자간을 Vesper 쪽으로 */
+/* 제목은 세리프 이탤릭, 본문은 산세리프.
+   웹폰트는 받아오지 않는다 — 이 앱 CSP 가 font-src 'self' 라 외부 폰트
+   호스트가 막혀 있다. 깔려 있으면 쓰이고 아니면 시스템 세리프로 떨어진다. */
 body.theme-mono h1,
 body.theme-mono h2,
 body.theme-mono h3,
+body.theme-mono .role-title,
 body.theme-mono .brand-name {
-  font-weight: 500;
-  letter-spacing: -0.04em;
+  font-family: "Instrument Serif", "Apple Garamond", Garamond,
+    "Times New Roman", "Batang", serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
 }
+body.theme-mono h1 { letter-spacing: -0.045em; }
 body.theme-mono .eyebrow { color: var(--muted); letter-spacing: 0.02em; }
 
-/* ---- 상단 메뉴: 액체 금속 알약 ---- */
-body.theme-mono .link-btn {
+/* ---- 액체 유리(liquid glass) ----
+   테두리를 border 로 긋지 않고, 위아래만 밝은 세로 그라디언트 링을
+   mask-composite 로 오려서 두른다. 유리 가장자리에 빛이 맺힌 것처럼 보인다.
+   원본 스펙은 -webkit-mask 만 적어 두었는데, 그러면 파이어폭스에서 링이
+   통째로 사각형으로 덮여 버린다. 표준 mask 도 같이 적어 둔다. */
+body.theme-mono .glass-card,
+body.theme-mono .link-btn,
+body.theme-mono .chip,
+body.theme-mono .btn,
+body.theme-mono .side-nav-item,
+body.theme-mono .student-page-nav,
+body.theme-mono .app-sidebar,
+body.theme-mono .modal {
   position: relative;
-  overflow: hidden;
-  height: 40px;
-  padding: 0 18px;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 7px;
-  border: 1px solid rgba(198, 198, 198, 0.55);
-  background: linear-gradient(105deg, #050505 0%, #2a2a2a 48%, #4a4a4a 100%);
-  color: #f3f3f3;
-  font-size: 14px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+  border: none;
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
 }
-body.theme-mono .link-btn::before {
+body.theme-mono .glass-card::before,
+body.theme-mono .link-btn::before,
+body.theme-mono .chip::before,
+body.theme-mono .btn::before,
+body.theme-mono .side-nav-item::before,
+body.theme-mono .student-page-nav::before,
+body.theme-mono .app-sidebar::before,
+body.theme-mono .modal::before {
   content: "";
   position: absolute;
   inset: 0;
-  transform: translateX(-120%);
-  transition: transform 0.6s ease;
-  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%);
+  z-index: 1;
+  border-radius: inherit;
+  padding: 1.4px;
+  opacity: 1;
+  height: auto;
+  transform: none;
+  animation: none;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.45) 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;
 }
-body.theme-mono .link-btn:hover::before { transform: translateX(120%); }
-body.theme-mono .link-btn:hover {
-  border-color: rgba(235, 235, 235, 0.9);
-  background: linear-gradient(105deg, #111 0%, #3a3a3a 45%, #6a6a6a 100%);
-  box-shadow: 0 0 18px rgba(200, 210, 230, 0.18);
-  color: #fff;
-}
-
-/* ---- 버튼: 액체 유리 ---- */
-body.theme-mono .btn {
-  border-radius: 6px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
-  transition: background 0.35s ease, border-color 0.35s ease,
-              box-shadow 0.35s ease, color 0.35s ease, filter 0.35s ease;
-}
-body.theme-mono .btn::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  transform: translateX(-130%);
-  transition: transform 0.65s ease;
-  background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.45) 48%, transparent 76%);
-}
-body.theme-mono .btn:hover::after { transform: translateX(130%); }
-
+/* 기본 버튼만 더 두꺼운 유리 */
 body.theme-mono .btn-primary {
-  background: linear-gradient(180deg, #ffffff 0%, #e7e7e7 48%, #cfcfcf 100%);
-  color: #111;
-  border: 1px solid #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(50px);
+  -webkit-backdrop-filter: blur(50px);
+  background: rgba(255, 255, 255, 0.01);
+  color: #fff;
+  box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05), inset 0 1px 1px rgba(255, 255, 255, 0.15);
 }
-body.theme-mono .btn-primary:hover {
-  background: linear-gradient(180deg, #fff 0%, #f3f6ff 42%, #d5def2 100%);
-  border-color: #f2f6ff;
+body.theme-mono .btn-primary::before {
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.2) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.2) 80%,
+    rgba(255, 255, 255, 0.5) 100%);
+}
+body.theme-mono .btn-primary:hover,
+body.theme-mono .btn-ghost:hover,
+body.theme-mono .link-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
   filter: none;
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 0 22px rgba(186, 208, 255, 0.35),
-    0 8px 18px rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18);
 }
-body.theme-mono .btn-ghost {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12),
-              rgba(0, 0, 0, 0.5) 46%, rgba(150, 170, 200, 0.1));
-  color: #fff;
-  border: 1px solid rgba(198, 198, 198, 0.55);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-body.theme-mono .btn-ghost:hover {
-  background: linear-gradient(135deg, rgba(210, 225, 255, 0.18),
-              rgba(0, 0, 0, 0.35) 48%, rgba(180, 195, 220, 0.16));
-  border-color: rgba(220, 230, 255, 0.8);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 24px rgba(170, 200, 255, 0.28);
+/* 알약 반지름: 버튼·칩은 완전한 알약, 카드는 20px */
+body.theme-mono .btn,
+body.theme-mono .link-btn,
+body.theme-mono .chip { border-radius: 9999px; }
+body.theme-mono .glass-card,
+body.theme-mono .side-nav-item,
+body.theme-mono .student-page-nav { border-radius: 1.25rem; }
+body.theme-mono .btn-ghost { background: rgba(255, 255, 255, 0.01); color: #fff; }
+body.theme-mono .btn::after { display: none; }
+body.theme-mono .glass-card::after { display: none; }
+body.theme-mono .link-btn {
+  height: auto;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0;
 }
 
 /* ---- 나머지 UI 에서도 고유 색을 걷어낸다 ---- */
