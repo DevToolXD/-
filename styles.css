@@ -1652,7 +1652,8 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   line-height: 1.5;
 }
 .rules-state.ok { color: var(--ok); }
-.rules-state.warn { color: var(--err); }
+/* 오류가 아니라 '아직 안 한 일'이라서 빨강을 쓰지 않는다 */
+.rules-state.todo { color: var(--muted); font-weight: 500; }
 .row-gap { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* =============================================================

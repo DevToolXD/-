@@ -380,7 +380,22 @@ export async function deleteFeedback(id) {
 // ---------- 이스터에그 도감 (전역 발견자 수) ----------
 // 어떤 이스터에그를 지금까지 몇 명이 찾았는지만 세는 카운터.
 // 누가 찾았는지는 저장하지 않고, 내가 뭘 찾았는지는 기기(localStorage)에만 남는다.
-export async function getEggStats() {
+//  컬렉션 목록 읽기는 규칙이 막아 둘 수 있지만 문서 하나씩 읽는 건 열려 있다.
+//  이스터에그 id 는 앱이 이미 전부 알고 있으므로, id 목록을 받으면 목록 조회
+//  없이 하나씩 읽어 모은다. 그래야 규칙 버전과 무관하게 항상 숫자가 나온다.
+export async function getEggStats(ids) {
+  if (Array.isArray(ids) && ids.length) {
+    const out = {};
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const d = await getDoc(doc(db, "eggStats", id));
+        out[id] = d.exists() ? Number(d.data().count) || 0 : 0;
+      } catch {
+        out[id] = 0; // 한 건이 막혀도 나머지는 보여준다
+      }
+    }));
+    return out;
+  }
   const snap = await getDocs(eggStatsCol());
   const out = {};
   snap.forEach((d) => { out[d.id] = Number(d.data().count) || 0; });
@@ -531,18 +546,32 @@ export async function isAccountAdmin(code, studentId) {
   }
 }
 
+//  서버에 기록해 두면 다른 기기에서 같은 계정으로 로그인해도 권한이 따라온다.
+//  규칙이 아직 이 컬렉션을 안 열었으면 기록만 실패하고, 지금 기기의 권한
+//  자체는 서명된 세션 토큰으로 이미 열려 있다. 그래서 실패를 오류로 알리지
+//  않고 "저장됐는지 여부"만 돌려준다.
 export async function grantAccountAdmin(code, studentId, name) {
-  await setDoc(adminAccountDoc(code, studentId), {
-    classCode: code,
-    studentId,
-    name: sanitizeText(name, APP.maxNameLength) || "이름 없음",
-    active: true,
-    grantedAt: serverTimestamp(),
-  });
+  try {
+    await setDoc(adminAccountDoc(code, studentId), {
+      classCode: code,
+      studentId,
+      name: sanitizeText(name, APP.maxNameLength) || "이름 없음",
+      active: true,
+      grantedAt: serverTimestamp(),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
+//  아직 규칙이 이 컬렉션을 열어 주지 않았으면 목록을 못 읽는다. 그럴 때
+//  빨간 오류를 띄우는 대신 '아직 없음'으로 돌려준다. 무엇이 막혀 있는지는
+//  전체 관리자 화면의 '서버 규칙' 칸이 따로 알려준다.
 export async function listAdminAccounts() {
-  const snap = await getDocs(adminAccountsCol());
+  let snap;
+  try { snap = await getDocs(adminAccountsCol()); }
+  catch { return []; }
   const out = [];
   snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
   out.sort((a, b) => String(a.classCode).localeCompare(String(b.classCode)));

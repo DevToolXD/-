@@ -1847,10 +1847,12 @@ async function refreshRulesState() {
     state.classList.add("ok");
     return;
   }
-  const missing = [!r.adminAccounts && "관리자 계정", !r.eggStats && "이스터에그 집계"]
-    .filter(Boolean).join(" · ");
-  state.textContent = `콘솔에 붙여 넣은 규칙이 예전 버전이에요. (막혀 있는 기능: ${missing})`;
-  state.classList.add("warn");
+  // 오류가 아니라 '할 일'이다. 빨간 경고로 띄우면 앱이 고장 난 것처럼 보인다.
+  const missing = [!r.adminAccounts && "계정에 붙는 관리자 권한",
+                   !r.eggStats && "이스터에그 발견자 수"].filter(Boolean).join(" · ");
+  state.textContent =
+    `아직 안 올린 규칙이 있어요. 지금도 앱은 정상이지만, 아래 기능은 이 기기에서만 동작해요 — ${missing}`;
+  state.classList.add("todo");
   actions.hidden = false;
   how.hidden = false;
 }
@@ -1894,13 +1896,13 @@ async function grantSuperAdmin() {
   // 그러면 다른 기기에서 그 계정으로 로그인해도 관리자 화면이 열린다.
   const target = student && student.id !== SUPER_ADMIN.studentId ? student : null;
   if (target) {
-    try {
-      await data.grantAccountAdmin(classCode, target.id, target.name);
-      accountIsAdmin = true;
-      toast(`${target.name} 계정에 관리자 권한이 붙었어요.`);
-    } catch (e) {
-      toast("권한 저장 실패: " + e.message, false);
-    }
+    // 서버 기록이 실패해도(규칙이 아직 이 컬렉션을 안 열었을 때) 이 기기의
+    // 권한은 서명된 세션으로 이미 열려 있다. 실패를 오류로 알리지 않는다.
+    const saved = await data.grantAccountAdmin(classCode, target.id, target.name);
+    accountIsAdmin = true;
+    toast(saved
+      ? `${target.name} 계정에 관리자 권한이 붙었어요.`
+      : `${target.name} 님, 관리자 권한이 열렸어요.`);
     markSuperAdminAuthed();
     updateAdminSideNav();
     await saveSession({
@@ -1935,6 +1937,9 @@ function updateAdminSideNav() {
 function flashAdminSideNav() {
   const tab = $("#side-nav-admin");
   if (!tab || tab.classList.contains("hidden")) return;
+  // 사이드바가 없는 화면(도감 등)에서 코드를 넣었다면 탭에 닿을 수가 없다.
+  // 학생 홈으로 돌려놓고 나서 강조한다.
+  if (currentView !== "student-home") showView("student-home");
   // 좁은 화면에서는 사이드바가 접혀 있으니 펴 준다
   document.body.classList.remove("sidebar-collapsed");
   $("#sidebar-toggle").setAttribute("aria-expanded", "true");
@@ -2665,7 +2670,8 @@ async function refreshCodex() {
   list.innerHTML = `<li class="muted small">발견자 수 불러오는 중…</li>`;
   let stats = {};
   let statsFailed = false;
-  try { stats = await data.getEggStats(); } catch { statsFailed = true; }
+  try { stats = await data.getEggStats(EGGS.map((e) => e.id)); }
+  catch { statsFailed = true; }
   const diffClass = { "쉬움": "easy", "중간": "mid", "어려움": "hard" };
   list.innerHTML = EGGS.map((e) => {
     const got = found.includes(e.id);
