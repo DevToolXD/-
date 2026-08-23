@@ -553,6 +553,23 @@ export async function revokeAccountAdmin(docId) {
   await deleteDoc(doc(db, "adminAccounts", docId));
 }
 
+// ---------- 서버 규칙이 최신인지 직접 확인 ----------
+//  firestore.rules 를 콘솔에 붙여 넣었는지 사람이 눈으로 확인할 방법이 없어서,
+//  실제로 두 군데를 읽어 본다. 둘 다 최신 규칙에서만 열리는 자리다.
+//    · adminAccounts  — 최신 규칙에서 새로 생긴 컬렉션
+//    · eggStats(목록) — 예전 규칙은 목록 읽기를 막고 있었다
+//  하나라도 막히면 콘솔에 붙여 넣은 규칙이 예전 버전이라는 뜻이다.
+export async function checkRulesPublished() {
+  const probe = async (name) => {
+    try { await getDocs(collection(db, name)); return true; }
+    catch { return false; }
+  };
+  const [adminAccounts, eggStats] = await Promise.all([
+    probe("adminAccounts"), probe("eggStats"),
+  ]);
+  return { adminAccounts, eggStats, ok: adminAccounts && eggStats };
+}
+
 // ---------- 부적절 시도 신고함 (해당 반 담임선생님에게 전달) ----------
 export async function reportBlockedAttempt(code, name, roleTag, text, reason) {
   await addDoc(reportsCol(code), {

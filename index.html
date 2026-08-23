@@ -547,7 +547,6 @@
             <p class="eyebrow" id="student-greeting-eyebrow"></p>
             <h2>안녕하세요, <span id="student-greeting"></span>님</h2>
             <p class="muted">내 마니또가 누구인지는 비밀이에요. 소원을 남기면 나를 도와주는 친구에게 전달돼요.</p>
-            <p id="special-badge" class="special-badge">✦ 제작자 소속 학급 · 특별판</p>
           </div>
 
           <div class="student-page-area">
@@ -762,7 +761,6 @@
       <section data-view="super-admin" class="view hidden">
         <div class="glass-card">
           <h2>전체 관리자</h2>
-          <p class="muted">모든 학급의 마니또 관계와 소원을 확인·수정할 수 있어요.</p>
         </div>
 
         <div id="sa-overview" class="glass-card">
@@ -814,11 +812,23 @@
             <h3>관리자 계정</h3>
             <button id="sa-admins-refresh" class="btn btn-ghost btn-sm">새로고침</button>
           </div>
-          <p class="muted small">
-            광고 문의 칸에 비밀 코드를 넣어 관리자 권한을 받은 계정 목록이에요.
-            더 이상 필요 없는 계정은 여기서 권한을 거둘 수 있어요.
-          </p>
           <ul class="feedback-list" id="sa-admins-list"></ul>
+        </div>
+
+        <!-- 서버 규칙이 최신인지 여기서 바로 확인하고, 한 번에 붙여 넣게 한다 -->
+        <div class="glass-card">
+          <div class="row-between">
+            <h3>서버 규칙</h3>
+            <button id="sa-rules-check" class="btn btn-ghost btn-sm">지금 확인</button>
+          </div>
+          <p class="rules-state" id="sa-rules-state">확인 중…</p>
+          <div class="row-gap" id="sa-rules-actions" hidden>
+            <button id="sa-rules-copy" class="btn btn-primary">규칙 복사하고 콘솔 열기</button>
+          </div>
+          <p class="muted small" id="sa-rules-how" hidden>
+            콘솔이 열리면 <b>규칙 칸을 전부 지우고(Ctrl+A → Delete)</b> 붙여넣기(Ctrl+V) 한 뒤
+            <b>게시</b>를 누르세요. 그리고 위의 <b>지금 확인</b>을 다시 누르면 됩니다.
+          </p>
         </div>
 
         <div class="glass-card">

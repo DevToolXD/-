@@ -641,20 +641,6 @@ body.special-0603 .class-chip {
   color: transparent;
   animation: shimmer-text 5s linear infinite;
 }
-#special-badge { display: none; }
-body.special-0603 #special-badge {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  background: linear-gradient(90deg, var(--green-600), #ffd166, var(--green-600));
-  background-size: 300% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: shimmer-text 4s linear infinite;
-}
 
 /* =============================================================
    뽀로로 모드 (테무산) — 어디서 본 듯한 짝퉁 펭귄 겨울 테마
@@ -1409,31 +1395,31 @@ body.theme-germany {
   --green-50: #17130d;
   --green-100: #201a10;
   --green-200: #3b2f16;
-  --green-500: #c9a227;
-  --green-600: #ddc077;
-  --green-700: #ecdcae;
-  --ok: #6fd6a0;
-  --err: #ff8478;
-  --ink: #ece7dc;
-  --muted: #938a7b;
-  /* 보라기 없는 중성 검정. 어두운 배경이 푸르뎅뎅하면 화면이 싸구려로 보인다 */
-  --bg-base: #08080a;
-  --glass-bg: rgba(17, 17, 19, 0.5);
-  --glass-bg-strong: rgba(20, 20, 23, 0.74);
-  --glass-border: rgba(201, 162, 39, 0.26);
-  --glass-edge: rgba(201, 162, 39, 0.26);
-  --glass-spec: rgba(236, 231, 220, 0.1);
-  --glass-spec-low: rgba(0, 0, 0, 0.45);
-  --glass-sheen: rgba(236, 231, 220, 0.05);
-  /* 밤유리: 더 깊게 흐리고 채도는 낮춰 차분하게 */
-  --glass-blur: 36px;
-  --glass-sat: 130%;
+  /* 금색은 흰 바탕에서 밝게 쓰면 안 보인다. 눌러 담은 고금색으로 */
+  --green-500: #8a6a12;
+  --green-600: #7a5d10;
+  --green-700: #5c460c;
+  --ok: #1a7f4b;
+  --err: #c0392b;
+  --ink: #1a1a1c;
+  --muted: #6b6862;
+  /* 누렇게 뜨지 않는 종이색 */
+  --bg-base: #f1efea;
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(138, 106, 18, 0.24);
+  --glass-edge: rgba(138, 106, 18, 0.24);
+  --glass-spec: rgba(255, 255, 255, 0.85);
+  --glass-spec-low: rgba(90, 70, 20, 0.12);
+  --glass-sheen: rgba(255, 255, 255, 0.4);
+  --glass-blur: 30px;
+  --glass-sat: 150%;
   /* 번져 나가는 후광 대신 바닥에 눌러 앉는 그림자 */
-  --card-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  --card-shadow: 0 14px 32px rgba(60, 48, 20, 0.14);
   --radius: 16px;
-  --gold: #c9a227;
-  --gold-lite: #e3cd94;
-  color-scheme: dark;
+  --gold: #8a6a12;
+  --gold-lite: #6f550e;
+  color-scheme: light;
 }
 /* 떠다니는 발광 블롭은 이 테마에서 끈다.
    흐릿한 빛덩이가 배경을 굴러다니는 건 어느 화면에나 붙일 수 있는
@@ -1464,15 +1450,15 @@ body.theme-germany .foot { position: relative; z-index: 2; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(130% 100% at 50% 42%, transparent 62%, rgba(0, 0, 0, 0.4) 100%);
+  background: radial-gradient(130% 100% at 50% 42%, transparent 66%, rgba(80, 66, 30, 0.14) 100%);
 }
 .de-sky {
   position: absolute;
   inset: 0;
   background:
     /* 지평선에만 얇게 남는 잔광. 넓게 번지는 블룸은 화면을 뿌옇게만 만든다 */
-    linear-gradient(0deg, rgba(201, 162, 39, 0.16) 0%, transparent 16%),
-    linear-gradient(180deg, #08080a 0%, #0a0a0c 58%, #0f0e0f 100%);
+    linear-gradient(0deg, rgba(138, 106, 18, 0.1) 0%, transparent 16%),
+    linear-gradient(180deg, #f6f4f0 0%, #f1efea 58%, #e8e4da 100%);
 }
 
 /* --- 제국 독수리: 중앙 워터마크 --- */
@@ -1483,8 +1469,8 @@ body.theme-germany .foot { position: relative; z-index: 2; }
   top: 46%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: var(--gold);
-  opacity: 0.2;
+  color: #2a2620;
+  opacity: 0.18;
   z-index: 1;
 }
 /* 두 독수리는 비스마르크 메달과 같은 지름의 원 안에 넣는다 */
@@ -1507,10 +1493,10 @@ body.theme-germany { --de-medal: min(15vmin, 138px); }
   width: 100%;
   /* viewBox 비율(1600:420)대로 전체가 보이게 — slice 로 자르면 문만 확대돼 버린다 */
   height: auto;
-  color: #050506;
-  opacity: 0.96;
+  color: #2a2620;
+  opacity: 0.4;
   /* 윤곽선 1px 뿐 — 뒤로 번지는 발광은 넣지 않는다 */
-  filter: drop-shadow(0 -1px 0 rgba(201, 162, 39, 0.45));
+  filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.5));
 }
 
 /* --- 비스마르크 메달: 오른쪽 아래 --- */
@@ -1521,8 +1507,8 @@ body.theme-germany { --de-medal: min(15vmin, 138px); }
   width: var(--de-medal);
   height: var(--de-medal);
   transform: translateY(-50%);
-  color: var(--gold-lite);
-  opacity: 0.26;
+  color: #2a2620;
+  opacity: 0.3;
 }
 /* 스카이라인이 높이 올라오는 화면에서는 비스마르크를 조금 위로 */
 @media (max-height: 780px) {
@@ -1549,12 +1535,12 @@ body.theme-germany { --de-medal: min(15vmin, 138px); }
 }
 .de-ribbon-modern {
   top: 0;
-  background: linear-gradient(90deg, #333336 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
+  background: linear-gradient(90deg, #14131a 0 33.33%, #dd0000 33.33% 66.66%, #ffce00 66.66% 100%);
 }
 .de-ribbon-empire {
   bottom: 0;
   height: 6px;
-  background: linear-gradient(90deg, #333336 0 33.33%, #f2ece0 33.33% 66.66%, #dd0000 66.66% 100%);
+  background: linear-gradient(90deg, #14131a 0 33.33%, #ffffff 33.33% 66.66%, #dd0000 66.66% 100%);
   opacity: 0.9;
 }
 
@@ -1572,21 +1558,16 @@ body.theme-germany .glass-card::before {
   position: absolute;
   inset: 0 0 auto 0;
   height: 4px;
+  /* 유리 윗면 광택(::after)이 위를 덮어 국기가 분홍빛으로 뜬다.
+     실선은 광택 위로 올려서 원래 색이 나오게 한다. */
+  z-index: 1;
   border-radius: var(--radius) var(--radius) 0 0;
-  background: linear-gradient(90deg, #3a3a3d 0 33.33%, #c8102e 33.33% 66.66%, var(--gold-lite) 66.66% 100%);
+  background: linear-gradient(90deg, #14131a 0 33.33%, #c8102e 33.33% 66.66%, var(--gold-lite) 66.66% 100%);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   opacity: 1;
 }
 
-/* --- 제목: 금박이 흐르는 각인 --- */
-body.theme-germany h1,
-body.theme-germany h2,
-body.theme-germany .brand-name {
-  font-family: "Iowan Old Style", "Apple Garamond", Garamond, "Times New Roman",
-    "Nanum Myeongjo", "Batang", serif;
-  font-weight: 600;
-}
 /* 제목은 한 가지 금색으로 또렷하게. 글자 위를 무지개가 흐르는 연출은
    내용과 아무 상관이 없고, 어느 화면에나 붙는 기성 효과라 뺐다.
    대신 제목 아래 금색 실선 하나로 문서처럼 눌러 준다. */
@@ -1647,6 +1628,32 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   .de-bundesadler { display: none; }
   .de-skyline { opacity: 0.3; }
 }
+
+/* 방금 생긴 '관리자' 탭을 잠깐 강조 — 코드를 넣은 자리에서 화면이
+   바뀌지 않으니, 무엇이 늘어났는지 눈으로 짚어 준다 */
+.side-nav-item.just-added,
+.student-page-nav.just-added {
+  animation: side-nav-pop 2.4s ease-out 1;
+}
+@keyframes side-nav-pop {
+  0%, 100% { box-shadow: none; }
+  10%, 60% { box-shadow: 0 0 0 2px var(--green-500); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-nav-item.just-added,
+  .student-page-nav.just-added { animation: none; box-shadow: 0 0 0 2px var(--green-500); }
+}
+
+/* ---- 전체 관리자: 서버 규칙 상태 ---- */
+.rules-state {
+  margin: 4px 0 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.rules-state.ok { color: var(--ok); }
+.rules-state.warn { color: var(--err); }
+.row-gap { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* =============================================================
    테마 고르기 화면
@@ -1783,21 +1790,21 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
 /* 독일: 금빛 지평선 · 문 실루엣 · 위아래 국기 띠 */
 .tp-germany .tp-deco {
   background:
-    linear-gradient(0deg, rgba(201, 162, 39, 0.2) 0%, transparent 22%);
+    linear-gradient(0deg, rgba(138, 106, 18, 0.14) 0%, transparent 22%);
 }
 .tp-germany .tp-deco::after {
   content: "";
   position: absolute;
   inset: auto 0 0 0;
   height: 26px;
-  background: #06050b;
+  background: #2a2620;
   /* 브란덴부르크 문 실루엣: 기둥 여섯 개 위에 얹힌 지붕 */
   clip-path: polygon(
     0% 100%, 0% 62%, 14% 62%, 14% 100%, 24% 100%, 24% 38%,
     22% 38%, 22% 26%, 78% 26%, 78% 38%, 76% 38%, 76% 100%,
     86% 100%, 86% 62%, 100% 62%, 100% 100%);
   opacity: 0.92;
-  filter: drop-shadow(0 -1px 0 rgba(201, 162, 39, 0.5));
+  opacity: 0.42;
 }
 .tp-germany .tp-card {
   border-width: 1px;
@@ -1809,10 +1816,10 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: linear-gradient(90deg, #3a3a3d 0 33.33%, #c8102e 33.33% 66.66%, #e3cd94 66.66% 100%);
+  background: linear-gradient(90deg, #14131a 0 33.33%, #c8102e 33.33% 66.66%, #e3cd94 66.66% 100%);
 }
-.tp-germany .tp-btn { border: 1px solid rgba(201, 162, 39, 0.8); }
-.tp-germany .tp-h { background: #e3cd94; }
+.tp-germany .tp-btn { border: 1px solid rgba(138, 106, 18, 0.6); }
+.tp-germany .tp-h { background: #6f550e; }
 
 @media (prefers-reduced-motion: no-preference) {
   .theme-card:hover .tp-card { transform: translateY(-2px); }
@@ -1854,9 +1861,9 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
    같은 간격으로 세운다. 개수는 그대로 여덟 개다. */
 .de-motif {
   position: absolute;
-  color: var(--gold);
+  color: #2a2620;
   width: min(6.2vmin, 64px);
-  opacity: 0.17;
+  opacity: 0.16;
 }
 .de-pretzel   { left: 5vw; top: 12%; }
 .de-oak       { left: 5vw; top: 25%; }
@@ -1877,8 +1884,8 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   top: 46%;
   width: min(7.4vmin, 68px);
   transform: translate(-50%, -50%);
-  color: var(--gold);
-  opacity: 0.16;
+  color: #2a2620;
+  opacity: 0.14;
   z-index: 0;
 }
 
@@ -1888,8 +1895,8 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   right: 17vw;
   top: 46%;
   transform: translateY(-50%);
-  color: var(--gold);
-  opacity: 0.2;
+  color: #2a2620;
+  opacity: 0.18;
 }
 
 /* 바이에른 마름모(청·백) 띠 — 왼쪽 세로 */
@@ -1899,8 +1906,7 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
   top: 0;
   width: 22px;
   height: 100%;
-  opacity: 0.07;
-  filter: sepia(1) saturate(1.6) hue-rotate(4deg);
+  opacity: 0.16;
 }
 
 @media (max-width: 900px) {

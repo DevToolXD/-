@@ -30,11 +30,13 @@ export const firebaseReady = !!firestoreApi;
 
 // Firestore 가 돌려주는 "Missing or insufficient permissions." 는 사용자가
 // 보기엔 아무 의미가 없다. 이 앱에서 이 오류는 사실상 하나의 원인 —
-// firestore.rules 를 Firebase 콘솔에 아직 게시하지 않은 것 — 뿐이므로,
-// 무엇을 해야 하는지 한국어로 알려준다.
+// firestore.rules 를 Firebase 콘솔에 아직 게시하지 않은 것 — 뿐이다.
+//
+// 다만 이 문구는 학생·선생님 화면 어디서나 뜨는데, 정작 규칙을 게시할 수
+// 있는 사람은 전체 관리자뿐이다. 그래서 여기서는 짧게만 알리고, 실제로
+// 무엇을 눌러야 하는지는 전체 관리자 화면의 "서버 규칙" 칸이 안내한다.
 export const RULES_MSG =
-  "아직 서버 준비가 안 됐어요. (관리자: Firebase 콘솔 → Firestore → 규칙에 " +
-  "firestore.rules 를 붙여넣고 게시해 주세요)";
+  "아직 서버 준비가 안 됐어요. 관리자에게 알려 주세요.";
 
 export function isPermissionError(e) {
   const code = e?.code || "";

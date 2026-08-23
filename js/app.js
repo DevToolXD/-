@@ -6,7 +6,8 @@ import { BLOCK_MESSAGE } from "./moderation.js?v=DEV";
 import * as guard from "./guard.js?v=DEV";
 import { THEMES, THEME_IDS, THEME_GROUPS, DEFAULT_THEME, isTheme, getTheme }
   from "./themes.js?v=DEV";
-import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN } from "../config.js?v=DEV";
+import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN, firebaseConfig }
+  from "../config.js?v=DEV";
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -1609,7 +1610,8 @@ async function enterSuperAdmin() {
   showView("super-admin");
   $("#sa-detail").classList.add("hidden");
   saCurrentCode = null;
-  await Promise.all([refreshOverview(), refreshSaVotes(), refreshAdInbox(), refreshAdminAccounts()]);
+  await Promise.all([refreshOverview(), refreshSaVotes(), refreshAdInbox(),
+                     refreshAdminAccounts(), refreshRulesState()]);
 }
 
 async function refreshOverview() {
@@ -1822,6 +1824,57 @@ async function refreshAdminAccounts() {
 }
 $("#sa-admins-refresh").addEventListener("click", refreshAdminAccounts);
 
+// ---------- 서버 규칙: 상태 확인 + 한 번에 붙여 넣기 ----------
+//  콘솔에 규칙을 붙여 넣었는지 눈으로 확인할 방법이 없어서, 실제로 읽어 보고
+//  결과를 그대로 보여준다. 붙여 넣을 때도 파일을 찾아 열 필요 없이
+//  클립보드에 담고 콘솔 규칙 탭을 바로 띄운다.
+const RULES_CONSOLE_URL =
+  `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/rules`;
+
+async function refreshRulesState() {
+  const state = $("#sa-rules-state");
+  const actions = $("#sa-rules-actions");
+  const how = $("#sa-rules-how");
+  state.textContent = "확인 중…";
+  state.className = "rules-state";
+  actions.hidden = true;
+  how.hidden = true;
+  let r;
+  try { r = await data.checkRulesPublished(); }
+  catch { r = { ok: false, adminAccounts: false, eggStats: false }; }
+  if (r.ok) {
+    state.textContent = "규칙이 최신이에요. 더 하실 일 없습니다.";
+    state.classList.add("ok");
+    return;
+  }
+  const missing = [!r.adminAccounts && "관리자 계정", !r.eggStats && "이스터에그 집계"]
+    .filter(Boolean).join(" · ");
+  state.textContent = `콘솔에 붙여 넣은 규칙이 예전 버전이에요. (막혀 있는 기능: ${missing})`;
+  state.classList.add("warn");
+  actions.hidden = false;
+  how.hidden = false;
+}
+
+$("#sa-rules-check").addEventListener("click", refreshRulesState);
+
+$("#sa-rules-copy").addEventListener("click", async (e) => {
+  // e.currentTarget 은 await 를 한 번 넘기면 null 이 된다. 먼저 붙잡아 둔다.
+  const btn = e.currentTarget;
+  busy(btn, true, "복사 중…");
+  try {
+    const text = await (await fetch("firestore.rules?v=DEV")).text();
+    await navigator.clipboard.writeText(text);
+    window.open(RULES_CONSOLE_URL, "_blank", "noopener");
+    toast("규칙을 복사했어요. 콘솔에서 붙여넣기 후 게시를 누르세요.");
+  } catch {
+    // 클립보드가 막힌 브라우저에서는 파일을 새 탭으로 열어 직접 복사하게 한다
+    window.open("firestore.rules?v=DEV", "_blank", "noopener");
+    toast("복사가 막혀 있어 규칙 파일을 새 탭으로 열었어요. 전체 선택해 복사하세요.", true);
+  } finally {
+    busy(btn, false);
+  }
+});
+
 // =============================================================
 //  6) 전체 관리자 바로가기 버튼
 //  한 번이라도 슈퍼 관리자로 인증하면 이 기기에서는 어느 화면에 있든
@@ -1854,7 +1907,10 @@ async function grantSuperAdmin() {
       classCode, role: "superadmin",
       studentId: target.id, studentName: target.name,
     });
-    await enterSuperAdmin();
+    // 곧바로 전체 관리자 화면으로 넘기지 않는다. 넘겨 버리면 사이드바가
+    // 사라져서, 방금 생긴 "관리자" 탭을 정작 볼 수가 없다.
+    // 화면은 있던 자리에 그대로 두고, 탭이 입구가 된다.
+    flashAdminSideNav();
     return;
   }
 
@@ -1872,6 +1928,21 @@ async function grantSuperAdmin() {
 let accountIsAdmin = false;
 function updateAdminSideNav() {
   $("#side-nav-admin").classList.toggle("hidden", !accountIsAdmin);
+}
+
+// 탭이 방금 생겼다는 걸 알아채게 잠깐 강조한다.
+// (사이드바가 접혀 있는 좁은 화면에서는 열어 주기도 한다)
+function flashAdminSideNav() {
+  const tab = $("#side-nav-admin");
+  if (!tab || tab.classList.contains("hidden")) return;
+  // 좁은 화면에서는 사이드바가 접혀 있으니 펴 준다
+  document.body.classList.remove("sidebar-collapsed");
+  $("#sidebar-toggle").setAttribute("aria-expanded", "true");
+  tab.classList.remove("just-added");
+  void tab.offsetWidth; // 애니메이션을 다시 태우기 위한 리플로우
+  tab.classList.add("just-added");
+  tab.scrollIntoView({ block: "nearest" });
+  setTimeout(() => tab.classList.remove("just-added"), 2600);
 }
 
 async function refreshSuperAdminAuthed() {
