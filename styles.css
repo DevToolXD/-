@@ -1674,130 +1674,176 @@ body.theme-germany .chip { border: 1px solid rgba(212, 164, 23, 0.5); }
 }
 
 /* =============================================================
-   이름 없는 테마 (Vesper 배색)
+   리퀴드 글라스
    =============================================================
-   순검정 위에 흰 글자와 회색 두 단계뿐이다. 파랑·금색·주황 같은
-   강조색을 한 군데도 남기지 않으려고 --green-* 계열까지 전부 무채색으로
-   덮는다(이름은 초록 시절 그대로지만 값만 바꾸는 기존 방식과 같다).
+   유리를 장식이 아니라 재료로 쓴다. 핵심은 "어디에 유리를 쓰지 않을지"다.
+   내용이 깔리는 면과 내용을 담는 카드는 유리가 아니고, 스크롤되는 내용
+   '위에 떠서 겹치는 것'만 유리다. 그래야 유리 너머로 무언가 지나가고,
+   비로소 재료처럼 보인다.
 
-   다른 테마와 달리 화면에 요소를 새로 얹지 않는다. 독일 테마의 무대나
-   뽀로로의 눈·마스코트 같은 전용 DOM 이 없고, 배색과 질감만 바꾼다.
-   그래서 입자(grain)도 새 요소 대신 body::after 로 깐다. */
+     0단계  바탕      - 흰 면. 아주 옅은 광원 하나로 유리가 굴절할 거리를 만든다
+     1단계  카드      - 거의 불투명한 면 + 실선 한 겹. 블러 없음(내용 우선)
+     2단계  보조 컨트롤 - 칩·입력칸·목록 행. 옅은 채움 + 실선
+     3단계  유리      - 상단바·사이드바·시트·토스트. 내용 위에 겹치는 것만
+     4단계  주요 동작  - 기본 버튼. 유리가 아니라 꽉 찬 컨트롤
+     5단계  초점/활성  - 링과 밝기로만 표시
+
+   색은 쓰지 않는다(무채색). 밝은 모드와 어두운 모드를 모두 지원한다.
+   ============================================================= */
 body.theme-mono {
-  --green-50: #f4f4f4;
-  --green-100: #ededed;
-  --green-200: #dcdcdc;
-  --green-500: #0a0a0a;
-  --green-600: #2a2a2a;
-  --green-700: #4a4a4a;
-  --ok: #0a0a0a;
-  --err: #4a4a4a;
-  --ink: #0a0a0a;
-  --muted: #6b6b6b;
-  --bg-base: #ffffff;
-  --glass-bg: rgba(255, 255, 255, 0.5);
-  --glass-bg-strong: rgba(255, 255, 255, 0.66);
-  --glass-border: rgba(0, 0, 0, 0.12);
-  --glass-edge: rgba(0, 0, 0, 0.12);
-  --glass-spec: rgba(255, 255, 255, 0.9);
-  --glass-spec-low: rgba(0, 0, 0, 0.06);
-  --glass-sheen: rgba(255, 255, 255, 0.5);
-  --glass-blur: 16px;
-  --glass-sat: 120%;
-  --card-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
-  --radius: 10px;
-  --radius-sm: 6px;
+  /* 무채색 스케일 하나로 모든 단계를 만든다 */
+  --lg-bg: #ffffff;
+  --lg-ink: #1c1c1e;
+  --lg-ink-2: #6e6e73;
+  --lg-line: rgba(0, 0, 0, 0.09);
+  --lg-line-strong: rgba(0, 0, 0, 0.16);
+  --lg-surface: #ffffff;         /* 1단계 카드 */
+  --lg-fill: rgba(0, 0, 0, 0.045); /* 2단계 채움 */
+  --lg-fill-hover: rgba(0, 0, 0, 0.075);
+  --lg-glass: rgba(255, 255, 255, 0.62);  /* 3단계 유리 */
+  --lg-glass-blur: 30px;
+  --lg-spec: rgba(255, 255, 255, 0.9);    /* 유리 윗면 스페큘러 */
+  --lg-refract: rgba(0, 0, 0, 0.13);      /* 아랫면으로 빠지는 굴절 띠 */
+  --lg-accent: #1c1c1e;          /* 4단계 — 무채색이라 잉크 그대로 */
+  --lg-on-accent: #ffffff;
+  --lg-lift: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+
+  --green-50: var(--lg-fill);
+  --green-100: var(--lg-fill);
+  --green-200: var(--lg-line-strong);
+  --green-500: var(--lg-ink);
+  --green-600: var(--lg-ink);
+  --green-700: var(--lg-ink-2);
+  --ok: var(--lg-ink);
+  --err: var(--lg-ink-2);
+  --ink: var(--lg-ink);
+  --muted: var(--lg-ink-2);
+  --bg-base: var(--lg-bg);
+  --glass-bg: var(--lg-surface);
+  --glass-bg-strong: var(--lg-surface);
+  --glass-border: var(--lg-line);
+  --glass-edge: var(--lg-line);
+  --glass-spec: transparent;
+  --glass-spec-low: transparent;
+  --glass-sheen: transparent;
+  --glass-blur: var(--lg-glass-blur);
+  --glass-sat: 180%;
+  --card-shadow: var(--lg-lift);
+  --radius: 22px;
+  --radius-sm: 14px;
   color-scheme: light;
-  background: #ffffff;
-  font-family: "Barlow", system-ui, -apple-system, BlinkMacSystemFont,
+  background: var(--lg-bg);
+  /* 시스템 글꼴. 제목은 굵기와 크기로만 위계를 만든다 */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
     "Segoe UI", "Malgun Gothic", sans-serif;
-  font-weight: 300;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
-/* 떠다니는 블롭 대신 고운 입자 한 겹 */
+
+@media (prefers-color-scheme: dark) {
+  body.theme-mono {
+    --lg-bg: #000000;
+    --lg-ink: #f5f5f7;
+    --lg-ink-2: #98989d;
+    --lg-line: rgba(255, 255, 255, 0.11);
+    --lg-line-strong: rgba(255, 255, 255, 0.2);
+    --lg-surface: #131315;
+    --lg-fill: rgba(255, 255, 255, 0.06);
+    --lg-fill-hover: rgba(255, 255, 255, 0.1);
+    --lg-glass: rgba(28, 28, 30, 0.55);
+    --lg-spec: rgba(255, 255, 255, 0.28);
+    --lg-refract: rgba(0, 0, 0, 0.5);
+    --lg-accent: #f5f5f7;
+    --lg-on-accent: #1c1c1e;
+    --lg-lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
+}
+
+/* 0단계 — 바탕. 아주 옅은 광원 하나. 유리가 굴절시킬 거리가 생긴다 */
 body.theme-mono::before { display: none; }
 body.theme-mono::after {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 0;
   pointer-events: none;
-  opacity: 0.045;
   width: auto; height: auto;
   border-radius: 0;
   filter: none;
   animation: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 1;
+  background:
+    radial-gradient(70% 55% at 18% 0%, rgba(0, 0, 0, 0.045), transparent 70%),
+    radial-gradient(60% 50% at 100% 100%, rgba(0, 0, 0, 0.035), transparent 70%);
+}
+@media (prefers-color-scheme: dark) {
+  body.theme-mono::after {
+    background:
+      radial-gradient(70% 55% at 18% 0%, rgba(255, 255, 255, 0.06), transparent 70%),
+      radial-gradient(60% 50% at 100% 100%, rgba(255, 255, 255, 0.045), transparent 70%);
+  }
 }
 
-/* 글자 굵기와 자간을 Vesper 쪽으로 */
-/* 제목은 세리프 이탤릭, 본문은 산세리프.
-   웹폰트는 받아오지 않는다 — 이 앱 CSP 가 font-src 'self' 라 외부 폰트
-   호스트가 막혀 있다. 깔려 있으면 쓰이고 아니면 시스템 세리프로 떨어진다. */
-body.theme-mono h1,
-body.theme-mono h2,
-body.theme-mono h3,
-body.theme-mono .role-title,
-body.theme-mono .brand-name {
-  font-family: "Instrument Serif", "Apple Garamond", Garamond,
-    "Times New Roman", "Batang", serif;
-  font-style: italic;
-  font-weight: 400;
-  letter-spacing: -0.03em;
-  line-height: 0.95;
+/* ---- 타이포: 굵기와 크기로만 위계 ---- */
+body.theme-mono h1, body.theme-mono h2, body.theme-mono h3,
+body.theme-mono .role-title, body.theme-mono .brand-name {
+  font-family: inherit;
+  font-style: normal;
+  color: var(--lg-ink);
 }
-body.theme-mono h1 { letter-spacing: -0.045em; }
-body.theme-mono .eyebrow { color: var(--muted); letter-spacing: 0.02em; }
+body.theme-mono h1 { font-weight: 700; letter-spacing: -0.022em; line-height: 1.08; }
+body.theme-mono h2 { font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+body.theme-mono h3 { font-weight: 600; letter-spacing: -0.015em; }
+body.theme-mono .brand-name { font-weight: 600; letter-spacing: -0.02em; }
+body.theme-mono .eyebrow {
+  color: var(--lg-ink-2);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+body.theme-mono .muted, body.theme-mono .small { color: var(--lg-ink-2); }
 
-/* ---- 액체 유리(liquid glass) ----
-   테두리를 border 로 긋지 않고, 위아래만 밝은 세로 그라디언트 링을
-   mask-composite 로 오려서 두른다. 유리 가장자리에 빛이 맺힌 것처럼 보인다.
-   원본 스펙은 -webkit-mask 만 적어 두었는데, 그러면 파이어폭스에서 링이
-   통째로 사각형으로 덮여 버린다. 표준 mask 도 같이 적어 둔다. */
-body.theme-mono .glass-card,
-body.theme-mono .link-btn,
-body.theme-mono .chip,
-body.theme-mono .btn,
-body.theme-mono .side-nav-item,
-body.theme-mono .student-page-nav,
+/* =============================================================
+   3단계 — 유리. 내용 위에 겹쳐 뜨는 것에만 쓴다.
+   ============================================================= */
+body.theme-mono .topbar,
 body.theme-mono .app-sidebar,
-body.theme-mono .modal {
-  position: relative;
+body.theme-mono .modal,
+body.theme-mono .toast {
+  /* position 은 건드리지 않는다 — .toast 는 fixed 로 화면 아래 가운데 뜬다.
+     여기서 relative 로 덮으면 흐름 속으로 돌아와 가로로 퍼져 버린다. */
+  isolation: isolate;
   border: none;
-  background: rgba(255, 255, 255, 0.55);
-  background-blend-mode: luminosity;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9),
-              0 6px 20px rgba(0, 0, 0, 0.06);
+  background: var(--lg-glass);
+  backdrop-filter: blur(var(--lg-glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--lg-glass-blur)) saturate(180%);
+  box-shadow: var(--lg-lift);
 }
-body.theme-mono .glass-card::before,
-body.theme-mono .link-btn::before,
-body.theme-mono .chip::before,
-body.theme-mono .btn::before,
-body.theme-mono .side-nav-item::before,
-body.theme-mono .student-page-nav::before,
+/* 가장자리: 위는 빛을 받고 아래로는 굴절이 빠진다.
+   위아래를 같은 밝기로 두르면 그냥 테두리로 보인다. 비대칭이라야 두께가 읽힌다. */
+body.theme-mono .topbar::before,
 body.theme-mono .app-sidebar::before,
-body.theme-mono .modal::before {
+body.theme-mono .modal::before,
+body.theme-mono .toast::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 1;
   border-radius: inherit;
-  padding: 1.4px;
+  padding: 1px;
   opacity: 1;
   height: auto;
   transform: none;
   animation: none;
   background: linear-gradient(180deg,
-    rgba(0, 0, 0, 0.22) 0%,
-    rgba(0, 0, 0, 0.08) 20%,
-    rgba(0, 0, 0, 0) 40%,
-    rgba(0, 0, 0, 0) 60%,
-    rgba(0, 0, 0, 0.08) 80%,
-    rgba(0, 0, 0, 0.22) 100%);
+    var(--lg-spec) 0%,
+    rgba(255, 255, 255, 0.18) 14%,
+    transparent 42%,
+    transparent 58%,
+    var(--lg-refract) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -1806,91 +1852,181 @@ body.theme-mono .modal::before {
   -webkit-backdrop-filter: none;
   pointer-events: none;
 }
-/* 기본 버튼만 더 두꺼운 유리 */
-/* 기본 버튼만 더 두꺼운 유리 */
-body.theme-mono .btn-primary {
-  backdrop-filter: blur(50px);
-  -webkit-backdrop-filter: blur(50px);
-  background: rgba(255, 255, 255, 0.66);
-  color: #0a0a0a;
-  box-shadow: 4px 4px 4px rgba(0, 0, 0, 0.05),
-              inset 0 1px 1px rgba(255, 255, 255, 0.95);
+/* 스페큘러: 포인터가 지나는 자리에서만 살짝 밝아진다(js 가 --gx/--gy 를 준다) */
+body.theme-mono .topbar::after,
+body.theme-mono .app-sidebar::after,
+body.theme-mono .modal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: var(--gl, 0);
+  transition: opacity 0.4s ease;
+  background: radial-gradient(220px circle at var(--gx, 50%) var(--gy, 0%),
+              rgba(255, 255, 255, 0.5), transparent 70%);
 }
-body.theme-mono .btn-primary::before {
-  background: linear-gradient(180deg,
-    rgba(0, 0, 0, 0.26) 0%,
-    rgba(0, 0, 0, 0.1) 20%,
-    rgba(0, 0, 0, 0) 40%,
-    rgba(0, 0, 0, 0) 60%,
-    rgba(0, 0, 0, 0.1) 80%,
-    rgba(0, 0, 0, 0.26) 100%);
+@media (prefers-color-scheme: dark) {
+  body.theme-mono .topbar::after,
+  body.theme-mono .app-sidebar::after,
+  body.theme-mono .modal::after {
+    background: radial-gradient(220px circle at var(--gx, 50%) var(--gy, 0%),
+                rgba(255, 255, 255, 0.09), transparent 70%);
+  }
 }
-body.theme-mono .btn-primary:hover,
-body.theme-mono .btn-ghost:hover,
-body.theme-mono .link-btn:hover {
-  background: rgba(255, 255, 255, 0.85);
-  color: #0a0a0a;
-  filter: none;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95),
-              0 6px 20px rgba(0, 0, 0, 0.08);
+body.theme-mono .app-sidebar,
+body.theme-mono .modal { position: relative; }
+/* 상단바는 스크롤되는 내용 위에 붙어 있어야 유리가 일한다 */
+body.theme-mono .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-radius: 0 0 var(--radius) var(--radius);
 }
-/* 알약 반지름: 버튼·칩은 완전한 알약, 카드는 20px */
-body.theme-mono .btn,
-body.theme-mono .link-btn,
-body.theme-mono .chip { border-radius: 9999px; }
-body.theme-mono .glass-card,
-body.theme-mono .side-nav-item,
-body.theme-mono .student-page-nav { border-radius: 1.25rem; }
-body.theme-mono .btn-ghost { background: rgba(255, 255, 255, 0.5); color: #0a0a0a; }
-body.theme-mono .btn::after { display: none; }
-body.theme-mono .glass-card::after { display: none; }
-body.theme-mono .link-btn {
-  height: auto;
-  padding: 8px 14px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  letter-spacing: 0;
+body.theme-mono .modal-overlay {
+  background: rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
+body.theme-mono .toast { color: var(--lg-ink); }
 
-/* ---- 나머지 UI 에서도 고유 색을 걷어낸다 ---- */
-body.theme-mono .chip { color: #2a2a2a; font-weight: 400; }
+/* =============================================================
+   1단계 — 카드. 유리가 아니다. 내용을 담는 면.
+   ============================================================= */
+body.theme-mono .glass-card {
+  background: var(--lg-surface);
+  border: 1px solid var(--lg-line);
+  border-radius: var(--radius);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 24px 26px;
+}
+body.theme-mono .glass-card::before,
+body.theme-mono .glass-card::after { display: none; }
+/* 시트는 마크업상 .modal.glass-card 라 위의 카드 규칙에 덮인다.
+   시트는 내용 위에 겹쳐 뜨는 3단계이므로 유리를 되돌려 준다. */
+body.theme-mono .modal.glass-card {
+  background: var(--lg-glass);
+  border: none;
+  backdrop-filter: blur(var(--lg-glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--lg-glass-blur)) saturate(180%);
+  box-shadow: var(--lg-lift);
+}
+body.theme-mono .modal.glass-card::before,
+body.theme-mono .modal.glass-card::after { display: block; }
+
+/* =============================================================
+   2단계 — 보조 컨트롤. 옅은 채움 + 실선, 블러 없음.
+   ============================================================= */
+body.theme-mono .chip,
+body.theme-mono .side-nav-item,
+body.theme-mono .student-page-nav,
 body.theme-mono input,
 body.theme-mono select,
-body.theme-mono textarea {
-  background: rgba(255, 255, 255, 0.6);
-  border-color: rgba(0, 0, 0, 0.14);
-  color: #0a0a0a;
+body.theme-mono textarea,
+body.theme-mono .btn-ghost,
+body.theme-mono .link-btn {
+  background: var(--lg-fill);
+  border: 1px solid transparent;
+  color: var(--lg-ink);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
-body.theme-mono .student-page-nav.active { background: rgba(255, 255, 255, 0.9); }
+body.theme-mono .chip::before,
+body.theme-mono .side-nav-item::before,
+body.theme-mono .student-page-nav::before,
+body.theme-mono .btn-ghost::before,
+body.theme-mono .link-btn::before,
+body.theme-mono .btn::after { display: none; }
+body.theme-mono input,
+body.theme-mono select,
+body.theme-mono textarea { border-color: var(--lg-line); }
+body.theme-mono .side-nav-item,
+body.theme-mono .student-page-nav { border-radius: var(--radius-sm); }
+body.theme-mono .side-nav-item:hover,
+body.theme-mono .student-page-nav:hover,
+body.theme-mono .link-btn:hover,
+body.theme-mono .btn-ghost:hover {
+  background: var(--lg-fill-hover);
+  border-color: transparent;
+  color: var(--lg-ink);
+  transform: none;
+}
+body.theme-mono .student-page-nav.active {
+  background: var(--lg-fill-hover);
+  border-color: var(--lg-line-strong);
+}
+body.theme-mono .link-btn {
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 500;
+  color: var(--lg-ink);
+}
+body.theme-mono .chip { color: var(--lg-ink); font-weight: 500; }
+
+/* =============================================================
+   4단계 — 주요 동작. 유리가 아니라 꽉 찬 컨트롤.
+   ============================================================= */
+body.theme-mono .btn { border-radius: 999px; font-weight: 590; letter-spacing: -0.01em; }
+body.theme-mono .btn-primary {
+  background: var(--lg-accent);
+  color: var(--lg-on-accent);
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.theme-mono .btn-primary::before { display: none; }
+body.theme-mono .btn-primary:hover { filter: none; opacity: 0.86; }
+body.theme-mono .btn:active { transform: scale(0.97); }
+
+/* =============================================================
+   5단계 — 초점/활성. 링과 밝기로만.
+   ============================================================= */
+body.theme-mono :focus-visible {
+  outline: 2px solid var(--lg-ink);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* ---- 자잘한 것들도 같은 체계로 ---- */
 body.theme-mono .free-tag,
 body.theme-mono .vote-lead-badge {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  color: #2a2a2a;
+  background: var(--lg-fill);
+  border: 1px solid var(--lg-line);
+  color: var(--lg-ink-2);
 }
-body.theme-mono .codex-count { color: #2a2a2a; }
-body.theme-mono .err { color: #4a4a4a; }
-/* 0603 전용 금빛 반짝임도 이 테마에서는 색을 뺀다 */
+body.theme-mono .codex-count { color: var(--lg-ink-2); }
+body.theme-mono .err { color: var(--lg-ink-2); }
 body.theme-mono.special-0603 .brand-name,
 body.theme-mono.special-0603 .class-chip {
-  background: linear-gradient(90deg, #6b6b6b, #0a0a0a, #6b6b6b, #6b6b6b);
-  background-size: 300% 100%;
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: var(--lg-ink);
+  animation: none;
 }
-/* 강조색을 흰색으로 바꾼 탓에 '이 테마 쓰기'가 흰 바탕에 흰 글자가 된다 */
-body.theme-mono .theme-pick { background: #0a0a0a; color: #ffffff; }
-body.theme-mono .theme-card.current .theme-pick {
-  background: transparent;
-  color: #0a0a0a;
-  border-color: rgba(0, 0, 0, 0.45);
+body.theme-mono .theme-pick { background: var(--lg-accent); color: var(--lg-on-accent); }
+body.theme-mono .theme-card {
+  background: var(--lg-surface);
+  border: 1px solid var(--lg-line);
 }
 body.theme-mono .theme-card.current {
-  border-color: rgba(0, 0, 0, 0.45);
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+  border-color: var(--lg-line-strong);
+  box-shadow: 0 0 0 3px var(--lg-fill);
 }
-/* 소원 연출의 빛줄기도 흰빛 한 가지로 */
-body.theme-mono .wish-cinema-rays { filter: grayscale(1); }
+body.theme-mono .theme-card.current .theme-pick {
+  background: transparent;
+  color: var(--lg-ink);
+  border: 1.5px solid var(--lg-line-strong);
+}
+body.theme-mono .theme-group-tag { background: var(--lg-fill); color: var(--lg-ink-2); }
+body.theme-mono .wish-cinema-rays,
 body.theme-mono .scratch-dust { filter: grayscale(1); }
+
 
 /* ---- 전체 관리자: 서버 규칙 상태 ---- */
 .rules-state {

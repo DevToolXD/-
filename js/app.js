@@ -2592,12 +2592,52 @@ function blurTextIn(el, { step = 34, mode = "char" } = {}) {
     el.appendChild(sp);
   });
 }
-// 테마마다 제목이 들어오는 방식이 다르다 (이름 없는 테마는 낱말 단위)
+// 테마마다 제목이 들어오는 방식이 다르다.
+// 리퀴드 글라스에서는 글자를 쪼개지 않는다 — 시선을 끄는 연출보다
+// 짧고 조용한 등장이 이 재료의 성격에 맞는다.
 function runHeadlineIntro() {
-  blurTextIn(document.querySelector(".landing-main h1"),
-             { mode: currentTheme() === "mono" ? "word" : "char" });
+  const h = document.querySelector(".landing-main h1");
+  if (!h) return;
+  if (currentTheme() === "mono") {
+    const text = h.dataset.btText ?? (h.dataset.btText = h.textContent);
+    h.textContent = text;
+    h.classList.remove("bt-words");
+    return;
+  }
+  blurTextIn(h, { mode: "char" });
 }
 runHeadlineIntro();
+
+// =============================================================
+//  리퀴드 글라스: 유리 표면의 스페큘러가 포인터를 따라간다
+// =============================================================
+//  유리가 놓인 자리에 따라 빛나는 곳이 달라져야 재료처럼 보인다.
+//  bounding box 를 매 이동마다 재지 않고 rAF 한 프레임에 한 번만 갱신한다.
+(() => {
+  const SEL = ".topbar, .app-sidebar, .modal";
+  let queued = null;
+  const apply = () => {
+    const e = queued; queued = null;
+    if (!e) return;
+    document.querySelectorAll(SEL).forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const near = e.clientX > r.left - 160 && e.clientX < r.right + 160 &&
+                   e.clientY > r.top - 160 && e.clientY < r.bottom + 160;
+      el.style.setProperty("--gl", near ? "1" : "0");
+      if (!near) return;
+      el.style.setProperty("--gx", ((e.clientX - r.left) / r.width) * 100 + "%");
+      el.style.setProperty("--gy", ((e.clientY - r.top) / r.height) * 100 + "%");
+    });
+  };
+  window.addEventListener("pointermove", (e) => {
+    if (!document.body.classList.contains("theme-mono")) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const first = !queued;
+    queued = e;
+    if (first) requestAnimationFrame(apply);
+  }, { passive: true });
+})();
 
 // =============================================================
 //  광고 문의 (푸터 버튼 → 모달 → 보내기)
