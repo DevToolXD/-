@@ -2609,12 +2609,68 @@ function runHeadlineIntro() {
 runHeadlineIntro();
 
 // =============================================================
+//  리퀴드 글라스: 유리 아래에 무엇이 있는지 보고 밝기를 맞춘다
+// =============================================================
+//  유리가 늘 같은 농도면 어두운 것 위에서는 글자가 묻히고 밝은 것 위에서는
+//  뿌옇게만 보인다. 유리 아래에 실제로 깔린 것의 밝기를 재서 그만큼
+//  밝히거나 옅게 한다.
+//
+//  뒤 픽셀을 직접 읽을 방법은 없으니(캔버스로 페이지를 다시 그릴 수는 없다),
+//  유리 아래 세 지점에서 elementsFromPoint 로 '실제로 깔린 요소'를 찾아
+//  그 배경색의 상대 휘도를 평균낸다. 유리 자신과 그 안의 것들은 건너뛴다.
+(() => {
+  const GLASS = ".topbar, .app-sidebar, .modal.glass-card, .toast, #app .glass-card";
+  const lumOf = (css) => {
+    const m = String(css).match(/[\d.]+/g);
+    if (!m || m.length < 3) return null;
+    if (m[3] !== undefined && Number(m[3]) < 0.5) return null;  // 거의 투명하면 뒤를 봐야 한다
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(+m[0]) + 0.7152 * f(+m[1]) + 0.0722 * f(+m[2]);
+  };
+  const behind = (el) => {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    let sum = 0, n = 0;
+    for (const fx of [0.18, 0.5, 0.82]) {
+      const x = Math.min(innerWidth - 1, Math.max(0, r.left + r.width * fx));
+      const y = Math.min(innerHeight - 1, Math.max(0, r.top + r.height * 0.5));
+      for (const node of document.elementsFromPoint(x, y)) {
+        if (node === el || el.contains(node)) continue;   // 유리 자신과 그 내용은 뺀다
+        const l = lumOf(getComputedStyle(node).backgroundColor);
+        if (l === null) continue;
+        sum += l; n++; break;
+      }
+    }
+    return n ? sum / n : null;
+  };
+  let pending = false;
+  const measure = () => {
+    pending = false;
+    if (!document.body.classList.contains("theme-mono")) return;
+    document.querySelectorAll(GLASS).forEach((el) => {
+      const l = behind(el);
+      if (l !== null) el.style.setProperty("--lg-lum", l.toFixed(3));
+    });
+  };
+  const schedule = () => { if (!pending) { pending = true; requestAnimationFrame(measure); } };
+  addEventListener("scroll", schedule, { passive: true });
+  addEventListener("resize", schedule);
+  // 화면이 바뀌면(뷰 전환·목록 갱신) 유리 아래 내용도 바뀐다
+  new MutationObserver(schedule).observe(document.body, {
+    subtree: true, childList: true, attributes: true, attributeFilter: ["class"],
+  });
+  addEventListener("load", schedule);
+  setTimeout(schedule, 300);
+  window.__lgMeasure = measure;
+})();
+
+// =============================================================
 //  리퀴드 글라스: 유리 표면의 스페큘러가 포인터를 따라간다
 // =============================================================
 //  유리가 놓인 자리에 따라 빛나는 곳이 달라져야 재료처럼 보인다.
 //  bounding box 를 매 이동마다 재지 않고 rAF 한 프레임에 한 번만 갱신한다.
 (() => {
-  const SEL = ".topbar, .app-sidebar, .modal";
+  const SEL = ".topbar, .app-sidebar, .modal, #app .glass-card";
   let queued = null;
   const apply = () => {
     const e = queued; queued = null;
