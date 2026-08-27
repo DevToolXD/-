@@ -737,7 +737,6 @@ body.pororo h1, body.pororo h2, body.pororo h3, body.pororo .role-title, body.po
   letter-spacing: 0.01em;
   text-shadow: 2px 2px 0 #ffe15a, -1px -1px 0 #000;
 }
-body.pororo .free-tag { background: #ff8a3d; border: 2px solid #000; }
 
 /* ---- 내리는 눈(짝퉁 반짝이 별 섞임) ---- */
 #pororo-layer {
@@ -853,7 +852,6 @@ body.pororo .free-tag { background: #ff8a3d; border: 2px solid #000; }
 }
 
 /* ---- 상단바 추가 버튼 ---- */
-.free-tag { background: var(--green-500); color: #fff; }
 .admin-quick-btn { color: var(--green-600); font-weight: 700; }
 
 /* ---- 학생 명단 삭제 가능한 칩 ---- */
@@ -1695,7 +1693,7 @@ body.theme-mono {
   /* 바탕은 아주 옅은 회색. 흰 유리가 그 위에 떠 있어야 유리로 읽힌다. */
   --lg-bg: #f2f2f4;
   --lg-ink: #1c1c1e;
-  --lg-ink-2: #6e6e73;
+  --lg-ink-2: #3a3a3d;              /* 회색이 잘 안 보인다고 해서 검게 가깝게 */
   --lg-line: rgba(0, 0, 0, 0.09);
   --lg-line-strong: rgba(0, 0, 0, 0.16);
   --lg-surface: #ffffff;         /* 1단계 카드 */
@@ -1747,7 +1745,7 @@ body.theme-mono {
   body.theme-mono {
     --lg-bg: #000000;
     --lg-ink: #f5f5f7;
-    --lg-ink-2: #98989d;
+    --lg-ink-2: #c7c7cc;             /* 검은 바탕이라 밝은 쪽으로 같이 올림 */
     --lg-line: rgba(255, 255, 255, 0.11);
     --lg-line-strong: rgba(255, 255, 255, 0.2);
     --lg-surface: #131315;
@@ -2072,7 +2070,6 @@ body.theme-mono :focus-visible {
 }
 
 /* ---- 자잘한 것들도 같은 체계로 ---- */
-body.theme-mono .free-tag,
 body.theme-mono .vote-lead-badge {
   background: var(--lg-fill);
   border: 1px solid var(--lg-line);

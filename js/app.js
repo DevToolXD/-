@@ -437,17 +437,16 @@ async function logout() {
 }
 
 // =============================================================
-//  0603 학급 전용 이스터에그 (선생님/슈퍼관리자 화면 제외)
+//  0603 학급 전용 이스터에그 — 상단바 이름이 "광고문의(정후교에게)"로
+//  바뀌던 장식은 헷갈린다는 말을 듣고 걷어냈다. 이제 아무 반이든
+//  "마니또"만 그대로 보인다.
 // =============================================================
-// 제작자 소속 학급 전용 장식(권한과는 무관한 순수 이스터에그)
 const CREATOR_CLASS = "0603";
 const FLOURISH_VIEWS = ["home", "student-login", "student-home"];
 
 function updateSpecialMode() {
   const active = classCode === CREATOR_CLASS && FLOURISH_VIEWS.includes(currentView);
   document.body.classList.toggle("special-0603", active);
-  $("#brand-name").textContent = active ? "광고문의(정후교에게)" : "마니또";
-  $("#brand-free-tag").classList.toggle("hidden", !active);
 }
 
 // =============================================================
@@ -3674,6 +3673,9 @@ applyTheme(currentTheme(), { remember: false });
   if (saved && isValidClassCode(saved.classCode)) {
     classCode = saved.classCode;
     setClassChip(classCode);
+    // 그냥 열어 보기만 해도(투표 안 해도) 유효기간이 밀리도록, 복원할 때도
+    // 한 번 돌려 둔다. 그래야 매일 쓰는 사람은 사실상 로그인이 안 풀린다.
+    guard.rotateSession().catch(() => {});
     try {
       if (saved.role === "admin") {
         // 선생님 세션은 복원할 때 그 반에 관리자 코드가 실제로 등록돼 있는지
