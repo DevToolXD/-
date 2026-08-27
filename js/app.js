@@ -934,10 +934,7 @@ async function enterStudentHome() {
   showView("student-home");
   // 데스크톱은 펼친 채로 시작, 좁은 화면(모바일)은 접힌 채로 시작
   document.body.classList.toggle("sidebar-collapsed", window.innerWidth < 900);
-  $("#student-greeting").textContent = student.name;
-  delete $("#student-greeting").dataset.btText; // 학생이 바뀌면 새 이름으로 다시 연출
-  blurTextIn($("#student-greeting"), 60);
-  $("#student-greeting-eyebrow").textContent = classLabel(classCode);
+  // 인사 카드는 없앴다 — 이름과 반은 사이드바 아래에 항상 떠 있으니 충분하다.
   $("#sidebar-student-name").textContent = `${classLabel(classCode)} · ${student.name}`;
   updateAdminSideNav();
   updateTankNav();
@@ -2740,20 +2737,148 @@ const tankKey = (k) => `manito.tank.${k}:${classCode}:${student?.id || "-"}`;
 
 function tankEnabled() { return classCode === TANK_CLASS; }
 
-// ---- 그림 저장 형식 ----
-//  획을 "x,y x,y|x,y ..." 로 적는다. 0~99 정수라 한 점이 최대 5글자.
-//  규칙에서 1400자로 막아 두었으므로 점 수도 그에 맞춰 줄인다.
+// ---- 그림 저장 형식 (v2) ----
+//  세밀하게 그릴 수 있어야 해서 좌표를 0~255 로 넓히고, 획마다 색과 굵기를
+//  같이 적는다. 그대로 적으면 금방 길어지니 앞 점과의 차이만 남긴다.
+//
+//    "2:" 획 | 획 | 획
+//    획 = <색><굵기> ":" <첫점 4글자> <이후 점 2글자씩>
+//    점프가 크면 "~" 뒤에 4글자 절대좌표
+//
+//  한 점이 보통 2글자라, 한도(ART_MAX) 안에 3천 점 가까이 들어간다.
+const ART_COLORS = [
+  "#0b3f77", "#111111", "#ffffff", "#ff5d5d", "#ff9f2e", "#ffd93d",
+  "#5fd35f", "#2ec5c5", "#4d7bff", "#b06bff", "#ff7fd0", "#8b5a2b",
+];
+const ART_WIDTHS = [5, 11, 19, 31, 48];  // 0~255 좌표계 기준 굵기
+const ART_SPACE = 256;
+const ART_MAX = 6000;                    // firestore.rules 의 art 길이 한도와 같게
+
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-";
+const B64I = {};
+for (let i = 0; i < 64; i++) B64I[B64[i]] = i;
+const artClamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+const encAbs = (v) => { const n = artClamp(v); return B64[n >> 6] + B64[n & 63]; };
+
 function encodeArt(strokes) {
-  return strokes.map((st) => st.map(([x, y]) =>
-    `${Math.round(x)},${Math.round(y)}`).join(" ")).join("|");
+  const parts = [];
+  for (const st of strokes) {
+    const pts = st.pts || [];
+    if (!pts.length) continue;
+    let px = artClamp(pts[0][0]), py = artClamp(pts[0][1]);
+    let s = B64[(st.c || 0) & 63] + B64[(st.w || 0) & 63] + ":" + encAbs(px) + encAbs(py);
+    for (let i = 1; i < pts.length; i++) {
+      const x = artClamp(pts[i][0]), y = artClamp(pts[i][1]);
+      const dx = x - px, dy = y - py;
+      if (dx >= -32 && dx <= 31 && dy >= -32 && dy <= 31) s += B64[dx + 32] + B64[dy + 32];
+      else s += "~" + encAbs(x) + encAbs(y);
+      px = x; py = y;
+    }
+    parts.push(s);
+  }
+  return parts.length ? "2:" + parts.join("|") : "";
 }
-function decodeArt(str) {
-  if (!str) return [];
-  return String(str).split("|").map((st) =>
-    st.split(" ").filter(Boolean).map((pt) => {
+
+// 예전에 저장된 물고기는 "x,y x,y|…" (0~99) 형식이다. 그대로 읽어서
+// 새 좌표계로 늘려 준다 — 어항에 이미 들어간 물고기가 사라지면 안 되니까.
+function decodeArtV1(str) {
+  const out = [];
+  for (const part of String(str).split("|")) {
+    const pts = part.split(" ").filter(Boolean).map((pt) => {
       const [x, y] = pt.split(",").map(Number);
-      return [x || 0, y || 0];
-    })).filter((st) => st.length > 1);
+      return [(x || 0) * 2.56, (y || 0) * 2.56];
+    });
+    if (pts.length > 1) out.push({ c: 0, w: 1, pts });
+  }
+  return out;
+}
+
+function decodeArt(str) {
+  const s = String(str || "");
+  if (!s) return [];
+  if (!s.startsWith("2:")) return decodeArtV1(s);
+  const out = [];
+  for (const part of s.slice(2).split("|")) {
+    const ci = part.indexOf(":");
+    if (ci < 1) continue;
+    const c = B64I[part[0]] ?? 0;
+    const w = B64I[part[1]] ?? 1;
+    const body = part.slice(ci + 1);
+    const pts = [];
+    let i = 0, px = 0, py = 0, bad = false;
+    const abs = () => {
+      const hi = B64I[body[i++]], lo = B64I[body[i++]];
+      if (hi === undefined || lo === undefined) { bad = true; return 0; }
+      return (hi << 6) | lo;
+    };
+    while (i < body.length && !bad) {
+      if (body[i] === "~" || pts.length === 0) {
+        if (body[i] === "~") i++;
+        const x = abs(), y = abs();
+        if (bad) break;
+        px = x; py = y;
+      } else {
+        const dx = B64I[body[i++]], dy = B64I[body[i++]];
+        if (dx === undefined || dy === undefined) break;
+        px = artClamp(px + dx - 32); py = artClamp(py + dy - 32);
+      }
+      pts.push([px, py]);
+    }
+    if (pts.length) out.push({ c: c < ART_COLORS.length ? c : 0, w: w < ART_WIDTHS.length ? w : 1, pts });
+  }
+  return out;
+}
+
+// 점을 솎아 모양은 남기고 길이만 줄인다 (Ramer–Douglas–Peucker).
+// 저장 한도를 넘겼을 때만 쓰이므로 평소 그림은 손대지 않는다.
+function simplifyPts(pts, tol) {
+  if (pts.length < 3) return pts;
+  const keep = new Uint8Array(pts.length);
+  keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    if (b - a < 2) continue;
+    const [ax, ay] = pts[a], [bx, by] = pts[b];
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.hypot(dx, dy) || 1;
+    let far = -1, fd = tol;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((pts[i][0] - ax) * dy - (pts[i][1] - ay) * dx) / len;
+      if (d > fd) { fd = d; far = i; }
+    }
+    if (far > 0) { keep[far] = 1; stack.push([a, far], [far, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+// 저장 한도 안에 들어오도록 필요한 만큼만 단순화한다.
+function fitArt(strokes) {
+  let art = encodeArt(strokes);
+  for (let tol = 0.8; art.length > ART_MAX && tol <= 12; tol *= 1.7) {
+    art = encodeArt(strokes.map((st) => ({ ...st, pts: simplifyPts(st.pts, tol) })));
+  }
+  return art;
+}
+
+// 한 획을 지금 좌표계(0~255) 그대로 그린다. 굵기는 획에 적힌 값,
+// boost 는 마우스를 올렸을 때 살짝 도드라지게 하려고 더한다.
+function paintStroke(g, st, boost = 0, colorOverride = null, floor = 0) {
+  const pts = st.pts;
+  if (!pts || !pts.length) return;
+  g.lineWidth = Math.max(floor, (ART_WIDTHS[st.w] ?? ART_WIDTHS[1]) + boost);
+  g.strokeStyle = colorOverride || ART_COLORS[st.c] || ART_COLORS[0];
+  g.fillStyle = g.strokeStyle;
+  if (pts.length === 1) {           // 톡 찍은 점
+    g.beginPath();
+    g.arc(pts[0][0], pts[0][1], g.lineWidth / 2, 0, Math.PI * 2);
+    g.fill();
+    return;
+  }
+  g.beginPath();
+  g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+  g.stroke();
 }
 
 // ---- 어항 속 자리 ----
@@ -2861,23 +2986,23 @@ function drawSeaweed(g, w, h, vx, vy, now) {
   g.restore();
 }
 
-// 그린 획을 그대로 물고기로. 0~99 좌표를 크기에 맞춰 늘린다.
+// 그린 획을 그대로 물고기로. 색과 굵기까지 그린 그대로 헤엄친다.
 function drawFish(g, f, x, y, size, dir, hot) {
-  const scale = (14 + size * 5) / 100;
+  const scale = (18 + size * 6) / ART_SPACE;
+  // 아기 물고기는 화면에서 아주 작다. 그대로 그리면 선이 1픽셀 아래로
+  // 내려가 사라지므로, 최소 한 픽셀은 되도록 굵기에 바닥을 깔아 준다.
+  const floor = 1.1 / scale;
   g.save();
   g.translate(x, y);
   g.scale(dir * scale, scale);
-  g.translate(-50, -50);
-  g.lineWidth = hot ? 7 : 5;
+  g.translate(-ART_SPACE / 2, -ART_SPACE / 2);
   g.lineJoin = "round";
   g.lineCap = "round";
-  g.strokeStyle = hot ? "#ffffff" : "rgba(255,255,255,0.92)";
-  for (const st of (f._art || (f._art = decodeArt(f.art)))) {
-    g.beginPath();
-    g.moveTo(st[0][0], st[0][1]);
-    for (let i = 1; i < st.length; i++) g.lineTo(st[i][0], st[i][1]);
-    g.stroke();
+  const strokes = f._art || (f._art = decodeArt(f.art));
+  if (hot) {                       // 커서를 올린 물고기는 흰 테두리로 도드라지게
+    for (const st of strokes) paintStroke(g, st, floor * 1.6, "rgba(255,255,255,0.85)", floor);
   }
+  for (const st of strokes) paintStroke(g, st, 0, null, floor);
   g.restore();
 }
 
@@ -2996,13 +3121,10 @@ function openTankPanel(kind) {
   // 작은 그림 미리보기
   list.querySelectorAll(".tank-thumb").forEach((cv) => {
     const g = cv.getContext("2d");
-    g.strokeStyle = "#7fb6e8"; g.lineWidth = 6; g.lineJoin = "round"; g.lineCap = "round";
-    g.setTransform(cv.width / 100, 0, 0, cv.height / 100, 0, 0);
-    for (const st of decodeArt(cv.dataset.art)) {
-      g.beginPath(); g.moveTo(st[0][0], st[0][1]);
-      for (let i = 1; i < st.length; i++) g.lineTo(st[i][0], st[i][1]);
-      g.stroke();
-    }
+    g.lineJoin = "round"; g.lineCap = "round";
+    g.setTransform(cv.width / ART_SPACE, 0, 0, cv.height / ART_SPACE, 0, 0);
+    const floor = ART_SPACE / cv.width;      // 미리보기도 선이 사라지지 않게
+    for (const st of decodeArt(cv.dataset.art)) paintStroke(g, st, 0, null, floor);
   });
   list.querySelectorAll(".tank-item").forEach((li) =>
     li.addEventListener("click", () => {
@@ -3015,33 +3137,78 @@ function openTankPanel(kind) {
 }
 
 // ---- 그리기 판 ----
-const pad = { strokes: [], drawing: false };
+const pad = { strokes: [], drawing: false, color: 0, width: 1 };
 function padDraw() {
   const cv = $("#fish-pad");
   const g = cv.getContext("2d");
+  g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, cv.width, cv.height);
-  g.strokeStyle = "#0b3f77"; g.lineWidth = 5; g.lineJoin = "round"; g.lineCap = "round";
-  g.save();
-  g.setTransform(cv.width / 100, 0, 0, cv.height / 100, 0, 0);
-  for (const st of pad.strokes) {
-    if (st.length < 2) continue;
-    g.beginPath(); g.moveTo(st[0][0], st[0][1]);
-    for (let i = 1; i < st.length; i++) g.lineTo(st[i][0], st[i][1]);
-    g.stroke();
-  }
-  g.restore();
+  g.lineJoin = "round"; g.lineCap = "round";
+  g.setTransform(cv.width / ART_SPACE, 0, 0, cv.height / ART_SPACE, 0, 0);
+  for (const st of pad.strokes) paintStroke(g, st);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  padMeter(!pad.drawing);
+}
+// 얼마나 담았는지 조용히 알려 준다. 한도에 닿아도 막지 않고,
+// 저장할 때 모양을 지키며 알아서 줄인다.
+// 점이 수천 개가 되면 매 프레임 다시 세는 게 부담이라 가끔만 센다.
+let padMeterAt = 0;
+function padMeter(force = false) {
+  const bar = $("#fish-detail");
+  if (!bar) return;
+  const now = Date.now();
+  if (!force && now - padMeterAt < 200) return;
+  padMeterAt = now;
+  const used = Math.min(1, encodeArt(pad.strokes).length / ART_MAX);
+  bar.style.setProperty("--fill", (used * 100).toFixed(1) + "%");
 }
 function padPoint(e) {
   const cv = $("#fish-pad");
   const r = cv.getBoundingClientRect();
+  const max = ART_SPACE - 1;
   return [
-    Math.max(0, Math.min(99, ((e.clientX - r.left) / r.width) * 100)),
-    Math.max(0, Math.min(99, ((e.clientY - r.top) / r.height) * 100)),
+    Math.max(0, Math.min(max, ((e.clientX - r.left) / r.width) * ART_SPACE)),
+    Math.max(0, Math.min(max, ((e.clientY - r.top) / r.height) * ART_SPACE)),
   ];
+}
+// 색·굵기 버튼은 팔레트에서 만들어 둔다 — 목록이 한 군데에만 있게.
+function buildPadTools() {
+  const colors = $("#fish-colors"), widths = $("#fish-widths");
+  if (!colors || colors.childElementCount) return;
+  ART_COLORS.forEach((hex, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pad-color" + (i === pad.color ? " on" : "");
+    b.style.background = hex;
+    b.dataset.i = String(i);
+    b.setAttribute("aria-label", `색 ${i + 1}`);
+    b.addEventListener("click", () => {
+      pad.color = i;
+      colors.querySelectorAll(".pad-color").forEach((el) =>
+        el.classList.toggle("on", el.dataset.i === String(i)));
+    });
+    colors.appendChild(b);
+  });
+  ART_WIDTHS.forEach((w, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pad-width" + (i === pad.width ? " on" : "");
+    b.dataset.i = String(i);
+    b.setAttribute("aria-label", `굵기 ${i + 1}`);
+    const dot = Math.min(20, Math.max(3, Math.round(w * 0.45)));   // 칸 밖으로 넘치지 않게
+    b.innerHTML = `<i style="width:${dot}px;height:${dot}px"></i>`;
+    b.addEventListener("click", () => {
+      pad.width = i;
+      widths.querySelectorAll(".pad-width").forEach((el) =>
+        el.classList.toggle("on", el.dataset.i === String(i)));
+    });
+    widths.appendChild(b);
+  });
 }
 function openFishModal(open) {
   const ov = $("#fish-modal");
   if (open) {
+    buildPadTools();
     pad.strokes = []; padDraw();
     $("#fish-name").value = "";
     setHint("#fish-hint", "");
@@ -3158,16 +3325,24 @@ function openFishModal(open) {
   // 그리기 판
   const padEl = $("#fish-pad");
   padEl.addEventListener("pointerdown", (e) => {
-    pad.drawing = true; pad.strokes.push([padPoint(e)]);
+    e.preventDefault();
+    pad.drawing = true;
+    pad.strokes.push({ c: pad.color, w: pad.width, pts: [padPoint(e)] });
     padEl.setPointerCapture(e.pointerId); padDraw();
   });
   padEl.addEventListener("pointermove", (e) => {
     if (!pad.drawing) return;
     const st = pad.strokes[pad.strokes.length - 1];
-    const pt = padPoint(e);
-    const last = st[st.length - 1];
-    if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 2.5) return;  // 점을 솎아 낸다
-    st.push(pt); padDraw();
+    // 브라우저가 모아 둔 중간 점까지 받아 쓴다 — 빨리 그어도 각지지 않게.
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    let moved = false;
+    for (const ev of (evs.length ? evs : [e])) {
+      const pt = padPoint(ev);
+      const last = st.pts[st.pts.length - 1];
+      if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 1.2) continue;
+      st.pts.push(pt); moved = true;
+    }
+    if (moved) padDraw();
   });
   const stop = () => { pad.drawing = false; };
   padEl.addEventListener("pointerup", stop);
@@ -3180,9 +3355,8 @@ function openFishModal(open) {
     const btn = e.currentTarget;
     const me = currentIdentity();
     if (!me) return setHint("#fish-hint", "학급에 먼저 입장해 주세요.", false);
-    const art = encodeArt(pad.strokes.filter((st) => st.length > 1));
+    const art = fitArt(pad.strokes.filter((st) => st.pts.length));
     if (art.length < 4) return setHint("#fish-hint", "물고기를 그려주세요.", false);
-    if (art.length > 1400) return setHint("#fish-hint", "그림이 너무 복잡해요. 조금 단순하게 그려주세요.", false);
     const nameRaw = $("#fish-name").value.trim() || "물고기";
     // screenVoteLabel 은 {ok, reason, matched} 만 돌려준다 — label 은 없다.
     // 통과하면 원래 적은 이름을 그대로 쓴다.

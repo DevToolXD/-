@@ -622,7 +622,7 @@ export async function addFish(code, ownerId, ownerName, name, art) {
     ownerId: String(ownerId).slice(0, 64),
     ownerName: sanitizeText(ownerName, APP.maxNameLength) || "이름 없음",
     name: sanitizeText(name, 20) || "물고기",
-    art: String(art).slice(0, 1400),
+    art: String(art).slice(0, 6000),
     seed: Math.floor(Math.random() * 1000000),
     fed: 0,
     createdAt: serverTimestamp(),

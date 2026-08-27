@@ -89,7 +89,7 @@ service cloud.firestore {
           && cleanStr(request.resource.data.name, 20)
           && request.resource.data.art is string
           && request.resource.data.art.size() >= 4
-          && request.resource.data.art.size() <= 1400
+          && request.resource.data.art.size() <= 6000
           && request.resource.data.seed is int
           && request.resource.data.seed >= 0
           && request.resource.data.fed == 0

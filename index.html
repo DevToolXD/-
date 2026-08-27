@@ -547,12 +547,6 @@
         <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
         <div class="student-content">
-          <div class="glass-card">
-            <p class="eyebrow" id="student-greeting-eyebrow"></p>
-            <h2>안녕하세요, <span id="student-greeting"></span>님</h2>
-            <p class="muted">내 마니또가 누구인지는 비밀이에요. 소원을 남기면 나를 도와주는 친구에게 전달돼요.</p>
-          </div>
-
           <div class="student-page-area">
             <!-- 페이지 1: 나의 소원 -->
             <div class="glass-card student-page" data-page="wish">
@@ -1015,8 +1009,11 @@
     <div id="fish-modal" class="modal-overlay hidden">
       <div class="modal glass-card fish-modal">
         <h3>물고기 그리기</h3>
-        <p class="muted small">칸 안에 물고기를 그려주세요. 그린 모양 그대로 헤엄칩니다.</p>
-        <canvas id="fish-pad" width="240" height="160"></canvas>
+        <p class="muted small">칸 안에 물고기를 그려주세요. 색과 굵기 그대로 헤엄칩니다.</p>
+        <canvas id="fish-pad" width="768" height="512"></canvas>
+        <div id="fish-detail" class="pad-detail" aria-hidden="true"></div>
+        <div id="fish-colors" class="pad-colors" role="group" aria-label="색깔"></div>
+        <div id="fish-widths" class="pad-widths" role="group" aria-label="굵기"></div>
         <div class="row-gap fish-pad-tools">
           <button id="fish-undo" class="btn btn-ghost btn-sm">한 획 지우기</button>
           <button id="fish-clear" class="btn btn-ghost btn-sm">모두 지우기</button>
