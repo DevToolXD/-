@@ -2,8 +2,9 @@
 //  UI / 라우팅 / 인터랙션 글루 코드
 // =============================================================
 import * as data from "./data.js?v=DEV";
-import { BLOCK_MESSAGE } from "./moderation.js?v=DEV";
+import { BLOCK_MESSAGE, screenVoteLabel } from "./moderation.js?v=DEV";
 import * as guard from "./guard.js?v=DEV";
+import * as fishlib from "./fish.js?v=DEV";
 import { THEMES, THEME_IDS, THEME_GROUPS, DEFAULT_THEME, isTheme, getTheme }
   from "./themes.js?v=DEV";
 import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN, firebaseConfig }
@@ -431,6 +432,7 @@ async function logout() {
   accountIsAdmin = false;
   updateAdminQuickBtn();
   updateAdminSideNav();
+  updateTankNav();
   showView("home");
 }
 
@@ -938,6 +940,7 @@ async function enterStudentHome() {
   $("#student-greeting-eyebrow").textContent = classLabel(classCode);
   $("#sidebar-student-name").textContent = `${classLabel(classCode)} · ${student.name}`;
   updateAdminSideNav();
+  updateTankNav();
   // 페이지1(나의 소원)을 기본으로 보여줌. 페이지2(긁어서 확인하기)는
   // 사이드바에서 눌렀을 때만 불러온다 (독립된 큰 페이지로 분리).
   $$(".student-page-nav").forEach((b) => b.classList.toggle("active", b.dataset.page === "wish"));
@@ -971,6 +974,7 @@ async function openStudentPage(pageName) {
     await refreshFeedbackBoard("#student-feedback-list");
   }
   if (pageName === "theme") renderThemeLists();
+  if (pageName === "tank") openTank(); else closeTank();
 }
 
 $$(".student-page-nav").forEach((b) =>
@@ -1888,7 +1892,8 @@ async function refreshRulesState() {
   const missing = [!r.adminAccounts && "계정에 붙는 관리자 권한",
                    !r.eggStats && "이스터에그 발견자 수",
                    !r.voteBallots && "투표 1회 제한(기기 바꿔도 유지)",
-                   !r.securityLog && "개발자 도구 기록"].filter(Boolean).join(" · ");
+                   !r.securityLog && "개발자 도구 기록",
+                   !r.fish && "어항"].filter(Boolean).join(" · ");
   state.textContent =
     `아직 안 올린 규칙이 있어요. 지금도 앱은 정상이지만, 아래 기능은 이 기기에서만 동작해요 — ${missing}`;
   state.classList.add("todo");
@@ -1979,6 +1984,7 @@ async function grantSuperAdmin() {
       : `${target.name} 님, 관리자 권한이 열렸어요.`);
     markSuperAdminAuthed();
     updateAdminSideNav();
+    updateTankNav();
     await saveSession({
       classCode, role: "superadmin",
       studentId: target.id, studentName: target.name,
@@ -2004,6 +2010,11 @@ async function grantSuperAdmin() {
 let accountIsAdmin = false;
 function updateAdminSideNav() {
   $("#side-nav-admin").classList.toggle("hidden", !accountIsAdmin);
+}
+// 어항은 지정된 반에만 있다
+function updateTankNav() {
+  const tab = $("#side-nav-tank");
+  if (tab) tab.classList.toggle("hidden", !tankEnabled());
 }
 
 // 탭이 방금 생겼다는 걸 알아채게 잠깐 강조한다.
@@ -2319,8 +2330,11 @@ function isSuperAdminAuthed() {
   return superAdminAuthed;
 }
 
+// 삭제 버튼은 전체 관리자만 볼 수 있었는데, 정작 반을 맡은 선생님이
+// 못 지워서 불편했다. 선생님에게도 연다.
+function canModerate() { return isSuperAdminAuthed() || !!adminSession; }
 function feedbackItemHtml(p) {
-  const delBtn = isSuperAdminAuthed()
+  const delBtn = canModerate()
     ? `<button class="link-btn feedback-del-btn" data-id="${p.id}">삭제</button>`
     : "";
   return `<li class="feedback-item" data-id="${p.id}">
@@ -2345,7 +2359,7 @@ async function refreshFeedbackBoard(listSel) {
     list.querySelectorAll(".feedback-del-btn").forEach((b) =>
       b.addEventListener("click", async () => {
         if (!(await confirmModal("이 버그 제보를 삭제할까요?"))) return;
-        if (!(await ensureRole("superadmin"))) return;
+        if (!(await ensureRole(["admin", "superadmin"]))) return;
         if (!useToken("reportOp")) return;
         try {
           await data.deleteFeedback(b.dataset.id);
@@ -2696,6 +2710,501 @@ runHeadlineIntro();
 })();
 
 // =============================================================
+//  8) 어항 (6학년 3반 전용)
+// =============================================================
+//  · 물고기는 학생이 직접 그린다. 획 좌표를 짧은 문자열로 눌러 담는다.
+//  · 크기는 저장하지 않는다 — seed 와 생성 시각으로 매번 계산(js/fish.js).
+//    그래서 앱을 꺼둬도 자라고, 2000마리가 20분마다 쓰기를 만들지 않는다.
+//  · 2000마리를 DOM 으로 그리면 버티지 못해서 canvas 한 장에 그린다.
+const TANK_CLASS = "0603";              // 어항이 있는 반
+const TANK_W = 6400, TANK_H = 3200;     // 어항 한 판의 크기(px)
+const TANK_CAP = 2000;                  // 최대 마리 수
+const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
+const FOOD_MAX = 2;                     // 손에 들 수 있는 밥
+const FOOD_INTERVAL = 24 * 60 * 60 * 1000;  // 하루에 하나
+const CATCHUP_MS = 30 * 60 * 1000;      // 이만큼 지나 있으면 자라는 걸 보여준다
+
+const tankState = {
+  fish: [],           // 서버에서 온 원본
+  manage: false,      // 선생님·전체 관리자의 관리 모드
+  view: { x: 0, y: 0 },
+  follow: null,       // 따라다닐 물고기 id
+  hover: null,
+  unsub: null,
+  raf: null,
+  grow: new Map(),    // id -> {from, to, at}  껐다 켠 사이 자란 만큼 보여주기
+  lastSeen: new Map(),
+};
+
+const tankKey = (k) => `manito.tank.${k}:${classCode}:${student?.id || "-"}`;
+
+function tankEnabled() { return classCode === TANK_CLASS; }
+
+// ---- 그림 저장 형식 ----
+//  획을 "x,y x,y|x,y ..." 로 적는다. 0~99 정수라 한 점이 최대 5글자.
+//  규칙에서 1400자로 막아 두었으므로 점 수도 그에 맞춰 줄인다.
+function encodeArt(strokes) {
+  return strokes.map((st) => st.map(([x, y]) =>
+    `${Math.round(x)},${Math.round(y)}`).join(" ")).join("|");
+}
+function decodeArt(str) {
+  if (!str) return [];
+  return String(str).split("|").map((st) =>
+    st.split(" ").filter(Boolean).map((pt) => {
+      const [x, y] = pt.split(",").map(Number);
+      return [x || 0, y || 0];
+    })).filter((st) => st.length > 1);
+}
+
+// ---- 어항 속 자리 ----
+//  물고기마다 고정된 자리를 준다. id 를 해시해서 뽑으므로 새로고침해도
+//  같은 자리에 있고, 서버에 좌표를 저장할 필요가 없다.
+function fishSpot(f) {
+  let h = 2166136261;
+  for (let i = 0; i < f.id.length; i++) { h ^= f.id.charCodeAt(i); h = Math.imul(h, 16777619); }
+  const a = ((h >>> 0) % 100000) / 100000;
+  const b = (((h >>> 7) >>> 0) % 100000) / 100000;
+  const c = (((h >>> 13) >>> 0) % 100000) / 100000;
+  return {
+    x: 60 + a * (TANK_W - 120),
+    y: 60 + b * (TANK_H - 200),
+    dir: c < 0.5 ? -1 : 1,
+    phase: c * Math.PI * 2,
+  };
+}
+
+function tankSize(f, now) {
+  const anim = tankState.grow.get(f.id);
+  if (anim) {
+    const t = Math.min(1, (now - anim.at) / 2600);
+    if (t >= 1) tankState.grow.delete(f.id);
+    else return anim.from + (anim.to - anim.from) * (1 - Math.pow(1 - t, 3));
+  }
+  return fishlib.sizeOf(f, now);
+}
+
+// ---- 어항 그리기 ----
+function drawTank() {
+  const cv = $("#tank-canvas");
+  const vp = $("#tank-viewport");
+  if (!cv || !vp || vp.offsetParent === null) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = vp.clientWidth, h = vp.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    cv.style.width = w + "px"; cv.style.height = h + "px";
+  }
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const now = Date.now();
+
+  // 따라가기: 카메라를 그 물고기에 붙인다
+  if (tankState.follow) {
+    const f = tankState.fish.find((x) => x.id === tankState.follow);
+    if (f) {
+      const s = fishSpot(f);
+      const sway = Math.sin(now / 2200 + s.phase) * 60;
+      tankState.view.x = clampView(s.x + sway - w / 2, TANK_W - w);
+      tankState.view.y = clampView(s.y - h / 2, TANK_H - h);
+    }
+  }
+  const vx = tankState.view.x, vy = tankState.view.y;
+
+  // 물 — 파랑 한 가지로 깊이감만
+  const grad = g.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#2f7fd1");
+  grad.addColorStop(1, "#0b3f77");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, w, h);
+
+  drawSeaweed(g, w, h, vx, vy, now);
+
+  // 물고기 — 화면에 걸치는 것만 그린다(2000마리라도 이 부분이 비용을 정한다)
+  let drawn = 0;
+  for (const f of tankState.fish) {
+    const spot = fishSpot(f);
+    const size = tankSize(f, now);
+    const sway = Math.sin(now / 2200 + spot.phase) * 60;
+    const x = spot.x + sway - vx;
+    const y = spot.y + Math.sin(now / 3100 + spot.phase) * 18 - vy;
+    const r = 14 + size * 5;
+    if (x < -r || x > w + r || y < -r || y > h + r) continue;
+    drawFish(g, f, x, y, size, spot.dir, f.id === tankState.hover);
+    drawn++;
+  }
+  g.restore?.();
+  $("#tank-count").textContent = `${tankState.fish.length}마리 · 화면에 ${drawn}`;
+}
+
+function clampView(v, max) { return Math.max(0, Math.min(Math.max(0, max), v)); }
+
+function drawSeaweed(g, w, h, vx, vy, now) {
+  const bottom = TANK_H - vy;
+  if (bottom > h + 140) return;
+  g.save();
+  g.strokeStyle = "rgba(90, 200, 160, 0.5)";
+  g.lineCap = "round";
+  const first = Math.floor(vx / 90) * 90;
+  for (let wx = first; wx < vx + w + 90; wx += 90) {
+    const seed = (wx * 7919) % 1000 / 1000;
+    const hgt = 70 + seed * 130;
+    const x = wx - vx;
+    g.lineWidth = 4 + seed * 4;
+    g.beginPath();
+    g.moveTo(x, bottom);
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 4;
+      g.lineTo(x + Math.sin(now / 1800 + seed * 6 + t * 2.2) * 14 * t, bottom - hgt * t);
+    }
+    g.stroke();
+  }
+  g.restore();
+}
+
+// 그린 획을 그대로 물고기로. 0~99 좌표를 크기에 맞춰 늘린다.
+function drawFish(g, f, x, y, size, dir, hot) {
+  const scale = (14 + size * 5) / 100;
+  g.save();
+  g.translate(x, y);
+  g.scale(dir * scale, scale);
+  g.translate(-50, -50);
+  g.lineWidth = hot ? 7 : 5;
+  g.lineJoin = "round";
+  g.lineCap = "round";
+  g.strokeStyle = hot ? "#ffffff" : "rgba(255,255,255,0.92)";
+  for (const st of (f._art || (f._art = decodeArt(f.art)))) {
+    g.beginPath();
+    g.moveTo(st[0][0], st[0][1]);
+    for (let i = 1; i < st.length; i++) g.lineTo(st[i][0], st[i][1]);
+    g.stroke();
+  }
+  g.restore();
+}
+
+function tankLoop() {
+  drawTank();
+  tankState.raf = requestAnimationFrame(tankLoop);
+}
+
+// ---- 밥 ----
+function foodCount() {
+  const now = Date.now();
+  let n = Number(lsGet(tankKey("food")) || 0);
+  let last = Number(lsGet(tankKey("foodAt")) || 0);
+  if (!last) { last = now; lsSet(tankKey("foodAt"), String(now)); n = 1; }
+  const gained = Math.floor((now - last) / FOOD_INTERVAL);
+  if (gained > 0) {
+    n = Math.min(FOOD_MAX, n + gained);
+    lsSet(tankKey("foodAt"), String(last + gained * FOOD_INTERVAL));
+  }
+  n = Math.max(0, Math.min(FOOD_MAX, n));
+  lsSet(tankKey("food"), String(n));
+  return n;
+}
+function spendFood() {
+  const n = foodCount();
+  if (n <= 0) return false;
+  lsSet(tankKey("food"), String(n - 1));
+  return true;
+}
+function refreshFoodLabel() {
+  const el = $("#tank-food");
+  if (el) el.textContent = `밥 ${foodCount()}개`;
+}
+
+
+// ---- 열기 / 닫기 ----
+function openTank() {
+  if (!tankEnabled()) return;
+  $("#tank-hint").textContent = "";
+  const vp = $("#tank-viewport");
+  vp.scrollTop = 0;
+  refreshFoodLabel();
+  const canManage = !!adminSession || isSuperAdminAuthed();
+  $("#tank-manage-btn").classList.toggle("hidden", !canManage);
+  tankState.manage = false;
+  $("#tank-manage-btn").textContent = "관리";
+
+  // 껐다 켠 사이 자란 만큼은 "그때 크기 → 지금 크기" 로 보여준다
+  const now = Date.now();
+  const seenAt = Number(lsGet(tankKey("seenAt")) || 0);
+  const showGrowth = seenAt && now - seenAt >= CATCHUP_MS;
+
+  if (tankState.unsub) tankState.unsub();
+  tankState.unsub = data.watchFish(classCode, (rows) => {
+    if (showGrowth) {
+      for (const f of rows) {
+        const before = fishlib.sizeOf(f, seenAt);
+        const after = fishlib.sizeOf(f, now);
+        if (after - before > 0.05) tankState.grow.set(f.id, { from: before, to: after, at: Date.now() });
+      }
+    }
+    tankState.fish = rows.slice(0, TANK_CAP);
+    $("#tank-count").textContent = `${tankState.fish.length}마리`;
+    if (showGrowth && tankState.grow.size) {
+      setHint("#tank-hint", `안 보는 사이 ${tankState.grow.size}마리가 자랐어요.`, true);
+    }
+  });
+  lsSet(tankKey("seenAt"), String(now));
+  if (!tankState.raf) tankLoop();
+}
+function closeTank() {
+  if (tankState.unsub) { tankState.unsub(); tankState.unsub = null; }
+  if (tankState.raf) { cancelAnimationFrame(tankState.raf); tankState.raf = null; }
+  lsSet(tankKey("seenAt"), String(Date.now()));
+  closeTankPanel();
+}
+
+// ---- 화면 좌표 → 어항 좌표에서 물고기 찾기 ----
+function fishAt(px, py) {
+  const now = Date.now();
+  let best = null, bestD = 1e9;
+  for (const f of tankState.fish) {
+    const spot = fishSpot(f);
+    const size = tankSize(f, now);
+    const sway = Math.sin(now / 2200 + spot.phase) * 60;
+    const x = spot.x + sway - tankState.view.x;
+    const y = spot.y + Math.sin(now / 3100 + spot.phase) * 18 - tankState.view.y;
+    const r = 16 + size * 5;
+    const d = Math.hypot(px - x, py - y);
+    if (d < r && d < bestD) { best = f; bestD = d; }
+  }
+  return best;
+}
+
+// ---- 패널(내 물고기 / 순위) ----
+function closeTankPanel() { $("#tank-panel").classList.add("hidden"); }
+function openTankPanel(kind) {
+  const now = Date.now();
+  const me = currentIdentity();
+  const rows = kind === "mine"
+    ? tankState.fish.filter((f) => me && f.ownerName === me.name)
+    : [...tankState.fish].sort((a, b) => fishlib.weightOf(b, now) - fishlib.weightOf(a, now)).slice(0, 100);
+  $("#tank-panel-title").textContent = kind === "mine" ? "내 물고기" : "크기 순위";
+  const list = $("#tank-panel-list");
+  list.innerHTML = rows.length
+    ? rows.map((f, i) => `<li class="tank-item" data-id="${escapeHtml(f.id)}">
+        <span class="tank-rank">${kind === "mine" ? "" : i + 1}</span>
+        <canvas class="tank-thumb" data-art="${escapeHtml(f.art)}" width="44" height="30"></canvas>
+        <span class="tank-item-main">
+          <b>${escapeHtml(f.name)}</b>
+          <span class="muted small">${escapeHtml(f.ownerName)}</span>
+        </span>
+        <span class="tank-weight">${fishlib.formatWeight(fishlib.weightOf(f, now))}</span>
+      </li>`).join("")
+    : `<li class="muted small">${kind === "mine" ? "아직 내 물고기가 없어요." : "아직 물고기가 없어요."}</li>`;
+  // 작은 그림 미리보기
+  list.querySelectorAll(".tank-thumb").forEach((cv) => {
+    const g = cv.getContext("2d");
+    g.strokeStyle = "#7fb6e8"; g.lineWidth = 6; g.lineJoin = "round"; g.lineCap = "round";
+    g.setTransform(cv.width / 100, 0, 0, cv.height / 100, 0, 0);
+    for (const st of decodeArt(cv.dataset.art)) {
+      g.beginPath(); g.moveTo(st[0][0], st[0][1]);
+      for (let i = 1; i < st.length; i++) g.lineTo(st[i][0], st[i][1]);
+      g.stroke();
+    }
+  });
+  list.querySelectorAll(".tank-item").forEach((li) =>
+    li.addEventListener("click", () => {
+      tankState.follow = li.dataset.id;
+      $("#tank-follow-note").textContent = "따라가는 중 — 어항을 탭하면 멈춰요";
+      closeTankPanel();
+    })
+  );
+  $("#tank-panel").classList.remove("hidden");
+}
+
+// ---- 그리기 판 ----
+const pad = { strokes: [], drawing: false };
+function padDraw() {
+  const cv = $("#fish-pad");
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.strokeStyle = "#0b3f77"; g.lineWidth = 5; g.lineJoin = "round"; g.lineCap = "round";
+  g.save();
+  g.setTransform(cv.width / 100, 0, 0, cv.height / 100, 0, 0);
+  for (const st of pad.strokes) {
+    if (st.length < 2) continue;
+    g.beginPath(); g.moveTo(st[0][0], st[0][1]);
+    for (let i = 1; i < st.length; i++) g.lineTo(st[i][0], st[i][1]);
+    g.stroke();
+  }
+  g.restore();
+}
+function padPoint(e) {
+  const cv = $("#fish-pad");
+  const r = cv.getBoundingClientRect();
+  return [
+    Math.max(0, Math.min(99, ((e.clientX - r.left) / r.width) * 100)),
+    Math.max(0, Math.min(99, ((e.clientY - r.top) / r.height) * 100)),
+  ];
+}
+function openFishModal(open) {
+  const ov = $("#fish-modal");
+  if (open) {
+    pad.strokes = []; padDraw();
+    $("#fish-name").value = "";
+    setHint("#fish-hint", "");
+    ov.classList.remove("hidden");
+    requestAnimationFrame(() => ov.classList.add("show"));
+  } else {
+    ov.classList.remove("show");
+    setTimeout(() => ov.classList.add("hidden"), 200);
+  }
+}
+
+// ---- 이벤트 배선 ----
+(() => {
+  const vp = $("#tank-viewport");
+  if (!vp) return;
+
+  // 스크롤로 어항을 둘러본다
+  vp.addEventListener("scroll", () => {
+    if (tankState.follow) return;      // 따라가는 중엔 카메라가 주인
+    tankState.view.x = vp.scrollLeft;
+    tankState.view.y = vp.scrollTop;
+  }, { passive: true });
+
+  // 커서를 대면 누구 물고기인지
+  vp.addEventListener("pointermove", (e) => {
+    const r = vp.getBoundingClientRect();
+    const f = fishAt(e.clientX - r.left, e.clientY - r.top);
+    tankState.hover = f ? f.id : null;
+    const tip = $("#tank-tip");
+    if (!f) { tip.classList.add("hidden"); return; }
+    const now = Date.now();
+    tip.innerHTML = `<b>${escapeHtml(f.name)}</b><span>${escapeHtml(f.ownerName)}</span>` +
+      `<span class="muted small">${fishlib.formatWeight(fishlib.weightOf(f, now))}</span>`;
+    tip.style.left = Math.min(r.width - 150, e.clientX - r.left + 14) + "px";
+    tip.style.top = Math.max(4, e.clientY - r.top - 54) + "px";
+    tip.classList.remove("hidden");
+  });
+  vp.addEventListener("pointerleave", () => {
+    tankState.hover = null; $("#tank-tip").classList.add("hidden");
+  });
+
+  // 탭 = 따라가기 풀기 / 밥이 있으면 밥주기
+  vp.addEventListener("click", async (e) => {
+    if (tankState.follow) {
+      tankState.follow = null;
+      $("#tank-follow-note").textContent = "";
+      return;
+    }
+    const r = vp.getBoundingClientRect();
+    const f = fishAt(e.clientX - r.left, e.clientY - r.top);
+    if (!f) return;
+    if (tankState.manage) {
+      if (!(await confirmModal(`${f.name}(${f.ownerName})을(를) 어항에서 뺄까요?`))) return;
+      if (!(await ensureRole(["admin", "superadmin"]))) return;
+      if (!useToken("reportOp")) return;
+      try { await data.deleteFish(classCode, f.id); toast("어항에서 뺐어요."); }
+      catch (err) { setHint("#tank-hint", "실패: " + err.message, false); }
+      return;
+    }
+    if (foodCount() <= 0) {
+      setHint("#tank-hint", "밥이 없어요. 하루에 하나씩 생겨요.", false);
+      return;
+    }
+    if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
+    if (!useToken("wish")) return;
+    const before = fishlib.sizeOf(f, Date.now());
+    try {
+      await data.feedFish(classCode, f);
+      spendFood(); refreshFoodLabel();
+      const after = fishlib.sizeOf({ ...f, fed: (Number(f.fed) || 0) + 1 }, Date.now());
+      if (after - before > 0.01) {
+        tankState.grow.set(f.id, { from: before, to: after, at: Date.now() });
+        toast(`${f.name}이(가) 밥을 먹고 자랐어요!`);
+      } else {
+        toast(`${f.name}이(가) 밥을 먹었어요.`);
+      }
+    } catch (err) {
+      setHint("#tank-hint", "밥주기 실패: " + err.message, false);
+    }
+  });
+
+  // 관리 모드: 선생님·전체 관리자만. 켜면 누른 물고기를 지운다.
+  $("#tank-manage-btn").addEventListener("click", async () => {
+    if (!tankState.manage) {
+      if (!(await ensureRole(["admin", "superadmin"]))) return;
+      tankState.manage = true;
+      $("#tank-manage-btn").textContent = "관리 끄기";
+      setHint("#tank-hint", "관리 중 — 물고기를 누르면 지워져요.", true);
+    } else {
+      tankState.manage = false;
+      $("#tank-manage-btn").textContent = "관리";
+      setHint("#tank-hint", "");
+    }
+  });
+
+  $("#tank-mine-btn").addEventListener("click", () => openTankPanel("mine"));
+  $("#tank-rank-btn").addEventListener("click", () => openTankPanel("rank"));
+  $("#tank-panel-close").addEventListener("click", closeTankPanel);
+
+  $("#tank-add-btn").addEventListener("click", () => {
+    const last = Number(lsGet(tankKey("addedAt")) || 0);
+    const left = TANK_ADD_COOLDOWN - (Date.now() - last);
+    if (last && left > 0) {
+      setHint("#tank-hint", `${Math.ceil(left / 60000)}분 뒤에 한 마리 더 넣을 수 있어요.`, false);
+      return;
+    }
+    if (tankState.fish.length >= TANK_CAP) {
+      setHint("#tank-hint", `어항이 가득 찼어요 (${TANK_CAP}마리).`, false);
+      return;
+    }
+    openFishModal(true);
+  });
+
+  // 그리기 판
+  const padEl = $("#fish-pad");
+  padEl.addEventListener("pointerdown", (e) => {
+    pad.drawing = true; pad.strokes.push([padPoint(e)]);
+    padEl.setPointerCapture(e.pointerId); padDraw();
+  });
+  padEl.addEventListener("pointermove", (e) => {
+    if (!pad.drawing) return;
+    const st = pad.strokes[pad.strokes.length - 1];
+    const pt = padPoint(e);
+    const last = st[st.length - 1];
+    if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 2.5) return;  // 점을 솎아 낸다
+    st.push(pt); padDraw();
+  });
+  const stop = () => { pad.drawing = false; };
+  padEl.addEventListener("pointerup", stop);
+  padEl.addEventListener("pointercancel", stop);
+  $("#fish-undo").addEventListener("click", () => { pad.strokes.pop(); padDraw(); });
+  $("#fish-clear").addEventListener("click", () => { pad.strokes = []; padDraw(); });
+  $("#fish-cancel").addEventListener("click", () => openFishModal(false));
+
+  $("#fish-save").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const me = currentIdentity();
+    if (!me) return setHint("#fish-hint", "학급에 먼저 입장해 주세요.", false);
+    const art = encodeArt(pad.strokes.filter((st) => st.length > 1));
+    if (art.length < 4) return setHint("#fish-hint", "물고기를 그려주세요.", false);
+    if (art.length > 1400) return setHint("#fish-hint", "그림이 너무 복잡해요. 조금 단순하게 그려주세요.", false);
+    const nameRaw = $("#fish-name").value.trim() || "물고기";
+    // screenVoteLabel 은 {ok, reason, matched} 만 돌려준다 — label 은 없다.
+    // 통과하면 원래 적은 이름을 그대로 쓴다.
+    const screened = screenVoteLabel(nameRaw);
+    if (!screened.ok) return setHint("#fish-hint", BLOCK_MESSAGE, false);
+    if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
+    if (!useToken("voteAdd")) return;
+    busy(btn, true, "넣는 중…");
+    try {
+      await data.addFish(classCode, student?.id || me.name, me.name, nameRaw, art);
+      lsSet(tankKey("addedAt"), String(Date.now()));
+      openFishModal(false);
+      toast("어항에 넣었어요!");
+    } catch (err) {
+      setHint("#fish-hint", "실패: " + err.message, false);
+    } finally {
+      busy(btn, false);
+    }
+  });
+})();
+
+// =============================================================
 //  광고 문의 (푸터 버튼 → 모달 → 보내기)
 // =============================================================
 let adHideTimer = null;
@@ -3022,6 +3531,7 @@ applyTheme(currentTheme(), { remember: false });
         }
         markSuperAdminAuthed();
         updateAdminSideNav();
+        updateTankNav();
         await enterSuperAdmin();
         return;
       }

@@ -526,6 +526,10 @@
               <span class="side-nav-code">5</span>
               <span class="side-nav-label">버그 제보</span>
             </button>
+            <button class="student-page-nav tank-nav hidden" id="side-nav-tank" data-page="tank">
+              <span class="side-nav-code">🐟</span>
+              <span class="side-nav-label">어항</span>
+            </button>
             <button class="student-page-nav" data-page="theme">
               <span class="side-nav-code">6</span>
               <span class="side-nav-label">테마</span>
@@ -641,7 +645,49 @@
             </div>
 
             <!-- 페이지 6: 테마 고르기 -->
-            <div class="glass-card student-page hidden" data-page="theme">
+            <!-- ============ 어항 ============
+               반마다 하나. 물고기는 학생이 직접 그려서 넣는다.
+               크기는 저장하지 않고 seed+생성시각으로 매번 계산한다. -->
+          <div class="glass-card student-page hidden tank-page" data-page="tank">
+            <div class="row-between tank-head">
+              <div>
+                <p class="eyebrow">우리 반 어항</p>
+                <h2>어항</h2>
+              </div>
+              <div class="row-gap tank-actions">
+                <button id="tank-add-btn" class="btn btn-primary btn-sm">물고기 그리기</button>
+                <button id="tank-mine-btn" class="btn btn-ghost btn-sm">내 물고기</button>
+                <button id="tank-rank-btn" class="btn btn-ghost btn-sm">크기 순위</button>
+                <button id="tank-manage-btn" class="btn btn-ghost btn-sm hidden">관리</button>
+              </div>
+            </div>
+            <p class="hint" id="tank-hint"></p>
+
+            <div class="tank-bar">
+              <span class="tank-stat" id="tank-count">0마리</span>
+              <span class="tank-stat" id="tank-food">밥 0개</span>
+              <span class="tank-stat muted small" id="tank-follow-note"></span>
+            </div>
+
+            <!-- 스크롤되는 큰 어항. 물고기는 canvas 로 그린다(2000마리) -->
+            <div class="tank-viewport" id="tank-viewport" tabindex="0">
+              <div class="tank-world" id="tank-world">
+                <canvas id="tank-canvas"></canvas>
+              </div>
+              <div class="tank-tip hidden" id="tank-tip"></div>
+            </div>
+
+            <!-- 내 물고기 목록 / 순위: 어항 위에 겹쳐 뜨는 패널 -->
+            <div class="tank-panel hidden" id="tank-panel">
+              <div class="row-between">
+                <h3 id="tank-panel-title">내 물고기</h3>
+                <button id="tank-panel-close" class="link-btn">닫기</button>
+              </div>
+              <ul class="tank-list" id="tank-panel-list"></ul>
+            </div>
+          </div>
+
+          <div class="glass-card student-page hidden" data-page="theme">
               <h3>테마</h3>
               <p class="muted small">화면 전체의 색과 분위기를 바꿔요. 고른 테마는 이 기기에 저장돼요.</p>
               <div id="student-theme-list"></div>
@@ -961,6 +1007,25 @@
         <div class="row modal-actions">
           <button id="ad-cancel" class="btn btn-ghost">닫기</button>
           <button id="ad-send" class="btn btn-primary">보내기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 물고기 그리기 ============ -->
+    <div id="fish-modal" class="modal-overlay hidden">
+      <div class="modal glass-card fish-modal">
+        <h3>물고기 그리기</h3>
+        <p class="muted small">칸 안에 물고기를 그려주세요. 그린 모양 그대로 헤엄칩니다.</p>
+        <canvas id="fish-pad" width="240" height="160"></canvas>
+        <div class="row-gap fish-pad-tools">
+          <button id="fish-undo" class="btn btn-ghost btn-sm">한 획 지우기</button>
+          <button id="fish-clear" class="btn btn-ghost btn-sm">모두 지우기</button>
+        </div>
+        <input id="fish-name" maxlength="20" placeholder="물고기 이름 (예: 뽀글이)" />
+        <p class="hint" id="fish-hint"></p>
+        <div class="row modal-actions">
+          <button id="fish-cancel" class="btn btn-ghost">닫기</button>
+          <button id="fish-save" class="btn btn-primary">어항에 넣기</button>
         </div>
       </div>
     </div>

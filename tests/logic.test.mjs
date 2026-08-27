@@ -62,5 +62,54 @@ console.log("\n[3] 비밀번호 해시 (PBKDF2)");
   check("해시에 원문 비번 미포함", !h1.includes("1234"));
 }
 
+
+// ---------- 어항: 물고기 성장 ----------
+{
+  const F = await import("../js/fish.js");
+  const now = Date.UTC(2026, 0, 1);
+  const P = F.PERIOD_MS;
+
+  // 같은 입력이면 어디서 계산해도 같아야 한다(기기마다 크기가 달라지면 안 됨)
+  const f = { seed: 12345, createdAt: now - P * 30, fed: 0 };
+  check("성장이 결정적", F.sizeOf(f, now) === F.sizeOf({ ...f }, now));
+
+  // 갓 넣은 물고기는 기본 크기
+  check("갓 그린 물고기는 기본 크기",
+    F.sizeOf({ seed: 1, createdAt: now, fed: 0 }, now) === F.BASE_SIZE);
+
+  // 시간이 지나면 자란다
+  const a = F.sizeOf({ seed: 7, createdAt: now - P * 5, fed: 0 }, now);
+  const b = F.sizeOf({ seed: 7, createdAt: now - P * 20, fed: 0 }, now);
+  check("오래될수록 큼", b > a, `${a} < ${b}`);
+
+  // 20분이 안 지나면 안 자란다 (구간이 20분)
+  const c1 = F.sizeOf({ seed: 3, createdAt: now - P + 1000, fed: 0 }, now);
+  check("20분 안에는 그대로", c1 === F.BASE_SIZE, c1);
+
+  // 성장률은 구간마다 다르다
+  const rates = new Set([0, 1, 2, 3, 4].map((i) => F.periodGrowth(99, i).toFixed(6)));
+  check("구간마다 성장률이 다름", rates.size >= 4, [...rates]);
+
+  // 상한을 넘지 않는다 (2000마리가 화면을 뒤덮지 않게)
+  check("최대 크기에서 멈춤",
+    F.sizeOf({ seed: 5, createdAt: 0, fed: 9 }, now) === F.MAX_SIZE);
+
+  // 밥은 확률적으로 키운다 — 먹은 만큼 결정적으로 더해진다
+  const noFeed = F.sizeOf({ seed: 42, createdAt: now - P * 10, fed: 0 }, now);
+  const fed2 = F.sizeOf({ seed: 42, createdAt: now - P * 10, fed: 2 }, now);
+  check("밥을 먹으면 작아지지는 않음", fed2 >= noFeed, [noFeed, fed2]);
+
+  // 무게는 길이의 세제곱 — 랭킹이 크기 순서와 같아야 한다
+  const small = { seed: 1, createdAt: now - P * 3, fed: 0 };
+  const big = { seed: 1, createdAt: now - P * 40, fed: 0 };
+  check("무게 순서가 크기 순서와 같음",
+    F.weightOf(big, now) > F.weightOf(small, now));
+  check("무게 표기", F.formatWeight(1500) === "1.50 kg" && F.formatWeight(240) === "240 g");
+
+  // 다음 성장까지 남은 시간
+  const left = F.msToNextGrowth({ createdAt: now - P - 60000 }, now);
+  check("다음 성장까지 남은 시간", left > 0 && left <= P, left);
+}
+
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패\n`);
 process.exit(fail ? 1 : 0);

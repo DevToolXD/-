@@ -100,3 +100,10 @@ export const query = need("query");
 export const orderBy = need("orderBy");
 export const limit = need("limit");
 export const serverTimestamp = need("serverTimestamp");
+
+// 실시간 구독. 어항에서 누가 물고기를 넣거나 밥을 주면 다른 사람 화면에도
+// 바로 보여야 해서 쓴다. CDN 로드가 실패했으면 아무 것도 하지 않는 해제
+// 함수를 돌려준다 — 호출한 쪽이 분기하지 않아도 되게.
+export const onSnapshot = firestoreApi
+  ? (...args) => firestoreApi.onSnapshot(...args)
+  : () => () => {};

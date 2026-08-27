@@ -75,6 +75,39 @@ service cloud.firestore {
         allow delete: if validClassCode(code);
       }
 
+      // ---- 어항: 반마다 하나. 학생이 그린 물고기가 쌓인다 ----
+      //  크기는 저장하지 않는다. seed 와 createdAt 으로 매번 계산하므로
+      //  2000마리가 20분마다 쓰기를 일으키는 일이 없다.
+      //  밥은 fed 를 +1 하는 것만 허용한다(다른 필드는 못 건드림).
+      match /fish/{id} {
+        allow get, list: if validClassCode(code);
+        allow create: if smallDoc()
+          && request.resource.data.keys().hasOnly(
+               ['ownerId','ownerName','name','art','seed','fed','createdAt'])
+          && cleanStr(request.resource.data.ownerId, 64)
+          && cleanStr(request.resource.data.ownerName, 40)
+          && cleanStr(request.resource.data.name, 20)
+          && request.resource.data.art is string
+          && request.resource.data.art.size() >= 4
+          && request.resource.data.art.size() <= 1400
+          && request.resource.data.seed is int
+          && request.resource.data.seed >= 0
+          && request.resource.data.fed == 0
+          && serverTime(request.resource.data.createdAt);
+        // 밥주기: fed 를 정확히 1 늘리는 것만. 그림·주인·시각은 못 바꾼다.
+        allow update: if request.resource.data.keys().hasOnly(
+               ['ownerId','ownerName','name','art','seed','fed','createdAt'])
+          && request.resource.data.fed == resource.data.fed + 1
+          && request.resource.data.fed <= 9
+          && request.resource.data.art == resource.data.art
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.name == resource.data.name
+          && request.resource.data.seed == resource.data.seed
+          && request.resource.data.createdAt == resource.data.createdAt;
+        // 정리는 선생님·전체 관리자 화면의 버튼으로만 (다른 컬렉션과 같은 신뢰 모델)
+        allow delete: if validClassCode(code);
+      }
+
       // ---- 신고함: 검열에 걸린 투표 항목 시도가 담임선생님께 쌓인다 ----
       //  선생님 화면에서만 목록을 보여주지만, Auth 없는 이 스택에서는
       //  규칙만으로 "선생님만 읽기"를 강제할 수 없다(광고 문의와 동일한 한계).

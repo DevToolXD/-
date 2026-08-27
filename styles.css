@@ -2081,6 +2081,142 @@ body.theme-mono .wish-cinema-rays,
 body.theme-mono .scratch-dust { filter: grayscale(1); }
 
 
+/* =============================================================
+   어항
+   =============================================================
+   물고기는 canvas 한 장에 그린다(2000마리를 DOM 으로는 못 버틴다).
+   스크롤은 안쪽의 큰 빈 판(.tank-world)이 만들고, canvas 는 보이는
+   자리에 고정해 둔 채 카메라 좌표만 옮긴다. 그래서 스크롤해도 캔버스를
+   다시 만들지 않는다.
+   ============================================================= */
+.tank-page { max-width: none; }
+.tank-head { align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.tank-actions { flex-wrap: wrap; }
+.tank-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 6px 0 10px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.tank-stat { white-space: nowrap; }
+
+.tank-viewport {
+  position: relative;
+  height: min(62vh, 560px);
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: #0b3f77;
+  cursor: crosshair;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.tank-viewport:focus-visible { outline: 2px solid var(--green-500); outline-offset: 2px; }
+/* 스크롤 거리를 만드는 빈 판. 실제 그림은 canvas 가 그린다. */
+.tank-world { width: 6400px; height: 3200px; position: relative; }
+#tank-canvas {
+  position: sticky;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+}
+
+/* 커서를 대면 뜨는 이름표 */
+.tank-tip {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: rgba(8, 30, 55, 0.9);
+  color: #fff;
+  font-size: 0.82rem;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+.tank-tip .muted { color: rgba(255, 255, 255, 0.65); }
+
+/* 어항 위에 겹쳐 뜨는 목록 */
+.tank-panel {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  z-index: 6;
+  width: min(320px, calc(100% - 32px));
+  max-height: min(52vh, 420px);
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: var(--card-shadow);
+}
+.tank-panel.hidden { display: none; }
+.tank-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tank-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.tank-item:hover { background: var(--glass-bg); }
+.tank-rank {
+  min-width: 22px;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.tank-thumb { width: 44px; height: 30px; flex: none; }
+.tank-item-main { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.tank-item-main b { font-size: 0.9rem; }
+.tank-weight {
+  margin-left: auto;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 그리기 판 */
+.fish-modal { max-width: 320px; }
+#fish-pad {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  margin: 10px 0;
+  border-radius: 12px;
+  background: #eaf4ff;
+  border: 1px solid var(--glass-border);
+  touch-action: none;
+  cursor: crosshair;
+}
+.fish-pad-tools { justify-content: center; margin-bottom: 8px; }
+
+@media (max-width: 700px) {
+  .tank-viewport { height: 56vh; }
+  .tank-panel { right: 10px; left: 10px; width: auto; }
+}
+
 /* ---- 전체 관리자: 서버 규칙 상태 ---- */
 .rules-state {
   margin: 4px 0 12px;

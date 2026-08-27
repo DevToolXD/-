@@ -17,6 +17,7 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  onSnapshot,
 } from "./firebase.js?v=DEV";
 import { randomHex, hashSecret, safeEqual } from "./crypto.js?v=DEV";
 import { buildCycle } from "./assign.js?v=DEV";
@@ -595,14 +596,85 @@ export async function checkRulesPublished() {
     try { await getDocs(collection(db, name)); return true; }
     catch { return false; }
   };
-  const [adminAccounts, eggStats, voteBallots, securityLog] = await Promise.all([
+  const probePath = async (...parts) => {
+    try { await getDocs(collection(db, ...parts)); return true; } catch { return false; }
+  };
+  const [adminAccounts, eggStats, voteBallots, securityLog, fish] = await Promise.all([
     probe("adminAccounts"), probe("eggStats"),
     probe("voteBallots"), probe("securityLog"),
+    probePath("classes", "0603", "fish"),
   ]);
   return {
-    adminAccounts, eggStats, voteBallots, securityLog,
-    ok: adminAccounts && eggStats && voteBallots && securityLog,
+    adminAccounts, eggStats, voteBallots, securityLog, fish,
+    ok: adminAccounts && eggStats && voteBallots && securityLog && fish,
   };
+}
+
+// ---------- 어항 ----------
+//  반마다 하나. 물고기 크기는 저장하지 않는다 — seed 와 createdAt 으로
+//  매번 계산한다(js/fish.js). 그래서 앱을 꺼둬도 자라고, 2000마리가
+//  20분마다 쓰기를 일으키지도 않는다.
+const fishCol = (code) => collection(db, "classes", code, "fish");
+const fishDoc = (code, id) => doc(db, "classes", code, "fish", id);
+
+export async function addFish(code, ownerId, ownerName, name, art) {
+  const ref = await addDoc(fishCol(code), {
+    ownerId: String(ownerId).slice(0, 64),
+    ownerName: sanitizeText(ownerName, APP.maxNameLength) || "이름 없음",
+    name: sanitizeText(name, 20) || "물고기",
+    art: String(art).slice(0, 1400),
+    seed: Math.floor(Math.random() * 1000000),
+    fed: 0,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function listFish(code) {
+  const snap = await getDocs(fishCol(code));
+  const out = [];
+  snap.forEach((d) => out.push(readFish(d)));
+  return out;
+}
+
+// Firestore 타임스탬프를 ms 로 펴서 준다. 방금 만든 문서는 서버 시각이
+// 아직 안 와서 null 일 수 있는데, 그때는 지금 시각으로 본다.
+function readFish(d) {
+  const v = d.data() || {};
+  const t = v.createdAt;
+  const ms = t && typeof t.toMillis === "function" ? t.toMillis()
+    : (t instanceof Date ? t.getTime() : Date.now());
+  return { id: d.id, ...v, createdAt: ms };
+}
+
+/** 어항을 실시간으로 구독한다. 해제 함수를 돌려준다. */
+export function watchFish(code, onChange) {
+  try {
+    return onSnapshot(fishCol(code), (snap) => {
+      const out = [];
+      snap.forEach((d) => out.push(readFish(d)));
+      onChange(out);
+    }, () => {});
+  } catch {
+    return () => {};
+  }
+}
+
+/** 밥주기: fed 를 1 늘린다. 규칙이 +1 외에는 막는다. */
+export async function feedFish(code, fish) {
+  await updateDoc(fishDoc(code, fish.id), { fed: (Number(fish.fed) || 0) + 1 });
+}
+
+export async function deleteFish(code, id) {
+  await deleteDoc(fishDoc(code, id));
+}
+
+export async function clearFishTank(code) {
+  const snap = await getDocs(fishCol(code));
+  const jobs = [];
+  snap.forEach((d) => jobs.push(deleteDoc(d.ref)));
+  await Promise.all(jobs);
+  return jobs.length;
 }
 
 // ---------- 투표 기록 (같은 사람이 두 번 투표하지 못하게) ----------
