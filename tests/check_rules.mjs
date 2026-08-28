@@ -36,6 +36,8 @@ const CHECKS = [
     why: "개발자 도구를 열어 본 흔적" },
   { name: "어항(fish) 목록 읽기", run: () => list("classes/0603/fish"),
     why: "6학년 3반 어항" },
+  { name: "어항 밥 나눠주기 목록 읽기", run: () => list("classes/0603/foodGrants"),
+    why: "전체 관리자 화면의 '어항 밥 주기'" },
 ];
 // 이미 열려 있어야 정상인 자리들 — 여기서 막히면 규칙이 잘못 올라간 것이다.
 const SHOULD_WORK = [

@@ -33,10 +33,22 @@ function showView(name) {
   const backBtn = $("#btn-back");
   backBtn.classList.toggle("hidden", name === "class-gate");
   backBtn.textContent = LOGGED_IN_VIEWS.includes(name) ? "로그아웃" : "뒤로";
-  // 학생 홈에서만 고정 사이드바 + 햄버거 버튼 활성화
-  document.body.classList.toggle("student-mode", name === "student-home");
-  $("#sidebar-toggle").classList.toggle("hidden", name !== "student-home");
-  if (name !== "student-home") document.body.classList.remove("sidebar-collapsed");
+  // 사이드바는 학생 화면의 것이지만, 사이드바의 "관리자" 항목으로 들어가는
+  // 전체 관리자 패널에서도 그대로 있어야 한다. (예전에는 사이드바가 학생
+  // 화면 섹션 안에 들어 있어서, 패널로 넘어가면 통째로 같이 사라졌다.)
+  const withSidebar = name === "student-home" ||
+    (name === "super-admin" && !!student);
+  document.body.classList.toggle("student-mode", withSidebar);
+  $("#sidebar-toggle").classList.toggle("hidden", !withSidebar);
+  $("#student-sidebar").classList.toggle("hidden", !withSidebar);
+  $("#sidebar-backdrop").classList.toggle("hidden", !withSidebar);
+  if (!withSidebar) document.body.classList.remove("sidebar-collapsed");
+  // 패널에 들어가 있으면 사이드바에서도 "관리자"가 눌린 상태로 보이게.
+  // (학생 페이지 사이를 옮길 때의 표시는 openStudentPage 가 맡는다)
+  if (name === "super-admin") {
+    $$(".student-page-nav").forEach((b) =>
+      b.classList.toggle("active", b.dataset.page === "admin"));
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
   updateSpecialMode();
   updateAdminQuickBtn();
@@ -1229,27 +1241,115 @@ function setupScratchCard(name) {
 // =============================================================
 //  4) 선생님(학급 관리자)
 // =============================================================
+// 최초 등록은 두 걸음이다.
+//  1) 학년 선생님만 아는 열쇠(TEST_CODE, 1889)를 넣는다
+//  2) 그 반에서 쓸 비밀번호를 정한다
+// 예전에는 첫 사람이 아무 값이나 넣으면 그게 곧 그 반의 관리자 코드가 됐다.
+// 학생이 먼저 들어와 선생님 자리를 차지할 수 있었다는 뜻이다.
+let adminSetupStep = null;    // null=로그인 · "key"=열쇠 확인 · "pw"=비밀번호 정하기
+
 async function openAdminLogin() {
   showView("admin-login");
   $("#admin-code").value = "";
+  $("#admin-code2").value = "";
   setHint("#admin-login-hint", "");
   try {
     const exists = await data.adminConfigExists(classCode);
-    $("#admin-setup-note").textContent = exists
-      ? "관리자 코드를 입력하세요."
-      : "최초 실행입니다. 지금 입력하는 코드가 이 학급의 관리자 코드로 등록됩니다.";
+    adminSetupStep = exists ? null : "key";
   } catch {
-    $("#admin-setup-note").textContent = "";
+    adminSetupStep = null;
   }
+  renderAdminLoginStep();
+}
+
+function renderAdminLoginStep() {
+  const note = $("#admin-setup-note");
+  const label = $("#admin-code-label");
+  const input = $("#admin-code");
+  const second = $("#admin-code2-row");
+  const btn = $("#admin-login-btn");
+  second.classList.add("hidden");
+  if (adminSetupStep === "key") {
+    note.textContent = "이 학급은 아직 선생님 비밀번호가 없어요. 먼저 학년 선생님 열쇠를 넣어주세요.";
+    label.textContent = "학년 선생님 열쇠";
+    input.placeholder = "학년 선생님 열쇠";
+    btn.textContent = "다음";
+  } else if (adminSetupStep === "pw") {
+    note.textContent = "이제 이 학급에서 쓸 선생님 비밀번호를 정해주세요.";
+    label.textContent = "새 비밀번호";
+    input.placeholder = "새 비밀번호";
+    second.classList.remove("hidden");
+    btn.textContent = "등록";
+  } else {
+    note.textContent = "선생님 비밀번호를 입력하세요.";
+    label.textContent = "비밀번호";
+    input.placeholder = "비밀번호";
+    btn.textContent = "입장";
+  }
+  input.value = "";
+  $("#admin-code2").value = "";
+  input.focus();
 }
 
 $("#admin-code").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#admin-login-btn").click(); });
+$("#admin-code2").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#admin-login-btn").click(); });
 
 $("#admin-login-btn").addEventListener("click", async () => {
   const code = $("#admin-code").value;
-  if (!code) return setHint("#admin-login-hint", "코드를 입력해주세요.");
   const btn = $("#admin-login-btn");
   const lockKey = `${classCode}:admin`;
+
+  // 1걸음: 학년 선생님 열쇠. 틀리면 잠금 카운터가 올라간다.
+  if (adminSetupStep === "key") {
+    if (!code) return setHint("#admin-login-hint", "열쇠를 입력해주세요.");
+    try {
+      guard.assertLoginAllowed(lockKey);
+      guard.spendToken("login");
+    } catch (e) {
+      return setHint("#admin-login-hint", e.message);
+    }
+    if (code.trim() !== TEST_CODE) {
+      const st = guard.noteLoginFailure(lockKey);
+      const left = guard.loginLockLeft(lockKey);
+      return setHint("#admin-login-hint", left > 0
+        ? `열쇠가 올바르지 않습니다. ${Math.ceil(left / 1000)}초 동안 잠깁니다. (${st.fails}번째 실패)`
+        : "열쇠가 올바르지 않습니다.");
+    }
+    guard.clearLoginFailures(lockKey);
+    adminSetupStep = "pw";
+    renderAdminLoginStep();
+    return;
+  }
+
+  // 2걸음: 이 학급에서 쓸 비밀번호 정하기 (두 번 같게)
+  if (adminSetupStep === "pw") {
+    const again = $("#admin-code2").value;
+    if (code.length < 4) return setHint("#admin-login-hint", "비밀번호는 4자 이상으로 정해주세요.");
+    if (code !== again) return setHint("#admin-login-hint", "두 비밀번호가 서로 달라요.");
+    busy(btn, true, "등록 중…");
+    try {
+      if (await data.adminConfigExists(classCode)) {
+        // 그 사이 누가 먼저 등록했으면 그냥 로그인 화면으로 되돌린다
+        adminSetupStep = null;
+        renderAdminLoginStep();
+        return setHint("#admin-login-hint", "이미 등록됐어요. 비밀번호로 들어와 주세요.");
+      }
+      await data.setupAdmin(classCode, code);
+      adminSetupStep = null;
+      guard.clearLoginFailures(lockKey);
+      adminSession = { code };
+      await saveSession({ classCode, role: "admin" });
+      toast("선생님 비밀번호가 등록되었습니다.");
+      await enterAdminHome();
+    } catch (e) {
+      setHint("#admin-login-hint", "오류: " + e.message);
+    } finally {
+      busy(btn, false);
+    }
+    return;
+  }
+
+  if (!code) return setHint("#admin-login-hint", "비밀번호를 입력해주세요.");
   try {
     guard.assertLoginAllowed(lockKey);
     guard.spendToken("login");
@@ -1260,8 +1360,10 @@ $("#admin-login-btn").addEventListener("click", async () => {
   try {
     const exists = await data.adminConfigExists(classCode);
     if (!exists) {
-      await data.setupAdmin(classCode, code);
-      toast("관리자 코드가 등록되었습니다.");
+      // 여기까지 왔는데 아직 없다면 최초 등록 흐름으로 돌려보낸다
+      adminSetupStep = "key";
+      renderAdminLoginStep();
+      return setHint("#admin-login-hint", "먼저 학년 선생님 열쇠가 필요해요.");
     } else {
       const ok = await data.verifyAdmin(classCode, code);
       if (!ok) {
@@ -1270,8 +1372,8 @@ $("#admin-login-btn").addEventListener("click", async () => {
         setHint(
           "#admin-login-hint",
           left > 0
-            ? `관리자 코드가 올바르지 않습니다. ${Math.ceil(left / 1000)}초 동안 잠깁니다. (${st.fails}번째 실패)`
-            : "관리자 코드가 올바르지 않습니다."
+            ? `비밀번호가 올바르지 않습니다. ${Math.ceil(left / 1000)}초 동안 잠깁니다. (${st.fails}번째 실패)`
+            : "비밀번호가 올바르지 않습니다."
         );
         return;
       }
@@ -1648,7 +1750,38 @@ async function enterSuperAdmin() {
   $("#sa-detail").classList.add("hidden");
   saCurrentCode = null;
   await Promise.all([refreshOverview(), refreshSaVotes(), refreshAdInbox(),
-                     refreshAdminAccounts(), refreshSecurityLog(), refreshRulesState()]);
+                     refreshAdminAccounts(), refreshSecurityLog(), refreshRulesState(),
+                     refreshFoodGrants()]);
+}
+
+// ---- 어항 밥 나눠주기 ----
+//  어항이 있는 반(TANK_CLASS)의 학생 목록을 뽑아, 고른 학생에게 밥을 더 준다.
+//  규칙이 아직 안 올라갔으면 목록이 비어 나오고 칸 자체를 숨긴다 — 권한
+//  오류 문구가 화면에 뜨는 일은 없다.
+async function refreshFoodGrants() {
+  const card = $("#sa-food");
+  const sel = $("#sa-food-student");
+  const body = $("#sa-food-body");
+  if (!card) return;
+  try {
+    const [students, grants] = await Promise.all([
+      data.listStudents(TANK_CLASS),
+      data.listFoodGrants(TANK_CLASS),
+    ]);
+    if (!students.length) { card.classList.add("hidden"); return; }
+    card.classList.remove("hidden");
+    const keep = sel.value;
+    sel.innerHTML = students
+      .map((st) => `<option value="${escapeHtml(st.id)}">${escapeHtml(st.name)}</option>`)
+      .join("");
+    if (keep && students.some((st) => st.id === keep)) sel.value = keep;
+    const given = students.filter((st) => grants[st.id] > 0);
+    body.innerHTML = given.length
+      ? given.map((st) => `<tr><td>${escapeHtml(st.name)}</td><td>${grants[st.id]}개</td></tr>`).join("")
+      : `<tr><td colspan="2" class="muted small">아직 밥을 준 학생이 없어요.</td></tr>`;
+  } catch {
+    card.classList.add("hidden");
+  }
 }
 
 async function refreshOverview() {
@@ -1860,6 +1993,26 @@ async function refreshAdminAccounts() {
   }
 }
 $("#sa-admins-refresh").addEventListener("click", refreshAdminAccounts);
+$("#sa-food-refresh").addEventListener("click", refreshFoodGrants);
+$("#sa-food-give").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const id = $("#sa-food-student").value;
+  const name = $("#sa-food-student").selectedOptions[0]?.textContent || "";
+  const n = Math.max(1, Math.min(50, Math.floor(Number($("#sa-food-n").value) || 0)));
+  if (!id) return setHint("#sa-food-hint", "학생을 골라주세요.", false);
+  if (!(await ensureRole("superadmin"))) return;
+  if (!useToken("reportOp")) return;
+  busy(btn, true, "주는 중…");
+  try {
+    await data.giveFood(TANK_CLASS, id, n);
+    setHint("#sa-food-hint", `${name}에게 밥 ${n}개를 줬어요.`, true);
+    await refreshFoodGrants();
+  } catch (err) {
+    setHint("#sa-food-hint", "밥을 주지 못했어요: " + err.message, false);
+  } finally {
+    busy(btn, false);
+  }
+});
 
 // ---------- 서버 규칙: 상태 확인 + 한 번에 붙여 넣기 ----------
 //  콘솔에 규칙을 붙여 넣었는지 눈으로 확인할 방법이 없어서, 실제로 읽어 보고
@@ -2716,8 +2869,9 @@ const TANK_CLASS = "0603";              // 어항이 있는 반
 const TANK_W = 2140, TANK_H = 1070;     // 어항 한 판의 크기(px)
 const TANK_CAP = 2000;                  // 최대 마리 수
 const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
-const FOOD_MAX = 2;                     // 손에 들 수 있는 밥
-const FOOD_INTERVAL = 24 * 60 * 60 * 1000;  // 하루에 하나
+const FOOD_PER_DAY = 3;                 // 하루에 생기는 밥
+const FOOD_MAX = 6;                     // 손에 들 수 있는 밥(이틀치까지 모임)
+const FOOD_INTERVAL = 24 * 60 * 60 * 1000;
 const CATCHUP_MS = 30 * 60 * 1000;      // 이만큼 지나 있으면 자라는 걸 보여준다
 
 // ---- 확대/축소 (그림 그리는 앱처럼) ----
@@ -2752,6 +2906,9 @@ const tankState = {
   pellets: [],        // 물에 떠다니는 밥알
   frameAt: 0,
   pan: null,          // 끌어서 옮기는 중
+  armed: false,       // 밥을 집어 든 상태 — 이때만 뿌릴 수 있다
+  grantTotal: 0,      // 선생님이 지금까지 준 밥의 누적 개수
+  grantUnsub: null,
 };
 
 const tankKey = (k) => `manito.tank.${k}:${classCode}:${student?.id || "-"}`;
@@ -3198,15 +3355,42 @@ function foodCount() {
   const now = Date.now();
   let n = Number(lsGet(tankKey("food")) || 0);
   let last = Number(lsGet(tankKey("foodAt")) || 0);
-  if (!last) { last = now; lsSet(tankKey("foodAt"), String(now)); n = 1; }
-  const gained = Math.floor((now - last) / FOOD_INTERVAL);
-  if (gained > 0) {
-    n = Math.min(FOOD_MAX, n + gained);
-    lsSet(tankKey("foodAt"), String(last + gained * FOOD_INTERVAL));
+  if (!last) { last = now; lsSet(tankKey("foodAt"), String(now)); n = FOOD_PER_DAY; }
+  const days = Math.floor((now - last) / FOOD_INTERVAL);
+  if (days > 0) {
+    n = Math.min(FOOD_MAX, n + days * FOOD_PER_DAY);
+    lsSet(tankKey("foodAt"), String(last + days * FOOD_INTERVAL));
   }
+  // 선생님이 따로 넣어준 밥을 받아온다(받은 만큼만 한 번씩 더해진다)
+  n = Math.min(FOOD_MAX, n + claimFoodGrant());
   n = Math.max(0, Math.min(FOOD_MAX, n));
   lsSet(tankKey("food"), String(n));
   return n;
+}
+
+// 새로 받은 누적값을 손안의 밥에 반영한다. announce 는 "받았어요" 를
+// 띄울지 여부 — 어항을 열 때의 첫 확인에서는 조용히 넘어간다.
+function applyFoodGrant(total, announce) {
+  const had = tankState.grantTotal;
+  tankState.grantTotal = Math.max(had, Number(total) || 0);
+  const gained = claimFoodGrant();
+  if (gained > 0) {
+    const n = Math.min(FOOD_MAX, Number(lsGet(tankKey("food")) || 0) + gained);
+    lsSet(tankKey("food"), String(n));
+    if (announce && had) toast(`선생님이 밥 ${gained}개를 주셨어요!`);
+  }
+  refreshFoodLabel();
+}
+
+// 선생님이 준 밥은 "지금까지 준 누적 개수"로 서버에 쌓인다. 여기서는 아직
+// 안 받은 몫(누적 - 이미 받은 몫)만 꺼내 온다. 그래서 새로고침해도 두 번
+// 받지 않고, 서버가 막혀 있어도 그냥 0이 되어 아무 일도 일어나지 않는다.
+function claimFoodGrant() {
+  const total = Number(tankState.grantTotal || 0);
+  const seen = Number(lsGet(tankKey("grantSeen")) || 0);
+  if (!(total > seen)) return 0;
+  lsSet(tankKey("grantSeen"), String(total));
+  return total - seen;
 }
 function spendFood() {
   const n = foodCount();
@@ -3215,8 +3399,28 @@ function spendFood() {
   return true;
 }
 function refreshFoodLabel() {
+  const n = foodCount();
   const el = $("#tank-food");
-  if (el) el.textContent = `밥 ${foodCount()}개`;
+  if (el) el.textContent = `밥 ${n}개`;
+  const btn = $("#tank-feed-btn");
+  if (!btn) return;
+  btn.disabled = n <= 0;
+  btn.classList.toggle("armed", tankState.armed);
+  btn.textContent = tankState.armed ? "밥 취소" : "밥 주기";
+}
+
+// 밥을 집었다 놓았다 한다. 집은 상태에서만 어항을 눌러 뿌릴 수 있다 —
+// 예전에는 어항 아무 데나 누르면 바로 밥이 나가서, 그냥 둘러보다가
+// 실수로 하루치를 써버리는 일이 있었다.
+function setArmed(on) {
+  if (on && foodCount() <= 0) {
+    setHint("#tank-hint", "밥이 없어요. 하루에 3개씩 생겨요.", false);
+    return;
+  }
+  tankState.armed = !!on;
+  setHint("#tank-hint", on ? "밥을 집었어요 — 뿌릴 곳을 눌러보세요." : "", true);
+  $("#tank-viewport")?.classList.toggle("feeding", tankState.armed);
+  refreshFoodLabel();
 }
 
 // ---- 밥 뿌리기 ----
@@ -3258,7 +3462,8 @@ function scatterPellets(wx, wy, now) {
 async function throwFood(wx, wy) {
   const now = Date.now();
   if (foodCount() <= 0) {
-    setHint("#tank-hint", "밥이 없어요. 하루에 하나씩 생겨요.", false);
+    setArmed(false);
+    setHint("#tank-hint", "밥이 없어요. 하루에 3개씩 생겨요.", false);
     return;
   }
   const near = feedableFish(now, wx, wy);
@@ -3276,6 +3481,8 @@ async function throwFood(wx, wy) {
   if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
   if (!useToken("wish")) return;
   if (!spendFood()) { refreshFoodLabel(); return; }
+  tankState.armed = false;                     // 한 번 뿌리면 손을 턴다
+  $("#tank-viewport")?.classList.remove("feeding");
   refreshFoodLabel();
 
   scatterPellets(wx, wy, now);
@@ -3337,6 +3544,8 @@ function openTank() {
   tankState.aggro.clear();
   tankState.pellets = [];
   tankState.follow = null;
+  tankState.armed = false;
+  vp.classList.remove("feeding");
   $("#tank-follow-note").textContent = "";
   zoomToFit();                       // 처음엔 어항 전체가 보이게
   refreshFoodLabel();
@@ -3365,6 +3574,15 @@ function openTank() {
       setHint("#tank-hint", `안 보는 사이 ${tankState.grow.size}마리가 자랐어요.`, true);
     }
   });
+  // 선생님이 넣어준 밥을 먼저 한 번 확인하고(실시간 통로가 막혀 있어도
+  // 받을 수 있게), 그 다음 실시간으로 지켜본다.
+  data.getFoodGrant(classCode, student?.id || "-")
+    .then((total) => applyFoodGrant(total, false))
+    .catch(() => {});
+  if (tankState.grantUnsub) tankState.grantUnsub();
+  tankState.grantUnsub = data.watchFoodGrant(classCode, student?.id || "-",
+    (total) => applyFoodGrant(total, true));
+
   lsSet(tankKey("seenAt"), String(now));
   if (!tankState.raf) tankLoop();
 }
@@ -3373,6 +3591,7 @@ function closeTank() {
   if (tankState.raf) { cancelAnimationFrame(tankState.raf); tankState.raf = null; }
   tankState.aggro.clear();
   tankState.pellets = [];
+  if (tankState.grantUnsub) { tankState.grantUnsub(); tankState.grantUnsub = null; }
   lsSet(tankKey("seenAt"), String(Date.now()));
   closeTankPanel();
 }
@@ -3636,6 +3855,7 @@ function openFishModal(open) {
       catch (err) { setHint("#tank-hint", "실패: " + err.message, false); }
       return;
     }
+    if (!tankState.armed) return;              // 밥을 집어야 뿌릴 수 있다
     const [wx, wy] = toWorld(px, py);
     await throwFood(wx, wy);
   });
@@ -3654,6 +3874,7 @@ function openFishModal(open) {
     }
   });
 
+  $("#tank-feed-btn").addEventListener("click", () => setArmed(!tankState.armed));
   $("#tank-mine-btn").addEventListener("click", () => openTankPanel("mine"));
   $("#tank-rank-btn").addEventListener("click", () => openTankPanel("rank"));
   $("#tank-panel-close").addEventListener("click", closeTankPanel);

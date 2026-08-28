@@ -671,6 +671,58 @@ export function watchFish(code, onChange) {
   }
 }
 
+// ---- 밥 나눠주기 ----
+//  선생님이 학생에게 밥을 더 준다. 문서에는 "지금까지 준 누적 개수"만
+//  적히고 줄지 않는다. 학생 쪽은 아직 안 받은 몫만 가져가므로 새로고침해도
+//  같은 밥을 두 번 받지 못한다.
+const grantCol = (code) => collection(db, "classes", code, "foodGrants");
+const grantDoc = (code, id) => doc(db, "classes", code, "foodGrants", id);
+export const FOOD_GRANT_MAX = 999;
+
+/** 한 학생의 누적 밥 수를 n 만큼 늘린다. 늘어난 누적값을 돌려준다. */
+export async function giveFood(code, studentId, n) {
+  const add = Math.max(1, Math.min(50, Math.floor(Number(n) || 0)));
+  const ref = grantDoc(code, String(studentId).slice(0, 64));
+  const snap = await getDoc(ref);
+  const now = snap.exists() ? Number(snap.data()?.total) || 0 : 0;
+  const total = Math.min(FOOD_GRANT_MAX, now + add);
+  if (total <= now) throw new Error("더 줄 수 없어요 (최대 999개).");
+  await setDoc(ref, { total, updatedAt: serverTimestamp() }, { merge: true });
+  return total;
+}
+
+/** 반 전체의 누적 밥 수. 규칙이 아직 안 올라갔으면 빈 객체를 돌려준다. */
+export async function listFoodGrants(code) {
+  try {
+    const snap = await getDocs(grantCol(code));
+    const out = {};
+    snap.forEach((d) => { out[d.id] = Number(d.data()?.total) || 0; });
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** 내 누적 밥 수를 한 번 읽는다. 막혀 있으면 0. */
+export async function getFoodGrant(code, studentId) {
+  try {
+    const snap = await getDoc(grantDoc(code, String(studentId).slice(0, 64)));
+    return Number(snap.data()?.total) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 내 누적 밥 수를 실시간으로 본다. 막혀 있으면 아무 것도 하지 않는다. */
+export function watchFoodGrant(code, studentId, onChange) {
+  try {
+    return onSnapshot(grantDoc(code, String(studentId).slice(0, 64)),
+      (d) => onChange(Number(d.data()?.total) || 0), () => {});
+  } catch {
+    return () => {};
+  }
+}
+
 /** 밥주기: fed 를 1 늘린다. 규칙이 +1 외에는 막는다. */
 export async function feedFish(code, fish) {
   const fed = Number(fish.fed) || 0;

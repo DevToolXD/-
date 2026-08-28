@@ -2141,6 +2141,32 @@ body.theme-mono .scratch-dust { filter: grayscale(1); }
   touch-action: none;
 }
 .tank-viewport:active { cursor: grabbing; }
+/* 밥을 집은 동안에는 커서로도 알려준다 */
+.tank-viewport.feeding { cursor: crosshair; }
+.tank-viewport.feeding::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px rgba(255, 217, 138, 0.85);
+}
+.sa-food-form { align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.sa-food-form select,
+.sa-food-form input {
+  margin: 0;
+  flex: none;
+  width: auto;
+}
+.sa-food-form select { min-width: 160px; max-width: 220px; }
+.sa-food-form input { width: 84px; }
+.sa-food-form .btn { flex: none; margin: 0; }
+
+#tank-feed-btn.armed {
+  background: #ffd98a;
+  border-color: #ffd98a;
+  color: #3a2a06;
+}
 .tank-viewport:focus-visible { outline: 2px solid var(--green-500); outline-offset: 2px; }
 /* 스크롤 거리를 만드는 빈 판. 크기는 배율에 맞춰 js 가 정한다. */
 .tank-world { width: 2140px; height: 1070px; position: relative; }

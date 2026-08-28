@@ -430,6 +430,54 @@
       <button id="btn-back" class="link-btn hidden">뒤로</button>
     </header>
 
+    <!-- 클로드 코드처럼 화면 왼쪽에 항상 고정된 진짜 사이드바.
+         상단의 줄 3개(햄버거) 버튼으로 열고 닫는다. -->
+    <aside id="student-sidebar" class="app-sidebar hidden">
+      <div class="app-sidebar-head">
+            <span class="app-sidebar-title">마니또</span>
+      </div>
+      <p class="eyebrow app-sidebar-eyebrow">메뉴</p>
+      <nav class="side-nav">
+        <button class="student-page-nav active" data-page="wish">
+          <span class="side-nav-code">1</span>
+          <span class="side-nav-label">나의 소원</span>
+        </button>
+        <button class="student-page-nav" data-page="friend">
+          <span class="side-nav-code">2</span>
+          <span class="side-nav-label">내가 도와주는 친구</span>
+        </button>
+        <button class="student-page-nav" data-page="scratch">
+          <span class="side-nav-code">3</span>
+          <span class="side-nav-label">긁어서 확인하기</span>
+        </button>
+        <button class="student-page-nav" data-page="vote">
+          <span class="side-nav-code">4</span>
+          <span class="side-nav-label">투표</span>
+        </button>
+        <button class="student-page-nav" data-page="feedback">
+          <span class="side-nav-code">5</span>
+          <span class="side-nav-label">버그 제보</span>
+        </button>
+        <button class="student-page-nav" data-page="theme">
+          <span class="side-nav-code">6</span>
+          <span class="side-nav-label">테마</span>
+        </button>
+        <button class="student-page-nav tank-nav hidden" id="side-nav-tank" data-page="tank">
+          <span class="side-nav-code">🐟</span>
+          <span class="side-nav-label">어항</span>
+        </button>
+        <!-- 관리자 권한이 있는 계정에만 나타나는 항목 -->
+        <button class="student-page-nav side-nav-admin hidden" id="side-nav-admin" data-page="admin">
+          <span class="side-nav-code">★</span>
+          <span class="side-nav-label">관리자</span>
+        </button>
+      </nav>
+      <div class="app-sidebar-foot">
+        <span id="sidebar-student-name" class="muted small"></span>
+      </div>
+    </aside>
+    <div id="sidebar-backdrop" class="sidebar-backdrop hidden" aria-hidden="true"></div>
+
     <main id="app">
       <!-- ============ 홈 (사이드바에서 학급 선택) ============ -->
       <section data-view="class-gate" class="view">
@@ -497,53 +545,6 @@
 
       <!-- ============ 학생 대시보드 ============ -->
       <section data-view="student-home" class="view hidden">
-        <!-- 클로드 코드처럼 화면 왼쪽에 항상 고정된 진짜 사이드바.
-             상단의 줄 3개(햄버거) 버튼으로 열고 닫는다. -->
-        <aside id="student-sidebar" class="app-sidebar">
-          <div class="app-sidebar-head">
-                <span class="app-sidebar-title">마니또</span>
-          </div>
-          <p class="eyebrow app-sidebar-eyebrow">메뉴</p>
-          <nav class="side-nav">
-            <button class="student-page-nav active" data-page="wish">
-              <span class="side-nav-code">1</span>
-              <span class="side-nav-label">나의 소원</span>
-            </button>
-            <button class="student-page-nav" data-page="friend">
-              <span class="side-nav-code">2</span>
-              <span class="side-nav-label">내가 도와주는 친구</span>
-            </button>
-            <button class="student-page-nav" data-page="scratch">
-              <span class="side-nav-code">3</span>
-              <span class="side-nav-label">긁어서 확인하기</span>
-            </button>
-            <button class="student-page-nav" data-page="vote">
-              <span class="side-nav-code">4</span>
-              <span class="side-nav-label">투표</span>
-            </button>
-            <button class="student-page-nav" data-page="feedback">
-              <span class="side-nav-code">5</span>
-              <span class="side-nav-label">버그 제보</span>
-            </button>
-            <button class="student-page-nav" data-page="theme">
-              <span class="side-nav-code">6</span>
-              <span class="side-nav-label">테마</span>
-            </button>
-            <button class="student-page-nav tank-nav hidden" id="side-nav-tank" data-page="tank">
-              <span class="side-nav-code">🐟</span>
-              <span class="side-nav-label">어항</span>
-            </button>
-            <!-- 관리자 권한이 있는 계정에만 나타나는 항목 -->
-            <button class="student-page-nav side-nav-admin hidden" id="side-nav-admin" data-page="admin">
-              <span class="side-nav-code">★</span>
-              <span class="side-nav-label">관리자</span>
-            </button>
-          </nav>
-          <div class="app-sidebar-foot">
-            <span id="sidebar-student-name" class="muted small"></span>
-          </div>
-        </aside>
-        <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
         <div class="student-content">
           <div class="student-page-area">
@@ -649,6 +650,7 @@
               </div>
               <div class="row-gap tank-actions">
                 <button id="tank-add-btn" class="btn btn-primary btn-sm">물고기 그리기</button>
+                <button id="tank-feed-btn" class="btn btn-ghost btn-sm">밥 주기</button>
                 <button id="tank-mine-btn" class="btn btn-ghost btn-sm">내 물고기</button>
                 <button id="tank-rank-btn" class="btn btn-ghost btn-sm">크기 순위</button>
                 <button id="tank-manage-btn" class="btn btn-ghost btn-sm hidden">관리</button>
@@ -700,9 +702,14 @@
         <div class="glass-card form-card">
           <h2>선생님 로그인</h2>
           <p class="muted small" id="admin-setup-note"></p>
-          <label><span class="label-text">관리자 코드</span>
-            <input id="admin-code" type="password" autocomplete="off" placeholder="관리자 코드" />
+          <label><span class="label-text" id="admin-code-label">비밀번호</span>
+            <input id="admin-code" type="password" autocomplete="off" placeholder="비밀번호" />
           </label>
+          <div id="admin-code2-row" class="hidden">
+            <label><span class="label-text">비밀번호 확인</span>
+              <input id="admin-code2" type="password" autocomplete="off" placeholder="한 번 더" />
+            </label>
+          </div>
           <p class="hint" id="admin-login-hint"></p>
           <button id="admin-login-btn" class="btn btn-primary btn-lg">입장</button>
         </div>
@@ -832,6 +839,27 @@
             <table class="tbl">
               <thead><tr><th>이름</th><th>도와주는 친구</th><th>소원</th><th></th></tr></thead>
               <tbody id="sa-detail-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 어항 밥 나눠주기 (어항이 있는 반만) -->
+        <div id="sa-food" class="glass-card">
+          <div class="row-between">
+            <h3>어항 밥 주기</h3>
+            <button id="sa-food-refresh" class="btn btn-ghost btn-sm">새로고침</button>
+          </div>
+          <p class="muted small">학생을 고르고 개수를 정해 밥을 더 줄 수 있어요. 준 밥은 되돌릴 수 없어요.</p>
+          <div class="row-gap sa-food-form">
+            <select id="sa-food-student" aria-label="학생"></select>
+            <input id="sa-food-n" type="number" min="1" max="50" value="1" aria-label="개수" />
+            <button id="sa-food-give" class="btn btn-primary btn-sm">밥 주기</button>
+          </div>
+          <p class="hint" id="sa-food-hint"></p>
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead><tr><th>이름</th><th>지금까지 받은 밥</th></tr></thead>
+              <tbody id="sa-food-body"></tbody>
             </table>
           </div>
         </div>

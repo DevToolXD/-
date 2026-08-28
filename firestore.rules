@@ -108,6 +108,32 @@ service cloud.firestore {
         allow delete: if validClassCode(code);
       }
 
+      // ---- 밥 나눠주기: 선생님이 학생에게 밥을 더 준다 ----
+      //  문서 하나가 학생 하나. total 은 "지금까지 준 누적 개수"라서 줄지
+      //  않는다. 학생 쪽은 아직 안 받은 몫(누적 - 이미 받은 몫)만 가져간다.
+      //  그래서 새로고침으로 같은 밥을 두 번 받을 수 없다.
+      //
+      //  ⚠️ Auth 가 없어 "선생님만 줄 수 있다"는 규칙으로 강제할 수 없다.
+      //  다른 컬렉션과 같은 신뢰 모델이며, total 이 줄지 않는 것과 상한만
+      //  규칙이 지킨다.
+      match /foodGrants/{studentId} {
+        allow get, list: if validClassCode(code);
+        allow create: if validClassCode(code) && smallDoc()
+          && request.resource.data.keys().hasOnly(['total','updatedAt'])
+          && request.resource.data.total is int
+          && request.resource.data.total > 0
+          && request.resource.data.total <= 999
+          && serverTime(request.resource.data.updatedAt);
+        // 늘리는 것만 허용한다(회수는 못 한다 — 이미 받아간 밥은 못 되돌린다)
+        allow update: if validClassCode(code) && smallDoc()
+          && request.resource.data.keys().hasOnly(['total','updatedAt'])
+          && request.resource.data.total is int
+          && request.resource.data.total > resource.data.total
+          && request.resource.data.total <= 999
+          && serverTime(request.resource.data.updatedAt);
+        allow delete: if validClassCode(code);
+      }
+
       // ---- 신고함: 검열에 걸린 투표 항목 시도가 담임선생님께 쌓인다 ----
       //  선생님 화면에서만 목록을 보여주지만, Auth 없는 이 스택에서는
       //  규칙만으로 "선생님만 읽기"를 강제할 수 없다(광고 문의와 동일한 한계).
