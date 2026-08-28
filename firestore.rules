@@ -118,18 +118,22 @@ service cloud.firestore {
       //  규칙이 지킨다.
       match /foodGrants/{studentId} {
         allow get, list: if validClassCode(code);
+        //  한 번에 늘릴 수 있는 폭(9999)을 제한한다. Auth 가 없어 "선생님만"은
+        //  강제할 수 없지만, 이 상한 덕분에 한 번의 위조 쓰기로 상한까지
+        //  단번에 채울 수는 없다.
         allow create: if validClassCode(code) && smallDoc()
           && request.resource.data.keys().hasOnly(['total','updatedAt'])
           && request.resource.data.total is int
           && request.resource.data.total > 0
-          && request.resource.data.total <= 999
+          && request.resource.data.total <= 9999
           && serverTime(request.resource.data.updatedAt);
         // 늘리는 것만 허용한다(회수는 못 한다 — 이미 받아간 밥은 못 되돌린다)
         allow update: if validClassCode(code) && smallDoc()
           && request.resource.data.keys().hasOnly(['total','updatedAt'])
           && request.resource.data.total is int
           && request.resource.data.total > resource.data.total
-          && request.resource.data.total <= 999
+          && request.resource.data.total <= resource.data.total + 9999
+          && request.resource.data.total <= 99999
           && serverTime(request.resource.data.updatedAt);
         allow delete: if validClassCode(code);
       }

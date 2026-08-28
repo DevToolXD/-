@@ -677,17 +677,35 @@ export function watchFish(code, onChange) {
 //  같은 밥을 두 번 받지 못한다.
 const grantCol = (code) => collection(db, "classes", code, "foodGrants");
 const grantDoc = (code, id) => doc(db, "classes", code, "foodGrants", id);
-export const FOOD_GRANT_MAX = 999;
+export const FOOD_GRANT_MAX = 99999;   // firestore.rules 의 total 상한과 같게
+export const FOOD_GRANT_STEP = 9999;   // 한 번에 늘릴 수 있는 폭(규칙과 같게)
 
 /** 한 학생의 누적 밥 수를 n 만큼 늘린다. 늘어난 누적값을 돌려준다. */
 export async function giveFood(code, studentId, n) {
-  const add = Math.max(1, Math.min(50, Math.floor(Number(n) || 0)));
+  // 한 번에 몇 개까지, 라는 제한은 두지 않는다. 누적 상한(FOOD_GRANT_MAX)만
+  // 규칙과 맞춰 지킨다.
+  // 규칙이 한 번에 9999 까지만 늘리도록 막고 있다. 넘겨 보내면 서버가
+  // 거절하고 그 오류가 화면에 뜨므로, 여기서 먼저 걸러 안내한다.
+  const add = Math.max(1, Math.floor(Number(n) || 0));
+  if (add > FOOD_GRANT_STEP) throw new Error(`한 번에 ${FOOD_GRANT_STEP}개까지 줄 수 있어요.`);
   const ref = grantDoc(code, String(studentId).slice(0, 64));
   const snap = await getDoc(ref);
   const now = snap.exists() ? Number(snap.data()?.total) || 0 : 0;
   const total = Math.min(FOOD_GRANT_MAX, now + add);
-  if (total <= now) throw new Error("더 줄 수 없어요 (최대 999개).");
-  await setDoc(ref, { total, updatedAt: serverTimestamp() }, { merge: true });
+  if (total <= now) throw new Error(`더 줄 수 없어요 (누적 ${FOOD_GRANT_MAX}개까지).`);
+  try {
+    await setDoc(ref, { total, updatedAt: serverTimestamp() }, { merge: true });
+  } catch (e) {
+    // 서버가 막았다면 대개 규칙이 예전 것이라 누적 상한이 낮은 경우다.
+    // "서버 준비가 안 됐어요" 보다 무엇을 해야 하는지 알려주는 게 낫다.
+    if (e?.code === "permission-denied") {
+      throw new Error(
+        `서버가 거절했어요. Firebase 콘솔에 firestore.rules 를 다시 게시해 주세요. ` +
+        `(지금 주려는 누적: ${total}개)`
+      );
+    }
+    throw e;
+  }
   return total;
 }
 

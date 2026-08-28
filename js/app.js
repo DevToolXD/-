@@ -5,6 +5,7 @@ import * as data from "./data.js?v=DEV";
 import { BLOCK_MESSAGE, screenVoteLabel } from "./moderation.js?v=DEV";
 import * as guard from "./guard.js?v=DEV";
 import * as fishlib from "./fish.js?v=DEV";
+import { eul, iga } from "./korean.js?v=DEV";
 import { THEMES, THEME_IDS, THEME_GROUPS, DEFAULT_THEME, isTheme, getTheme }
   from "./themes.js?v=DEV";
 import { classLabel, isValidClassCode, TEST_CODE, SUPER_ADMIN, firebaseConfig }
@@ -1897,7 +1898,7 @@ $("#sa-back-btn").addEventListener("click", () => {
 
 $("#sa-reassign-btn").addEventListener("click", async (e) => {
   if (!saCurrentCode) return;
-  if (!(await confirmModal(`${classLabel(saCurrentCode)}을(를) 재배정할까요? 기존 소원이 초기화됩니다.`))) return;
+  if (!(await confirmModal(`${eul(classLabel(saCurrentCode))} 재배정할까요? 기존 소원이 초기화됩니다.`))) return;
   if (!(await ensureRole("superadmin"))) return;
   if (!useToken("assign", "#sa-detail-hint")) return;
   const btn = e.currentTarget;
@@ -1998,10 +1999,10 @@ $("#sa-food-give").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
   const id = $("#sa-food-student").value;
   const name = $("#sa-food-student").selectedOptions[0]?.textContent || "";
-  const n = Math.max(1, Math.min(50, Math.floor(Number($("#sa-food-n").value) || 0)));
+  const n = Math.max(1, Math.floor(Number($("#sa-food-n").value) || 0));
   if (!id) return setHint("#sa-food-hint", "학생을 골라주세요.", false);
   if (!(await ensureRole("superadmin"))) return;
-  if (!useToken("reportOp")) return;
+  if (!useToken("foodGrant")) return;
   busy(btn, true, "주는 중…");
   try {
     await data.giveFood(TANK_CLASS, id, n);
@@ -2870,7 +2871,8 @@ const TANK_W = 2140, TANK_H = 1070;     // 어항 한 판의 크기(px)
 const TANK_CAP = 2000;                  // 최대 마리 수
 const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
 const FOOD_PER_DAY = 3;                 // 하루에 생기는 밥
-const FOOD_MAX = 6;                     // 손에 들 수 있는 밥(이틀치까지 모임)
+const FOOD_MAX = 6;                     // 저절로 쌓이는 밥의 상한(이틀치)
+const FOOD_HARD_MAX = 999;              // 선생님이 준 밥까지 합친 최대
 const FOOD_INTERVAL = 24 * 60 * 60 * 1000;
 const CATCHUP_MS = 30 * 60 * 1000;      // 이만큼 지나 있으면 자라는 걸 보여준다
 
@@ -3358,12 +3360,14 @@ function foodCount() {
   if (!last) { last = now; lsSet(tankKey("foodAt"), String(now)); n = FOOD_PER_DAY; }
   const days = Math.floor((now - last) / FOOD_INTERVAL);
   if (days > 0) {
-    n = Math.min(FOOD_MAX, n + days * FOOD_PER_DAY);
+    // 저절로 생기는 밥만 하루치 상한에 걸린다(안 들어온 동안 무한정 쌓이지
+    // 않게). 이미 손에 그보다 많으면 — 선생님이 준 밥 — 줄이지는 않는다.
+    n = Math.max(n, Math.min(FOOD_MAX, n + days * FOOD_PER_DAY));
     lsSet(tankKey("foodAt"), String(last + days * FOOD_INTERVAL));
   }
   // 선생님이 따로 넣어준 밥을 받아온다(받은 만큼만 한 번씩 더해진다)
-  n = Math.min(FOOD_MAX, n + claimFoodGrant());
-  n = Math.max(0, Math.min(FOOD_MAX, n));
+  n = n + claimFoodGrant();
+  n = Math.max(0, Math.min(FOOD_HARD_MAX, n));
   lsSet(tankKey("food"), String(n));
   return n;
 }
@@ -3375,7 +3379,9 @@ function applyFoodGrant(total, announce) {
   tankState.grantTotal = Math.max(had, Number(total) || 0);
   const gained = claimFoodGrant();
   if (gained > 0) {
-    const n = Math.min(FOOD_MAX, Number(lsGet(tankKey("food")) || 0) + gained);
+    // 하루치 상한(FOOD_MAX)은 저절로 생기는 밥에만 건다. 선생님이 준 밥까지
+    // 여기서 잘라내면, 10개를 줘도 손에는 몇 개만 남고 나머지는 사라진다.
+    const n = Math.min(FOOD_HARD_MAX, Number(lsGet(tankKey("food")) || 0) + gained);
     lsSet(tankKey("food"), String(n));
     if (announce && had) toast(`선생님이 밥 ${gained}개를 주셨어요!`);
   }
@@ -3442,7 +3448,8 @@ function feedableFish(now, wx, wy) {
     .slice(0, FEED_AGGRO);
 }
 
-function scatterPellets(wx, wy, now) {
+let feedBurstSeq = 0;
+function scatterPellets(wx, wy, now, burst) {
   for (let i = 0; i < PELLET_N; i++) {
     const a = Math.random() * Math.PI * 2;
     const sp = 40 + Math.random() * 90;
@@ -3455,6 +3462,7 @@ function scatterPellets(wx, wy, now) {
       life: 0,
       eaten: false,
       at: now,
+      burst,
     });
   }
 }
@@ -3479,13 +3487,17 @@ async function throwFood(wx, wy) {
     return;
   }
   if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
-  if (!useToken("wish")) return;
+  if (!useToken("feed")) return;
   if (!spendFood()) { refreshFoodLabel(); return; }
-  tankState.armed = false;                     // 한 번 뿌리면 손을 턴다
-  $("#tank-viewport")?.classList.remove("feeding");
+  // 밥이 남아 있으면 손에 든 채로 둔다 — 연달아 뿌릴 수 있게.
+  if (foodCount() <= 0) {
+    tankState.armed = false;
+    $("#tank-viewport")?.classList.remove("feeding");
+  }
   refreshFoodLabel();
 
-  scatterPellets(wx, wy, now);
+  const burst = ++feedBurstSeq;
+  scatterPellets(wx, wy, now, burst);
   // 몰려들기: 밥 주위에 조금씩 다른 자리를 잡아줘서 겹쳐 보이지 않게
   near.forEach((o, i) => {
     const a = (i / near.length) * Math.PI * 2;
@@ -3501,15 +3513,16 @@ async function throwFood(wx, wy) {
 
   // 먼저 닿는 2마리만 먹는다
   const winners = near.slice(0, FEED_WINNERS).map((o) => o.f);
-  setTimeout(() => eatFood(winners), FEED_SWIM_MS);
+  setTimeout(() => eatFood(winners, burst), FEED_SWIM_MS);
 }
 
-async function eatFood(winners) {
-  // 밥알 두 개가 사라진다
+async function eatFood(winners, burst) {
+  // 이 차례에 뿌린 밥알에서만 두 개가 사라진다. (겹쳐 뿌렸을 때 방금 던진
+  // 남의 밥알을 먹어치우지 않게 뿌린 차례로 구분한다)
   let taken = 0;
   for (const p of tankState.pellets) {
     if (taken >= winners.length) break;
-    if (!p.eaten) { p.eaten = true; taken++; }
+    if (!p.eaten && p.burst === burst) { p.eaten = true; taken++; }
   }
   const eaten = [];
   for (const f of winners) {
@@ -3531,7 +3544,7 @@ async function eatFood(winners) {
     }
     eaten.push(fresh.name);
   }
-  if (eaten.length) toast(`${eaten.join(", ")}이(가) 밥을 먹었어요!`);
+  if (eaten.length) toast(`${iga(eaten.join(", "))} 밥을 먹었어요!`);
   else setHint("#tank-hint", "밥이 물에 흩어졌어요.", true);
 }
 
@@ -3848,9 +3861,9 @@ function openFishModal(open) {
     if (tankState.manage) {
       const f = fishAt(px, py);
       if (!f) return;
-      if (!(await confirmModal(`${f.name}(${f.ownerName})을(를) 어항에서 뺄까요?`))) return;
+      if (!(await confirmModal(`${eul(`${f.name}(${f.ownerName})`)} 어항에서 뺄까요?`))) return;
       if (!(await ensureRole(["admin", "superadmin"]))) return;
-      if (!useToken("reportOp")) return;
+      if (!useToken("fishOp")) return;
       try { await data.deleteFish(classCode, f.id); toast("어항에서 뺐어요."); }
       catch (err) { setHint("#tank-hint", "실패: " + err.message, false); }
       return;
@@ -3863,7 +3876,8 @@ function openFishModal(open) {
   // 관리 모드: 선생님·전체 관리자만. 켜면 누른 물고기를 지운다.
   $("#tank-manage-btn").addEventListener("click", async () => {
     if (!tankState.manage) {
-      if (!(await ensureRole(["admin", "superadmin"]))) return;
+        if (!(await ensureRole(["admin", "superadmin"]))) return;
+      setArmed(false);            // 관리 중에는 밥을 들고 있지 않는다
       tankState.manage = true;
       $("#tank-manage-btn").textContent = "관리 끄기";
       setHint("#tank-hint", "관리 중 — 물고기를 누르면 지워져요.", true);
@@ -3939,7 +3953,7 @@ function openFishModal(open) {
     const screened = screenVoteLabel(nameRaw);
     if (!screened.ok) return setHint("#fish-hint", BLOCK_MESSAGE, false);
     if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
-    if (!useToken("voteAdd")) return;
+    if (!useToken("fishAdd")) return;
     busy(btn, true, "넣는 중…");
     try {
       await data.addFish(classCode, student?.id || me.name, me.name, nameRaw, art);
