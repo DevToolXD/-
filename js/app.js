@@ -2713,23 +2713,45 @@ runHeadlineIntro();
 //    그래서 앱을 꺼둬도 자라고, 2000마리가 20분마다 쓰기를 만들지 않는다.
 //  · 2000마리를 DOM 으로 그리면 버티지 못해서 canvas 한 장에 그린다.
 const TANK_CLASS = "0603";              // 어항이 있는 반
-const TANK_W = 6400, TANK_H = 3200;     // 어항 한 판의 크기(px)
+const TANK_W = 2140, TANK_H = 1070;     // 어항 한 판의 크기(px)
 const TANK_CAP = 2000;                  // 최대 마리 수
 const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
 const FOOD_MAX = 2;                     // 손에 들 수 있는 밥
 const FOOD_INTERVAL = 24 * 60 * 60 * 1000;  // 하루에 하나
 const CATCHUP_MS = 30 * 60 * 1000;      // 이만큼 지나 있으면 자라는 걸 보여준다
 
+// ---- 확대/축소 (그림 그리는 앱처럼) ----
+// 휴대폰에서도 "전체"가 정말 전체가 되도록 최소 배율을 넉넉히 낮춘다
+// (좁은 화면에서 2140px 을 다 담으려면 0.14 쯤은 되어야 한다)
+const ZOOM_MIN = 0.12, ZOOM_MAX = 5;
+
+// ---- 밥 ----
+//  FISH_FED_MAX 는 firestore.rules 의 `fed <= 9` 와 반드시 같아야 한다.
+//  예전에는 이 값을 클라이언트가 몰라서, 9번 먹은 물고기에게 밥을 주면
+//  서버가 규칙으로 막고 그 오류 문구가 그대로 화면에 떴다. 이제는 보내기
+//  전에 여기서 걸러서 "배가 불러요" 라고만 말한다.
+const FISH_FED_MAX = data.FISH_FED_MAX;
+const FEED_AGGRO = 10;                  // 밥 냄새를 맡고 몰려드는 마리 수
+const FEED_WINNERS = 2;                 // 그중 실제로 먹는 마리 수
+const FEED_RADIUS = 420;                // 이 안(어항 좌표)에 있어야 알아챈다
+const FEED_SWIM_MS = 1500;              // 밥까지 헤엄치는 시간
+const FEED_HOLD_MS = 700;               // 밥 앞에서 머무는 시간
+const FEED_BACK_MS = 2200;              // 제자리로 돌아가는 시간
+const PELLET_N = 9;                     // 흩뿌려지는 알갱이 수
+
 const tankState = {
   fish: [],           // 서버에서 온 원본
   manage: false,      // 선생님·전체 관리자의 관리 모드
-  view: { x: 0, y: 0 },
+  zoom: 1,
   follow: null,       // 따라다닐 물고기 id
   hover: null,
   unsub: null,
   raf: null,
   grow: new Map(),    // id -> {from, to, at}  껐다 켠 사이 자란 만큼 보여주기
-  lastSeen: new Map(),
+  aggro: new Map(),   // id -> {at, tx, ty, hold}  밥으로 몰려가는 중
+  pellets: [],        // 물에 떠다니는 밥알
+  frameAt: 0,
+  pan: null,          // 끌어서 옮기는 중
 };
 
 const tankKey = (k) => `manito.tank.${k}:${classCode}:${student?.id || "-"}`;
@@ -2751,7 +2773,7 @@ const ART_COLORS = [
 ];
 const ART_WIDTHS = [5, 11, 19, 31, 48];  // 0~255 좌표계 기준 굵기
 const ART_SPACE = 256;
-const ART_MAX = 6000;                    // firestore.rules 의 art 길이 한도와 같게
+const ART_MAX = data.FISH_ART_MAX;       // firestore.rules 의 art 길이 한도와 같게
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-";
 const B64I = {};
@@ -2907,6 +2929,133 @@ function tankSize(f, now) {
   return fishlib.sizeOf(f, now);
 }
 
+// ---- 지금 이 순간 물고기가 있는 자리 ----
+//  기본 자리(해시로 고정) + 물결처럼 흔들리는 값. 밥이 뿌려지면 그 위에
+//  "밥 쪽으로 갔다가 돌아오는" 움직임이 얹힌다. 그리기·이름표·따라가기가
+//  전부 이 함수 하나를 보므로 세 곳의 계산이 어긋날 일이 없다.
+function fishBase(f, now) {
+  const s = fishSpot(f);
+  return {
+    x: s.x + Math.sin(now / 2200 + s.phase) * 60,
+    y: s.y + Math.sin(now / 3100 + s.phase) * 18,
+    dir: s.dir,
+  };
+}
+const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+
+function fishPos(f, now) {
+  const b = fishBase(f, now);
+  const a = tankState.aggro.get(f.id);
+  if (!a) return b;
+  const t = now - a.at;
+  let k;                                   // 0 = 제자리, 1 = 밥 앞
+  if (t < FEED_SWIM_MS) k = easeOut(t / FEED_SWIM_MS);
+  else if (t < FEED_SWIM_MS + a.hold) k = 1;
+  else {
+    const back = (t - FEED_SWIM_MS - a.hold) / FEED_BACK_MS;
+    if (back >= 1) { tankState.aggro.delete(f.id); return b; }
+    k = 1 - easeInOut(back);
+  }
+  const x = b.x + (a.tx - b.x) * k;
+  const y = b.y + (a.ty - b.y) * k;
+  // 헤엄쳐 갈 때는 가는 쪽을 본다
+  return { x, y, dir: k > 0.03 ? (a.tx >= b.x ? 1 : -1) : b.dir };
+}
+
+// ---- 확대/축소 ----
+//  스크롤은 뷰포트가 그대로 맡고, 안쪽 빈 판(.tank-world)의 크기를 배율에
+//  맞춰 늘렸다 줄인다. 그래서 확대해도 스크롤바가 그대로 맞는다.
+function applyWorldSize() {
+  const world = $("#tank-world");
+  if (!world) return;
+  world.style.width = Math.round(TANK_W * tankState.zoom) + "px";
+  world.style.height = Math.round(TANK_H * tankState.zoom) + "px";
+}
+// 어항이 뷰포트보다 작아지면(많이 축소했을 때) 한쪽에 몰리지 않게 가운데로
+// 민다. 그리기·좌표 변환·솎아내기가 모두 이 값을 같이 써야 어긋나지 않는다.
+function tankOffset() {
+  const vp = $("#tank-viewport");
+  const z = tankState.zoom;
+  return [
+    Math.max(0, (vp.clientWidth - TANK_W * z) / 2),
+    Math.max(0, (vp.clientHeight - TANK_H * z) / 2),
+  ];
+}
+/** 뷰포트 안 화면 좌표 → 어항 좌표 */
+function toWorld(px, py) {
+  const vp = $("#tank-viewport");
+  const z = tankState.zoom;
+  const [ox, oy] = tankOffset();
+  return [(vp.scrollLeft + px - ox) / z, (vp.scrollTop + py - oy) / z];
+}
+/** 손가락/커서 아래 지점이 제자리에 남도록 배율을 바꾼다 */
+function setZoom(next, focusPx, focusPy) {
+  const vp = $("#tank-viewport");
+  if (!vp) return;
+  const z0 = tankState.zoom;
+  const z1 = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+  if (Math.abs(z1 - z0) < 0.0005) return;
+  const fx = focusPx ?? vp.clientWidth / 2;
+  const fy = focusPy ?? vp.clientHeight / 2;
+  const [wx, wy] = toWorld(fx, fy);
+  tankState.zoom = z1;
+  applyWorldSize();
+  const [ox, oy] = tankOffset();
+  vp.scrollLeft = wx * z1 + ox - fx;
+  vp.scrollTop = wy * z1 + oy - fy;
+  refreshZoomLabel();
+}
+function refreshZoomLabel() {
+  const el = $("#tank-zoom-label");
+  if (el) el.textContent = Math.round(tankState.zoom * 100) + "%";
+}
+/** 어항 전체가 화면에 들어오는 배율 */
+function zoomToFit() {
+  const vp = $("#tank-viewport");
+  if (!vp) return;
+  const z = Math.min(vp.clientWidth / TANK_W, vp.clientHeight / TANK_H);
+  tankState.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+  applyWorldSize();
+  vp.scrollLeft = (TANK_W * tankState.zoom - vp.clientWidth) / 2;
+  vp.scrollTop = (TANK_H * tankState.zoom - vp.clientHeight) / 2;
+  refreshZoomLabel();
+}
+
+// ---- 밥알 ----
+//  던진 자리에서 터지듯 흩어졌다가 천천히 가라앉는다. 물속이라 금방
+//  느려지도록 저항을 크게 준다.
+function stepPellets(dt) {
+  const list = tankState.pellets;
+  if (!list.length) return;
+  for (const p of list) {
+    p.vy += 26 * dt;                     // 가라앉는 힘
+    p.vx *= Math.pow(0.12, dt);          // 물의 저항
+    p.vy *= Math.pow(0.5, dt);
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (p.y > TANK_H - 12) { p.y = TANK_H - 12; p.vy = 0; }
+    p.life += dt;
+  }
+  tankState.pellets = list.filter((p) => !p.eaten && p.life < 9);
+}
+function drawPellets(g, now) {
+  for (const p of tankState.pellets) {
+    const fade = Math.min(1, Math.max(0, (9 - p.life) / 2.5));
+    g.globalAlpha = fade;
+    g.fillStyle = "#ffd98a";
+    g.beginPath();
+    g.arc(p.x, p.y + Math.sin(now / 500 + p.x) * 1.5, p.r, 0, Math.PI * 2);
+    g.fill();
+    g.globalAlpha = fade * 0.5;
+    g.fillStyle = "#fff3d0";
+    g.beginPath();
+    g.arc(p.x - p.r * 0.3, p.y - p.r * 0.3, p.r * 0.4, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+}
+
 // ---- 어항 그리기 ----
 function drawTank() {
   const cv = $("#tank-canvas");
@@ -2919,66 +3068,89 @@ function drawTank() {
     cv.style.width = w + "px"; cv.style.height = h + "px";
   }
   const g = cv.getContext("2d");
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const now = Date.now();
+  const dt = Math.min(0.05, (now - (tankState.frameAt || now)) / 1000);
+  tankState.frameAt = now;
+  stepPellets(dt);
+
+  const z = tankState.zoom;
 
   // 따라가기: 카메라를 그 물고기에 붙인다
   if (tankState.follow) {
     const f = tankState.fish.find((x) => x.id === tankState.follow);
     if (f) {
-      const s = fishSpot(f);
-      const sway = Math.sin(now / 2200 + s.phase) * 60;
-      tankState.view.x = clampView(s.x + sway - w / 2, TANK_W - w);
-      tankState.view.y = clampView(s.y - h / 2, TANK_H - h);
+      const p = fishPos(f, now);
+      const [fox, foy] = tankOffset();
+      vp.scrollLeft = clampScroll(p.x * z + fox - w / 2, TANK_W * z - w);
+      vp.scrollTop = clampScroll(p.y * z + foy - h / 2, TANK_H * z - h);
     }
   }
-  const vx = tankState.view.x, vy = tankState.view.y;
+  const sx = vp.scrollLeft, sy = vp.scrollTop;
 
-  // 물 — 파랑 한 가지로 깊이감만
-  const grad = g.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, "#2f7fd1");
-  grad.addColorStop(1, "#0b3f77");
+  const [ox, oy] = tankOffset();
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+  g.save();
+  g.translate(ox - sx, oy - sy);
+  g.scale(z, z);
+  // 여기서부터는 전부 어항 좌표로 그린다
+
+  // 물 — 위는 하늘색, 아래로 갈수록 남색. 깊이라서 화면이 아니라
+  // 어항 기준이다(아래로 내려가면 실제로 더 어두워진다).
+  const grad = g.createLinearGradient(0, 0, 0, TANK_H);
+  grad.addColorStop(0, "#8ed2f5");
+  grad.addColorStop(0.35, "#3d92dc");
+  grad.addColorStop(0.72, "#17538f");
+  grad.addColorStop(1, "#0a2450");
   g.fillStyle = grad;
-  g.fillRect(0, 0, w, h);
+  g.fillRect(0, 0, TANK_W, TANK_H);
 
-  drawSeaweed(g, w, h, vx, vy, now);
+  // 수면 근처에서 들어오는 빛
+  const light = g.createLinearGradient(0, 0, 0, TANK_H * 0.4);
+  light.addColorStop(0, "rgba(255, 255, 255, 0.22)");
+  light.addColorStop(1, "rgba(255, 255, 255, 0)");
+  g.fillStyle = light;
+  g.fillRect(0, 0, TANK_W, TANK_H * 0.4);
 
-  // 물고기 — 화면에 걸치는 것만 그린다(2000마리라도 이 부분이 비용을 정한다)
+  drawSeaweed(g, now);
+  drawPellets(g, now);
+
+  // 어항의 테두리. 축소해서 바깥 여백이 보일 때 어디까지가 어항인지 알려준다.
+  g.strokeStyle = "rgba(255, 255, 255, 0.22)";
+  g.lineWidth = 1 / z;
+  g.strokeRect(0, 0, TANK_W, TANK_H);
+
+  // 물고기 — 보이는 자리에 걸치는 것만 그린다
+  const wx0 = (sx - ox) / z, wy0 = (sy - oy) / z, ww = w / z, wh = h / z;
   let drawn = 0;
   for (const f of tankState.fish) {
-    const spot = fishSpot(f);
     const size = tankSize(f, now);
-    const sway = Math.sin(now / 2200 + spot.phase) * 60;
-    const x = spot.x + sway - vx;
-    const y = spot.y + Math.sin(now / 3100 + spot.phase) * 18 - vy;
-    const r = 14 + size * 5;
-    if (x < -r || x > w + r || y < -r || y > h + r) continue;
-    drawFish(g, f, x, y, size, spot.dir, f.id === tankState.hover);
+    const p = fishPos(f, now);
+    const r = (18 + size * 6) / 2 + 6;
+    if (p.x < wx0 - r || p.x > wx0 + ww + r || p.y < wy0 - r || p.y > wy0 + wh + r) continue;
+    drawFish(g, f, p.x, p.y, size, p.dir, f.id === tankState.hover, z);
     drawn++;
   }
-  g.restore?.();
+  g.restore();
   $("#tank-count").textContent = `${tankState.fish.length}마리 · 화면에 ${drawn}`;
 }
 
-function clampView(v, max) { return Math.max(0, Math.min(Math.max(0, max), v)); }
+function clampScroll(v, max) { return Math.max(0, Math.min(Math.max(0, max), v)); }
 
-function drawSeaweed(g, w, h, vx, vy, now) {
-  const bottom = TANK_H - vy;
-  if (bottom > h + 140) return;
+// 바닥의 해조류. 어항 좌표로 그리므로 확대하면 같이 커진다.
+function drawSeaweed(g, now) {
   g.save();
   g.strokeStyle = "rgba(90, 200, 160, 0.5)";
   g.lineCap = "round";
-  const first = Math.floor(vx / 90) * 90;
-  for (let wx = first; wx < vx + w + 90; wx += 90) {
+  for (let wx = 0; wx < TANK_W; wx += 90) {
     const seed = (wx * 7919) % 1000 / 1000;
     const hgt = 70 + seed * 130;
-    const x = wx - vx;
     g.lineWidth = 4 + seed * 4;
     g.beginPath();
-    g.moveTo(x, bottom);
+    g.moveTo(wx, TANK_H);
     for (let i = 1; i <= 4; i++) {
       const t = i / 4;
-      g.lineTo(x + Math.sin(now / 1800 + seed * 6 + t * 2.2) * 14 * t, bottom - hgt * t);
+      g.lineTo(wx + Math.sin(now / 1800 + seed * 6 + t * 2.2) * 14 * t, TANK_H - hgt * t);
     }
     g.stroke();
   }
@@ -2986,11 +3158,12 @@ function drawSeaweed(g, w, h, vx, vy, now) {
 }
 
 // 그린 획을 그대로 물고기로. 색과 굵기까지 그린 그대로 헤엄친다.
-function drawFish(g, f, x, y, size, dir, hot) {
+function drawFish(g, f, x, y, size, dir, hot, zoom = 1) {
   const scale = (18 + size * 6) / ART_SPACE;
   // 아기 물고기는 화면에서 아주 작다. 그대로 그리면 선이 1픽셀 아래로
   // 내려가 사라지므로, 최소 한 픽셀은 되도록 굵기에 바닥을 깔아 준다.
-  const floor = 1.1 / scale;
+  // 축소해서 보고 있으면 그만큼 더 두껍게 잡아야 같은 한 픽셀이 된다.
+  const floor = 1.1 / (scale * zoom);
   g.save();
   g.translate(x, y);
   g.scale(dir * scale, scale);
@@ -3009,6 +3182,16 @@ function tankLoop() {
   drawTank();
   tankState.raf = requestAnimationFrame(tankLoop);
 }
+
+// 어항 상태를 밖에서 들여다보는 읽기 전용 창구(테스트·디버깅용).
+// 숫자만 돌려주므로 이걸로 어항을 바꿀 수는 없다.
+window.tankProbe = () => ({
+  zoom: tankState.zoom,
+  aggro: tankState.aggro.size,
+  pellets: tankState.pellets.length,
+  fish: tankState.fish.length,
+  follow: tankState.follow,
+});
 
 // ---- 밥 ----
 function foodCount() {
@@ -3036,13 +3219,126 @@ function refreshFoodLabel() {
   if (el) el.textContent = `밥 ${foodCount()}개`;
 }
 
+// ---- 밥 뿌리기 ----
+//  누른 자리에 밥알이 흩어지고, 가까운 물고기 10마리가 몰려온다.
+//  그중 밥 앞에 먼저 닿는 2마리만 실제로 먹는다.
+//
+//  서버에 쓰기 전에 여기서 firestore.rules 의 조건을 그대로 먼저 확인한다.
+//  (fed 는 9까지) 규칙이 막아서 나오는 오류 문구가 화면에 뜨지 않게 하려는
+//  것이다 — 막힐 게 뻔한 요청은 아예 보내지 않는다.
+function feedableFish(now, wx, wy) {
+  return tankState.fish
+    .filter((f) => (Number(f.fed) || 0) < FISH_FED_MAX)
+    .map((f) => {
+      const p = fishPos(f, now);
+      return { f, d: Math.hypot(p.x - wx, p.y - wy) };
+    })
+    .filter((o) => o.d <= FEED_RADIUS)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, FEED_AGGRO);
+}
+
+function scatterPellets(wx, wy, now) {
+  for (let i = 0; i < PELLET_N; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = 40 + Math.random() * 90;
+    tankState.pellets.push({
+      x: wx + Math.cos(a) * Math.random() * 10,
+      y: wy + Math.sin(a) * Math.random() * 10,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp - 45,
+      r: 2.2 + Math.random() * 1.8,
+      life: 0,
+      eaten: false,
+      at: now,
+    });
+  }
+}
+
+async function throwFood(wx, wy) {
+  const now = Date.now();
+  if (foodCount() <= 0) {
+    setHint("#tank-hint", "밥이 없어요. 하루에 하나씩 생겨요.", false);
+    return;
+  }
+  const near = feedableFish(now, wx, wy);
+  if (!near.length) {
+    // 배부른 물고기밖에 없는 건지, 아예 아무도 없는 건지 구분해서 알려준다
+    const anyNear = tankState.fish.some((f) => {
+      const p = fishPos(f, now);
+      return Math.hypot(p.x - wx, p.y - wy) <= FEED_RADIUS;
+    });
+    setHint("#tank-hint", anyNear
+      ? "이 근처 물고기는 배가 불러요. 다른 곳에 뿌려보세요."
+      : "이 근처에 물고기가 없어요. 물고기 가까이에 뿌려보세요.", false);
+    return;
+  }
+  if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
+  if (!useToken("wish")) return;
+  if (!spendFood()) { refreshFoodLabel(); return; }
+  refreshFoodLabel();
+
+  scatterPellets(wx, wy, now);
+  // 몰려들기: 밥 주위에 조금씩 다른 자리를 잡아줘서 겹쳐 보이지 않게
+  near.forEach((o, i) => {
+    const a = (i / near.length) * Math.PI * 2;
+    const ring = 18 + i * 4;
+    tankState.aggro.set(o.f.id, {
+      at: now,
+      tx: wx + Math.cos(a) * ring,
+      ty: wy + Math.sin(a) * ring,
+      hold: FEED_HOLD_MS + i * 70,
+    });
+  });
+  setHint("#tank-hint", `밥을 뿌렸어요 — ${near.length}마리가 몰려와요!`, true);
+
+  // 먼저 닿는 2마리만 먹는다
+  const winners = near.slice(0, FEED_WINNERS).map((o) => o.f);
+  setTimeout(() => eatFood(winners), FEED_SWIM_MS);
+}
+
+async function eatFood(winners) {
+  // 밥알 두 개가 사라진다
+  let taken = 0;
+  for (const p of tankState.pellets) {
+    if (taken >= winners.length) break;
+    if (!p.eaten) { p.eaten = true; taken++; }
+  }
+  const eaten = [];
+  for (const f of winners) {
+    const fresh = tankState.fish.find((x) => x.id === f.id) || f;
+    const fed = Number(fresh.fed) || 0;
+    if (fed >= FISH_FED_MAX) continue;      // 그 사이 누가 먹였으면 건너뛴다
+    const before = fishlib.sizeOf(fresh, Date.now());
+    try {
+      await data.feedFish(classCode, fresh);
+    } catch (err) {
+      // 규칙·네트워크로 막혔으면 조용히 넘어간다. 밥알 연출은 이미 봤고,
+      // 여기서 서버 오류 문구를 띄워봐야 학생이 할 수 있는 일이 없다.
+      console.warn("밥주기 실패:", err?.message || err);
+      continue;
+    }
+    const after = fishlib.sizeOf({ ...fresh, fed: fed + 1 }, Date.now());
+    if (after - before > 0.01) {
+      tankState.grow.set(fresh.id, { from: before, to: after, at: Date.now() });
+    }
+    eaten.push(fresh.name);
+  }
+  if (eaten.length) toast(`${eaten.join(", ")}이(가) 밥을 먹었어요!`);
+  else setHint("#tank-hint", "밥이 물에 흩어졌어요.", true);
+}
+
 
 // ---- 열기 / 닫기 ----
 function openTank() {
   if (!tankEnabled()) return;
   $("#tank-hint").textContent = "";
   const vp = $("#tank-viewport");
-  vp.scrollTop = 0;
+  tankState.aggro.clear();
+  tankState.pellets = [];
+  tankState.follow = null;
+  $("#tank-follow-note").textContent = "";
+  zoomToFit();                       // 처음엔 어항 전체가 보이게
   refreshFoodLabel();
   const canManage = !!adminSession || isSuperAdminAuthed();
   $("#tank-manage-btn").classList.toggle("hidden", !canManage);
@@ -3075,22 +3371,25 @@ function openTank() {
 function closeTank() {
   if (tankState.unsub) { tankState.unsub(); tankState.unsub = null; }
   if (tankState.raf) { cancelAnimationFrame(tankState.raf); tankState.raf = null; }
+  tankState.aggro.clear();
+  tankState.pellets = [];
   lsSet(tankKey("seenAt"), String(Date.now()));
   closeTankPanel();
 }
 
 // ---- 화면 좌표 → 어항 좌표에서 물고기 찾기 ----
+//  많이 축소해 놓으면 물고기가 몇 픽셀밖에 안 되니, 누르는 반경은 화면에서
+//  최소 14px 은 되도록 배율을 나눠 보정한다.
 function fishAt(px, py) {
   const now = Date.now();
+  const [wx, wy] = toWorld(px, py);
+  const minR = 14 / tankState.zoom;
   let best = null, bestD = 1e9;
   for (const f of tankState.fish) {
-    const spot = fishSpot(f);
     const size = tankSize(f, now);
-    const sway = Math.sin(now / 2200 + spot.phase) * 60;
-    const x = spot.x + sway - tankState.view.x;
-    const y = spot.y + Math.sin(now / 3100 + spot.phase) * 18 - tankState.view.y;
-    const r = 16 + size * 5;
-    const d = Math.hypot(px - x, py - y);
+    const p = fishPos(f, now);
+    const r = Math.max(minR, (18 + size * 6) / 2 + 4);
+    const d = Math.hypot(wx - p.x, wy - p.y);
     if (d < r && d < bestD) { best = f; bestD = d; }
   }
   return best;
@@ -3127,6 +3426,9 @@ function openTankPanel(kind) {
   });
   list.querySelectorAll(".tank-item").forEach((li) =>
     li.addEventListener("click", () => {
+      // 전체가 보이는 배율에서는 물고기가 점 하나라서, 따라가기를 켤 때
+      // 얼굴이 보일 만큼은 당겨 준다. 이미 더 당겨 놨으면 그대로 둔다.
+      if (tankState.zoom < 1.5) setZoom(1.5);
       tankState.follow = li.dataset.id;
       $("#tank-follow-note").textContent = "따라가는 중 — 어항을 탭하면 멈춰요";
       closeTankPanel();
@@ -3224,12 +3526,76 @@ function openFishModal(open) {
   const vp = $("#tank-viewport");
   if (!vp) return;
 
-  // 스크롤로 어항을 둘러본다
-  vp.addEventListener("scroll", () => {
-    if (tankState.follow) return;      // 따라가는 중엔 카메라가 주인
-    tankState.view.x = vp.scrollLeft;
-    tankState.view.y = vp.scrollTop;
-  }, { passive: true });
+  // 스크롤 위치는 뷰포트가 그대로 갖고 있으므로 따로 받아 적지 않는다.
+  // 그리기는 매 프레임 vp.scrollLeft/Top 을 직접 읽는다.
+
+  // ---- 확대/축소: 그림 그리는 앱처럼 ----
+  //  휠(트랙패드 핀치 포함)은 커서 자리를 기준으로, 두 손가락은 그 사이를
+  //  기준으로 배율을 바꾼다.
+  vp.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const r = vp.getBoundingClientRect();
+    // ctrl+휠 은 브라우저·트랙패드가 핀치로 보내주는 신호라 더 세게 잡는다
+    const k = e.ctrlKey ? 0.012 : 0.0022;
+    setZoom(tankState.zoom * Math.exp(-e.deltaY * k), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+
+  // 두 손가락 핀치 + 끌어서 옮기기
+  const pointers = new Map();
+  let pinch = null;
+  vp.addEventListener("pointerdown", (e) => {
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: tankState.zoom };
+      tankState.pan = null;
+    } else if (pointers.size === 1) {
+      tankState.pan = {
+        x: e.clientX, y: e.clientY,
+        sx: vp.scrollLeft, sy: vp.scrollTop, moved: false,
+      };
+      // 손가락이 어항 밖으로 나가도 끌기가 계속 이어지게
+      try { vp.setPointerCapture(e.pointerId); } catch {}
+    }
+  });
+  vp.addEventListener("pointermove", (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      const r = vp.getBoundingClientRect();
+      setZoom(pinch.z * (d / pinch.d), (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      return;
+    }
+    const pan = tankState.pan;
+    if (!pan) return;
+    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    if (!pan.moved && Math.hypot(dx, dy) < 5) return;   // 살짝 흔들린 건 탭으로 본다
+    pan.moved = true;
+    tankState.follow = null;                            // 직접 옮기면 따라가기는 풀린다
+    $("#tank-follow-note").textContent = "";
+    vp.scrollLeft = pan.sx - dx;
+    vp.scrollTop = pan.sy - dy;
+  });
+  const endPointer = (e) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (pointers.size === 0) setTimeout(() => { tankState.pan = null; }, 0);
+  };
+  vp.addEventListener("pointerup", endPointer);
+  vp.addEventListener("pointercancel", endPointer);
+
+  // 확대 단추는 어항 안에 떠 있어서, 그냥 두면 누를 때마다 클릭이 어항까지
+  // 흘러가 밥이 뿌려진다. 여기서 끊는다.
+  const zoomBtn = (sel, fn) => {
+    const el = $(sel);
+    el.addEventListener("pointerdown", (e) => e.stopPropagation());
+    el.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
+  };
+  zoomBtn("#tank-zoom-in", () => setZoom(tankState.zoom * 1.35));
+  zoomBtn("#tank-zoom-out", () => setZoom(tankState.zoom / 1.35));
+  zoomBtn("#tank-zoom-fit", () => zoomToFit());
 
   // 커서를 대면 누구 물고기인지
   vp.addEventListener("pointermove", (e) => {
@@ -3249,17 +3615,20 @@ function openFishModal(open) {
     tankState.hover = null; $("#tank-tip").classList.add("hidden");
   });
 
-  // 탭 = 따라가기 풀기 / 밥이 있으면 밥주기
+  // 탭 = 따라가기 풀기 / 관리 모드면 삭제 / 밥이 있으면 물에 흩뿌리기
   vp.addEventListener("click", async (e) => {
+    if (tankState.pan?.moved) return;          // 끌어서 옮긴 거였으면 탭이 아니다
     if (tankState.follow) {
       tankState.follow = null;
       $("#tank-follow-note").textContent = "";
       return;
     }
     const r = vp.getBoundingClientRect();
-    const f = fishAt(e.clientX - r.left, e.clientY - r.top);
-    if (!f) return;
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+
     if (tankState.manage) {
+      const f = fishAt(px, py);
+      if (!f) return;
       if (!(await confirmModal(`${f.name}(${f.ownerName})을(를) 어항에서 뺄까요?`))) return;
       if (!(await ensureRole(["admin", "superadmin"]))) return;
       if (!useToken("reportOp")) return;
@@ -3267,26 +3636,8 @@ function openFishModal(open) {
       catch (err) { setHint("#tank-hint", "실패: " + err.message, false); }
       return;
     }
-    if (foodCount() <= 0) {
-      setHint("#tank-hint", "밥이 없어요. 하루에 하나씩 생겨요.", false);
-      return;
-    }
-    if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
-    if (!useToken("wish")) return;
-    const before = fishlib.sizeOf(f, Date.now());
-    try {
-      await data.feedFish(classCode, f);
-      spendFood(); refreshFoodLabel();
-      const after = fishlib.sizeOf({ ...f, fed: (Number(f.fed) || 0) + 1 }, Date.now());
-      if (after - before > 0.01) {
-        tankState.grow.set(f.id, { from: before, to: after, at: Date.now() });
-        toast(`${f.name}이(가) 밥을 먹고 자랐어요!`);
-      } else {
-        toast(`${f.name}이(가) 밥을 먹었어요.`);
-      }
-    } catch (err) {
-      setHint("#tank-hint", "밥주기 실패: " + err.message, false);
-    }
+    const [wx, wy] = toWorld(px, py);
+    await throwFood(wx, wy);
   });
 
   // 관리 모드: 선생님·전체 관리자만. 켜면 누른 물고기를 지운다.
@@ -3356,6 +3707,11 @@ function openFishModal(open) {
     if (!me) return setHint("#fish-hint", "학급에 먼저 입장해 주세요.", false);
     const art = fitArt(pad.strokes.filter((st) => st.pts.length));
     if (art.length < 4) return setHint("#fish-hint", "물고기를 그려주세요.", false);
+    // fitArt 가 한도 안으로 줄여주지만, 혹시라도 넘으면 자르지 않고 멈춘다.
+    // (좌표 한가운데가 잘리면 그림이 깨진 채로 저장된다)
+    if (art.length > ART_MAX) {
+      return setHint("#fish-hint", "그림이 너무 커요. 조금만 덜어내 주세요.", false);
+    }
     const nameRaw = $("#fish-name").value.trim() || "물고기";
     // screenVoteLabel 은 {ok, reason, matched} 만 돌려준다 — label 은 없다.
     // 통과하면 원래 적은 이름을 그대로 쓴다.

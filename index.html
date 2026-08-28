@@ -662,12 +662,18 @@
               <span class="tank-stat muted small" id="tank-follow-note"></span>
             </div>
 
-            <!-- 스크롤되는 큰 어항. 물고기는 canvas 로 그린다(2000마리) -->
+            <!-- 끌어서 옮기고 휠·핀치로 확대하는 어항. 물고기는 canvas 로 그린다(2000마리) -->
             <div class="tank-viewport" id="tank-viewport" tabindex="0">
               <div class="tank-world" id="tank-world">
                 <canvas id="tank-canvas"></canvas>
               </div>
               <div class="tank-tip hidden" id="tank-tip"></div>
+              <div class="tank-zoom">
+                <button id="tank-zoom-out" type="button" aria-label="축소">−</button>
+                <span id="tank-zoom-label">100%</span>
+                <button id="tank-zoom-in" type="button" aria-label="확대">+</button>
+                <button id="tank-zoom-fit" type="button" class="tank-zoom-fit">전체</button>
+              </div>
             </div>
 
             <!-- 내 물고기 목록 / 순위: 어항 위에 겹쳐 뜨는 패널 -->

@@ -2131,14 +2131,56 @@ body.theme-mono .scratch-dust { filter: grayscale(1); }
   height: min(62vh, 560px);
   overflow: auto;
   border-radius: var(--radius-sm);
-  background: #0b3f77;
-  cursor: crosshair;
+  /* 어항 바깥의 작업 공간. 물빛(파랑)과 확실히 달라야 어항이 하나의
+     '판'으로 보인다 — 그림 그리는 앱에서 캔버스 밖이 회색인 것과 같다. */
+  background: #10192b;
+  cursor: grab;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* 두 손가락 확대를 우리가 직접 처리한다 */
+  touch-action: none;
 }
+.tank-viewport:active { cursor: grabbing; }
 .tank-viewport:focus-visible { outline: 2px solid var(--green-500); outline-offset: 2px; }
-/* 스크롤 거리를 만드는 빈 판. 실제 그림은 canvas 가 그린다. */
-.tank-world { width: 6400px; height: 3200px; position: relative; }
+/* 스크롤 거리를 만드는 빈 판. 크기는 배율에 맞춰 js 가 정한다. */
+.tank-world { width: 2140px; height: 1070px; position: relative; }
+
+/* 확대/축소 단추 — 어항 위에 떠 있다 */
+.tank-zoom {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(4, 20, 44, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.78rem;
+  user-select: none;
+}
+.tank-zoom button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tank-zoom button:hover { background: rgba(255, 255, 255, 0.18); }
+.tank-zoom .tank-zoom-fit { width: auto; padding: 0 9px; font-size: 0.76rem; }
+#tank-zoom-label {
+  min-width: 42px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 #tank-canvas {
   position: sticky;
   top: 0;
@@ -2302,7 +2344,8 @@ body.theme-mono .scratch-dust { filter: grayscale(1); }
 .pad-width.on { border-color: currentColor; background: var(--glass-bg-strong); }
 
 @media (max-width: 700px) {
-  .tank-viewport { height: 56vh; }
+  /* 좁은 화면에서는 어항이 가로로 길어 위아래 여백이 커진다 — 조금 낮춘다 */
+  .tank-viewport { height: 44vh; }
   .tank-panel { right: 10px; left: 10px; width: auto; }
 }
 

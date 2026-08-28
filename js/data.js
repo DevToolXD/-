@@ -617,16 +617,27 @@ export async function checkRulesPublished() {
 const fishCol = (code) => collection(db, "classes", code, "fish");
 const fishDoc = (code, id) => doc(db, "classes", code, "fish", id);
 
+//  firestore.rules 의 어항 규칙과 같은 한도. 여기서 먼저 막아야 서버가
+//  거절해서 나오는 "권한 없음" 문구가 화면에 뜨지 않는다.
+export const FISH_ART_MAX = 6000;
+export const FISH_FED_MAX = 9;
+
 export async function addFish(code, ownerId, ownerName, name, art) {
-  const ref = await addDoc(fishCol(code), {
-    ownerId: String(ownerId).slice(0, 64),
+  const doc = {
+    ownerId: String(ownerId || "").slice(0, 64),
     ownerName: sanitizeText(ownerName, APP.maxNameLength) || "이름 없음",
     name: sanitizeText(name, 20) || "물고기",
-    art: String(art).slice(0, 6000),
+    art: String(art || ""),
     seed: Math.floor(Math.random() * 1000000),
     fed: 0,
-    createdAt: serverTimestamp(),
-  });
+  };
+  // 규칙이 요구하는 모양을 보내기 전에 그대로 확인한다. 예전에는 art 를
+  // 그냥 잘라 보냈는데, 좌표 한가운데가 잘리면 그림이 깨진 채로 저장됐다.
+  if (!doc.ownerId) throw new Error("로그인이 풀렸어요. 다시 들어와 주세요.");
+  if (doc.art.length < 4) throw new Error("물고기를 그려주세요.");
+  if (doc.art.length > FISH_ART_MAX) throw new Error("그림이 너무 커요. 조금만 덜어내 주세요.");
+
+  const ref = await addDoc(fishCol(code), { ...doc, createdAt: serverTimestamp() });
   return ref.id;
 }
 
@@ -662,7 +673,11 @@ export function watchFish(code, onChange) {
 
 /** 밥주기: fed 를 1 늘린다. 규칙이 +1 외에는 막는다. */
 export async function feedFish(code, fish) {
-  await updateDoc(fishDoc(code, fish.id), { fed: (Number(fish.fed) || 0) + 1 });
+  const fed = Number(fish.fed) || 0;
+  // 규칙의 `fed <= 9` 를 여기서 먼저 지킨다. 넘겨서 보내면 서버가 막고
+  // 그 오류가 학생 화면에 그대로 떴었다.
+  if (fed >= FISH_FED_MAX) throw new Error("이 물고기는 배가 불러요.");
+  await updateDoc(fishDoc(code, fish.id), { fed: fed + 1 });
 }
 
 export async function deleteFish(code, id) {
