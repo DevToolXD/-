@@ -2867,7 +2867,7 @@ runHeadlineIntro();
 //    그래서 앱을 꺼둬도 자라고, 2000마리가 20분마다 쓰기를 만들지 않는다.
 //  · 2000마리를 DOM 으로 그리면 버티지 못해서 canvas 한 장에 그린다.
 const TANK_CLASS = "0603";              // 어항이 있는 반
-const TANK_W = 2140, TANK_H = 1070;     // 어항 한 판의 크기(px)
+const TANK_W = 8560, TANK_H = 4280;     // 어항 한 판의 크기(px)
 const TANK_CAP = 2000;                  // 최대 마리 수
 const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
 const FOOD_PER_DAY = 3;                 // 하루에 생기는 밥
@@ -2878,8 +2878,8 @@ const CATCHUP_MS = 30 * 60 * 1000;      // 이만큼 지나 있으면 자라는 
 
 // ---- 확대/축소 (그림 그리는 앱처럼) ----
 // 휴대폰에서도 "전체"가 정말 전체가 되도록 최소 배율을 넉넉히 낮춘다
-// (좁은 화면에서 2140px 을 다 담으려면 0.14 쯤은 되어야 한다)
-const ZOOM_MIN = 0.12, ZOOM_MAX = 5;
+// (좁은 화면 300px 에 8560px 을 다 담으려면 0.035 쯤은 되어야 한다)
+const ZOOM_MIN = 0.03, ZOOM_MAX = 5;
 
 // ---- 밥 ----
 //  FISH_FED_MAX 는 firestore.rules 의 `fed <= 9` 와 반드시 같아야 한다.
@@ -2889,7 +2889,9 @@ const ZOOM_MIN = 0.12, ZOOM_MAX = 5;
 const FISH_FED_MAX = data.FISH_FED_MAX;
 const FEED_AGGRO = 10;                  // 밥 냄새를 맡고 몰려드는 마리 수
 const FEED_WINNERS = 2;                 // 그중 실제로 먹는 마리 수
-const FEED_RADIUS = 420;                // 이 안(어항 좌표)에 있어야 알아챈다
+const FEED_RADIUS = 1680;               // 이 안(어항 좌표)에 있어야 알아챈다
+                                        // — 어항이 4배 커졌으니 같이 늘렸다.
+                                        //   안 그러면 물고기가 밥을 못 본다.
 const FEED_SWIM_MS = 1500;              // 밥까지 헤엄치는 시간
 const FEED_HOLD_MS = 700;               // 밥 앞에서 머무는 시간
 const FEED_BACK_MS = 2200;              // 제자리로 돌아가는 시간
@@ -3318,11 +3320,28 @@ function drawSeaweed(g, now) {
 
 // 그린 획을 그대로 물고기로. 색과 굵기까지 그린 그대로 헤엄친다.
 function drawFish(g, f, x, y, size, dir, hot, zoom = 1) {
-  const scale = (18 + size * 6) / ART_SPACE;
+  const span = 18 + size * 6;              // 어항 좌표에서의 크기
+  const scale = span / ART_SPACE;
+  const onScreen = span * zoom;            // 화면에서 실제 몇 픽셀인지
+
+  // 어항 전체를 볼 만큼 축소하면 물고기 한 마리가 몇 픽셀도 안 된다.
+  // 그때 획을 그대로 그리면 굵기 보정이 물고기보다 커져 덩어리가 되고,
+  // 2000마리를 그리느라 느려지기까지 한다. 점 하나로 대신 찍는다.
+  if (onScreen < 5) {
+    const strokes = f._art || (f._art = decodeArt(f.art));
+    g.fillStyle = hot ? "#ffffff" : (ART_COLORS[strokes[0]?.c] || ART_COLORS[0]);
+    const r = Math.max(0.6 / zoom, span * 0.32);
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+    return;
+  }
+
   // 아기 물고기는 화면에서 아주 작다. 그대로 그리면 선이 1픽셀 아래로
   // 내려가 사라지므로, 최소 한 픽셀은 되도록 굵기에 바닥을 깔아 준다.
   // 축소해서 보고 있으면 그만큼 더 두껍게 잡아야 같은 한 픽셀이 된다.
-  const floor = 1.1 / (scale * zoom);
+  // 다만 물고기 자체보다 두꺼워지면 안 되므로 위로 막아 둔다.
+  const floor = Math.min(ART_SPACE * 0.1, 1.1 / (scale * zoom));
   g.save();
   g.translate(x, y);
   g.scale(dir * scale, scale);
@@ -3578,7 +3597,9 @@ function openTank() {
       for (const f of rows) {
         const before = fishlib.sizeOf(f, seenAt);
         const after = fishlib.sizeOf(f, now);
-        if (after - before > 0.05) tankState.grow.set(f.id, { from: before, to: after, at: Date.now() });
+        // 성장이 10분의 1로 느려졌으니 이 문턱도 같이 내린다. 예전 값(0.05)
+        // 이면 한 시간 반은 자리를 비워야 "자랐어요"가 떠서, 사실상 안 뜬다.
+        if (after - before > 0.008) tankState.grow.set(f.id, { from: before, to: after, at: Date.now() });
       }
     }
     tankState.fish = rows.slice(0, TANK_CAP);

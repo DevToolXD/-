@@ -2169,7 +2169,7 @@ body.theme-mono .scratch-dust { filter: grayscale(1); }
 }
 .tank-viewport:focus-visible { outline: 2px solid var(--green-500); outline-offset: 2px; }
 /* 스크롤 거리를 만드는 빈 판. 크기는 배율에 맞춰 js 가 정한다. */
-.tank-world { width: 2140px; height: 1070px; position: relative; }
+.tank-world { width: 8560px; height: 4280px; position: relative; }
 
 /* 확대/축소 단추 — 어항 위에 떠 있다 */
 .tank-zoom {
