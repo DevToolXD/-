@@ -2032,18 +2032,16 @@ async function refreshRulesState() {
   how.hidden = true;
   let r;
   try { r = await data.checkRulesPublished(); }
-  catch { r = { ok: false, adminAccounts: false, eggStats: false }; }
+  catch { r = { ok: false, missing: [] }; }
   if (r.ok) {
     state.textContent = "규칙이 최신이에요. 더 하실 일 없습니다.";
     state.classList.add("ok");
     return;
   }
   // 오류가 아니라 '할 일'이다. 빨간 경고로 띄우면 앱이 고장 난 것처럼 보인다.
-  const missing = [!r.adminAccounts && "계정에 붙는 관리자 권한",
-                   !r.eggStats && "이스터에그 발견자 수",
-                   !r.voteBallots && "투표 1회 제한(기기 바꿔도 유지)",
-                   !r.securityLog && "개발자 도구 기록",
-                   !r.fish && "어항"].filter(Boolean).join(" · ");
+  // 빠진 자리 목록은 js/limits.js 의 RULE_PROBES 에서 그대로 온다 —
+  // 여기에 또 적어 두면 컬렉션이 늘 때마다 한쪽만 고치게 된다.
+  const missing = (r.missing || []).map((m) => m.why).join(" · ");
   state.textContent =
     `아직 안 올린 규칙이 있어요. 지금도 앱은 정상이지만, 아래 기능은 이 기기에서만 동작해요 — ${missing}`;
   state.classList.add("todo");

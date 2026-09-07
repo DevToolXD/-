@@ -20,6 +20,7 @@ import {
   onSnapshot,
 } from "./firebase.js?v=DEV";
 import { randomHex, hashSecret, safeEqual } from "./crypto.js?v=DEV";
+import { LIMITS, RULE_PROBES } from "./limits.js?v=DEV";
 import { buildCycle } from "./assign.js?v=DEV";
 import { APP, CLASS_CODES, SUPER_ADMIN, SECRET_SALT, MASTER_KEY_HASH, ADMIN_GRANT_HASH }
   from "../config.js?v=DEV";
@@ -592,22 +593,18 @@ export async function revokeAccountAdmin(docId) {
 //    · securityLog    — 개발자 도구를 열어 본 흔적
 //  하나라도 막히면 콘솔에 붙여 넣은 규칙이 예전 버전이라는 뜻이다.
 export async function checkRulesPublished() {
-  const probe = async (name) => {
-    try { await getDocs(collection(db, name)); return true; }
-    catch { return false; }
-  };
-  const probePath = async (...parts) => {
+  // 확인할 자리는 js/limits.js 의 RULE_PROBES 한 곳에만 적혀 있다.
+  // 컬렉션을 새로 만들면 거기 한 줄만 더하면 앱과 검사 도구가 같이 안다.
+  const probe = async (parts) => {
     try { await getDocs(collection(db, ...parts)); return true; } catch { return false; }
   };
-  const [adminAccounts, eggStats, voteBallots, securityLog, fish] = await Promise.all([
-    probe("adminAccounts"), probe("eggStats"),
-    probe("voteBallots"), probe("securityLog"),
-    probePath("classes", "0603", "fish"),
-  ]);
-  return {
-    adminAccounts, eggStats, voteBallots, securityLog, fish,
-    ok: adminAccounts && eggStats && voteBallots && securityLog && fish,
-  };
+  const results = await Promise.all(RULE_PROBES.map((r) => probe(r.path)));
+  const out = { ok: true, missing: [] };
+  RULE_PROBES.forEach((r, i) => {
+    out[r.key] = results[i];
+    if (!results[i]) { out.ok = false; out.missing.push(r); }
+  });
+  return out;
 }
 
 // ---------- 어항 ----------
@@ -619,8 +616,10 @@ const fishDoc = (code, id) => doc(db, "classes", code, "fish", id);
 
 //  firestore.rules 의 어항 규칙과 같은 한도. 여기서 먼저 막아야 서버가
 //  거절해서 나오는 "권한 없음" 문구가 화면에 뜨지 않는다.
-export const FISH_ART_MAX = 6000;
-export const FISH_FED_MAX = 9;
+//  숫자는 js/limits.js 한 곳에만 적고, 규칙 파일과 어긋나면
+//  tests/rules_match.test.mjs 가 빌드를 실패시킨다.
+export const FISH_ART_MAX = LIMITS.fishArtMax;
+export const FISH_FED_MAX = LIMITS.fishFedMax;
 
 export async function addFish(code, ownerId, ownerName, name, art) {
   const doc = {
@@ -677,8 +676,8 @@ export function watchFish(code, onChange) {
 //  같은 밥을 두 번 받지 못한다.
 const grantCol = (code) => collection(db, "classes", code, "foodGrants");
 const grantDoc = (code, id) => doc(db, "classes", code, "foodGrants", id);
-export const FOOD_GRANT_MAX = 99999;   // firestore.rules 의 total 상한과 같게
-export const FOOD_GRANT_STEP = 9999;   // 한 번에 늘릴 수 있는 폭(규칙과 같게)
+export const FOOD_GRANT_MAX = LIMITS.foodGrantMax;
+export const FOOD_GRANT_STEP = LIMITS.foodGrantStep;
 
 /** 한 학생의 누적 밥 수를 n 만큼 늘린다. 늘어난 누적값을 돌려준다. */
 export async function giveFood(code, studentId, n) {

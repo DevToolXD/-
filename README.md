@@ -8,30 +8,45 @@
 
 ---
 
-## ⚠️ 먼저 하셔야 할 일 — 보안 규칙 게시
+## 보안 규칙은 배포와 함께 자동으로 올라갑니다
 
-지금 Firebase에 **게시된 규칙이 오래된 버전**이라, 아래 기능들이 화면에
-"아직 서버 준비가 안 됐어요"라고만 뜨고 동작하지 않습니다.
+`firestore.rules` 는 **`main` 에 푸시하면 사이트와 같이 게시**됩니다.
+콘솔에 붙여넣을 일은 없습니다.
 
-| 기능 | 필요한 컬렉션 | 지금 상태 |
+이 앱에서 가장 자주 난 사고가 이것이었습니다. 규칙 파일은 저장소에서만
+바뀌고 서버 규칙은 옛날 그대로라, 앱이 서버가 막을 요청을 보내고 학생
+화면에 "권한이 없습니다"가 뜨는 일이 반복됐습니다. 그래서 세 겹으로
+막아 두었습니다.
+
+| 겹 | 무엇을 막나 | 어디에 |
 |---|---|---|
-| 주간 투표 (항목 추가·투표) | `voteItems` | ❌ 거부됨 |
-| 주간 채택 결과 | `voteWinners` | ❌ 거부됨 |
-| 선생님 신고함 | `classes/{code}/reports` | ❌ 거부됨 |
-| 광고 문의함 | `adInquiries` | ❌ 거부됨 |
-| 도감의 "몇 명이 발견" 숫자 | `eggStats` | ❌ 거부됨 |
+| 자동 게시 | 규칙을 올리는 것을 잊는 일 | `.github/workflows/pages.yml` |
+| 한도 대조 | 규칙과 앱이 다른 숫자를 아는 일 | `tests/rules_match.test.mjs` |
+| 자리 확인 | 새 컬렉션을 확인 목록에서 빠뜨리는 일 | 같은 파일 + `js/limits.js` |
 
-**해결 방법 (1분):**
+한도(그림 길이, 밥 횟수 같은 숫자)는 **`js/limits.js` 한 곳에만** 적습니다.
+규칙 파일과 어긋나면 배포 전에 빌드가 멈춥니다.
 
-1. [Firebase 콘솔 → Firestore → 규칙](https://console.firebase.google.com/project/manito-e14c1/firestore/rules) 열기
-2. 편집창을 **전부 지우고** 이 저장소의 [`firestore.rules`](./firestore.rules) 내용을 통째로 붙여넣기
-3. **게시(Publish)** 버튼 누르기
+### 한 번만 해두실 설정
 
-게시하면 위 5개가 즉시 정상 동작합니다. 학급·학생·소원·마니또 배정·버그
-제보는 예전 규칙으로도 동작하므로 지금도 문제없습니다.
+자동 게시는 서비스 계정 열쇠가 있어야 동작합니다. 아직 없으면 사이트는
+그대로 배포되고, Actions 요약에 안내가 남습니다.
 
-확인하려면 `node tests/e2e_new_features.mjs` 를 돌려보세요. 게시 전에는
-"건너뜀(규칙 미게시)"이 뜨고, 게시 후에는 전부 통과합니다.
+1. [Firebase 콘솔 → 프로젝트 설정 → 서비스 계정](https://console.firebase.google.com/project/manito-e14c1/settings/serviceaccounts/adminsdk) → **새 비공개 키 생성**
+2. 받은 JSON 전체를 이 저장소의
+   **Settings → Secrets and variables → Actions → New repository secret** 에
+   이름 `FIREBASE_SERVICE_ACCOUNT` 로 저장
+
+이후로는 규칙을 고쳐 푸시하기만 하면 됩니다.
+
+### 지금 서버 상태가 궁금하면
+
+```
+node tests/check_rules.mjs
+```
+
+실제 서버에 요청을 보내 어떤 자리가 열려 있는지 확인합니다. 앱 안에서는
+전체 관리자 화면의 **"서버 규칙"** 칸이 같은 확인을 합니다.
 
 ---
 

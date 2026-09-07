@@ -24,6 +24,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 규칙 파일과 앱이 서로 다른 한도를 알고 있으면 여기서 빌드를 세운다.
+      # (앱이 서버가 막을 요청을 보내 학생 화면에 권한 오류가 뜨던 사고)
+      - name: Check limits match firestore.rules
+        run: node --test tests/rules_match.test.mjs tests/logic.test.mjs
+
       - name: Configure Pages (auto-enable)
         uses: actions/configure-pages@v5
         with:
@@ -38,6 +43,63 @@ jobs:
           grep -rl '?v=DEV' index.html js | xargs sed -i "s/?v=DEV/?v=$V/g"
           echo "Stamped assets with version $V"
           grep -rn "?v=$V" index.html js
+
+      # ---- Firestore 규칙 자동 게시 ----
+      #  이 앱에서 가장 자주 난 사고가 "규칙 오류"였다. 원인은 늘 같았다:
+      #  firestore.rules 는 저장소에만 바뀌어 있고, 실제 서버 규칙은 사람이
+      #  콘솔에 붙여넣기 전까지 옛날 그대로였다. 그 사이에 앱은 서버가 막을
+      #  요청을 보내고, 학생 화면에는 권한 오류가 떴다.
+      #
+      #  그래서 규칙도 사이트와 같이 배포한다. 사람이 붙여넣을 일이 없어진다.
+      #
+      #  시크릿이 있는지는 앞 단계에서 확인해 출력으로 넘긴다. 단계의 if 에는
+      #  그 단계가 직접 정의한 env 도, secrets 도 쓸 수 없기 때문이다.
+      - name: Check for deploy credential
+        id: cred
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$SA" ]; then echo "have=yes" >> "$GITHUB_OUTPUT"
+          else echo "have=no" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Publish Firestore rules
+        if: steps.cred.outputs.have == 'yes'
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools@13 deploy --only firestore:rules --non-interactive
+          rm -f "$RUNNER_TEMP/sa.json"
+          echo "✅ firestore.rules 를 게시했습니다." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Explain how to enable rule publishing
+        if: steps.cred.outputs.have == 'no'
+        run: |
+          {
+            echo "### ⚠️ Firestore 규칙이 자동 게시되지 않았습니다"
+            echo ""
+            echo "\`FIREBASE_SERVICE_ACCOUNT\` 시크릿이 없어 규칙을 올리지 못했습니다."
+            echo "지금은 규칙을 바꿀 때마다 콘솔에 직접 붙여넣어야 합니다."
+            echo ""
+            echo "한 번만 설정해 두면 다시는 손댈 일이 없습니다:"
+            echo "1. Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성"
+            echo "2. 받은 JSON 전체를 이 저장소의 Settings → Secrets and variables →"
+            echo "   Actions → New repository secret 에 \`FIREBASE_SERVICE_ACCOUNT\` 로 저장"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 게시가 실제로 반영됐는지 서버에 직접 물어본다. 여기서 막지는 않는다 —
+      # 사이트 배포까지 세울 일은 아니고, 요약을 보면 바로 알 수 있으면 된다.
+      - name: Verify published rules
+        if: steps.cred.outputs.have == 'yes'
+        continue-on-error: true
+        run: |
+          if node tests/check_rules.mjs; then
+            echo "✅ 게시된 규칙이 firestore.rules 와 맞습니다." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ⚠️ 게시한 규칙이 아직 반영되지 않았습니다" >> "$GITHUB_STEP_SUMMARY"
+            echo "잠시 뒤 \`node tests/check_rules.mjs\` 로 다시 확인해 주세요." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3

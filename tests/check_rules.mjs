@@ -8,6 +8,7 @@
 //  실제 요청을 보내 보는 방식이라, 규칙 파일을 읽는 게 아니라 "지금 서버가
 //  실제로 무엇을 허용하는지"를 본다.
 import { firebaseConfig as CFG } from "../config.js";
+import { RULE_PROBES } from "../js/limits.js";
 
 const BASE = `https://firestore.googleapis.com/v1/projects/${CFG.projectId}` +
              `/databases/(default)/documents`;
@@ -25,20 +26,14 @@ const list = (p) => req(`${p}?pageSize=1`);
 const get  = (p) => req(p);
 
 // 최신 규칙에서만 열리는 자리들. 하나라도 막혀 있으면 예전 버전이다.
-const CHECKS = [
-  { name: "adminAccounts 목록 읽기", run: () => list("adminAccounts"),
-    why: "전체 관리자 화면의 '관리자 계정' 목록" },
-  { name: "eggStats 목록 읽기", run: () => list("eggStats"),
-    why: "이스터에그 발견자 수(문서 하나씩 읽기로 우회 중)" },
-  { name: "voteBallots 목록 읽기", run: () => list("voteBallots"),
-    why: "같은 사람이 두 번 투표하지 못하게 하는 기록" },
-  { name: "securityLog 목록 읽기", run: () => list("securityLog"),
-    why: "개발자 도구를 열어 본 흔적" },
-  { name: "어항(fish) 목록 읽기", run: () => list("classes/0603/fish"),
-    why: "6학년 3반 어항" },
-  { name: "어항 밥 나눠주기 목록 읽기", run: () => list("classes/0603/foodGrants"),
-    why: "전체 관리자 화면의 '어항 밥 주기'" },
-];
+// 목록은 js/limits.js 한 곳에만 적혀 있다 — 앱의 "서버 규칙" 칸도 같은 걸
+// 본다. 예전에는 여기와 앱에 따로 적어 두어서, 컬렉션을 새로 만들 때
+// 한쪽만 고치고 넘어가곤 했다.
+const CHECKS = RULE_PROBES.map((r) => ({
+  name: r.label,
+  why: r.why,
+  run: () => list(r.path.join("/")),
+}));
 // 이미 열려 있어야 정상인 자리들 — 여기서 막히면 규칙이 잘못 올라간 것이다.
 const SHOULD_WORK = [
   { name: "voteItems 목록 읽기", run: () => list("voteItems") },
