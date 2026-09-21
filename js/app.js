@@ -621,7 +621,6 @@ document.addEventListener("click", (e) => {
 //  테마 (예전 "뽀로로 모드" 토글을 테마 탭으로 확장)
 // =============================================================
 const THEME_KEY = "manito.theme";
-const DE_THEMES = ["germany"];
 let themeChangeCount = 0;
 
 function currentTheme() {
@@ -636,12 +635,8 @@ function applyTheme(id, { remember = true, count = false } = {}) {
   const body = document.body;
   // 이전 테마 흔적을 모두 걷어낸다
   THEME_IDS.forEach((t) => body.classList.remove(`theme-${t}`));
-  body.classList.remove("pororo", "de-theme");
+  body.classList.remove("pororo");
   if (themeId !== DEFAULT_THEME) body.classList.add(`theme-${themeId}`);
-  if (DE_THEMES.includes(themeId)) body.classList.add("de-theme");
-  // 독일 테마의 배경 무대(랜드마크·독수리·비스마르크)를 함께 켠다
-  const scene = $("#de-scene");
-  if (scene) scene.classList.toggle("hidden", !DE_THEMES.includes(themeId));
 
   // 뽀로로는 눈·마스코트·잔소리 같은 자기 동작이 따로 있다
   const pororoOn = themeId === "pororo";
@@ -1399,8 +1394,89 @@ async function enterAdminHome() {
     refreshAdminWishlist(),
     refreshTeacherParticipation(),
     refreshReports(),
+    refreshBetaReset(),
   ]);
 }
+
+// ---- 베타 초기화 (어항이 있는 반의 선생님에게만, 딱 한 번) ----
+//  아직 진짜로 쓰기 전이라 연습으로 만든 것들이 쌓여 있다. 그걸 한 번에
+//  치우되, 반에 등록해 둔 학생 명단은 남긴다(그게 제일 손이 많이 간다).
+async function refreshBetaReset() {
+  const card = $("#beta-reset-card");
+  if (!card) return;
+  const mine = !!adminSession && classCode === TANK_CLASS;
+  card.classList.toggle("hidden", !mine);
+  if (!mine) return;
+  setHint("#beta-reset-hint", "");
+  const btn = $("#beta-reset-btn");
+  const used = await data.betaResetUsed(classCode);
+  btn.disabled = used;
+  if (used) setHint("#beta-reset-hint", "이미 한 번 썼어요. 다시 쓸 수 없어요.", false);
+}
+
+$("#beta-reset-btn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  if (classCode !== TANK_CLASS || !adminSession) return;
+  if (await data.betaResetUsed(classCode)) {
+    btn.disabled = true;
+    return setHint("#beta-reset-hint", "이미 한 번 썼어요. 다시 쓸 수 없어요.", false);
+  }
+
+  const roster = await data.listStudents(classCode).catch(() => []);
+  // 1차: 무엇이 지워지고 무엇이 남는지 그대로 적어 보여준다
+  const first = await confirmModal(
+    `${classLabel(classCode)} 베타 초기화\n\n` +
+    `[남는 것]\n` +
+    `· 반에 등록해 둔 학생 명단 ${roster.length}명\n` +
+    `  (이름을 반에 추가해 둔 것 — 이건 그대로 둡니다)\n\n` +
+    `[지워지는 것]\n` +
+    `· 학생들이 쓴 소원\n` +
+    `· 마니또 배정 결과\n` +
+    `· 학생들이 정한 비밀번호 (다음 로그인 때 새로 정하게 됩니다)\n` +
+    `· 어항의 물고기와 밥\n` +
+    `· 신고함\n` +
+    `· 우리 반이 올린 투표 항목\n\n` +
+    `계속할까요?`,
+    { okText: "다음" }
+  );
+  if (!first) return;
+
+  // 2차: 되돌릴 수 없다는 점과 한 번뿐이라는 점만 다시 못박는다
+  const second = await confirmModal(
+    `정말 지울까요?\n\n` +
+    `· 되돌릴 수 없습니다.\n` +
+    `· 이 반에서 다시는 쓸 수 없습니다 (딱 한 번).\n` +
+    `· 학생 명단 ${roster.length}명은 그대로 남습니다.`,
+    { okText: "지우기" }
+  );
+  if (!second) return;
+
+  if (!(await ensureRole(["admin", "superadmin"]))) return;
+  if (!useToken("betaReset")) return;
+  busy(btn, true, "지우는 중…");
+  let done = false;
+  try {
+    const n = await data.betaReset(classCode);
+    // 이 기기에 남은 것들(밥·쿨다운·마지막으로 본 시각)도 같이 치운다
+    try {
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith("manito.tank.")) localStorage.removeItem(k);
+      }
+    } catch {}
+    done = true;
+    setHint("#beta-reset-hint",
+      `치웠어요 — 소원·배정·비밀번호 ${n.secrets}건, 물고기 ${n.fish}마리, ` +
+      `밥 기록 ${n.grants}건, 신고 ${n.reports}건, 투표 항목 ${n.votes}개. ` +
+      `학생 명단 ${roster.length}명은 그대로예요.`, true);
+    await Promise.all([refreshRoster(), refreshAdminWishlist(), refreshReports()]);
+  } catch (err) {
+    setHint("#beta-reset-hint", "초기화하지 못했어요: " + err.message, false);
+  } finally {
+    // busy(false) 가 disabled 를 원래대로 되돌리므로, 잠그는 건 그 뒤에 한다.
+    busy(btn, false);
+    if (done) btn.disabled = true;
+  }
+});
 
 // ---- 선생님 탭: 학급 관리 / 신고함 ----
 function switchAdminTab(name) {
@@ -2250,7 +2326,7 @@ function renderVoteSender(senderSel, inputSel, btnSel, identity) {
   if (!el) return;
   if (identity) {
     el.innerHTML = `올리는 사람 <strong>${escapeHtml(identity.name)}</strong>` +
-      `<span class="muted small"> · ${escapeHtml(identity.roleTag)}</span>`;
+      roleTagHtml(identity.roleTag);
     el.classList.remove("err");
     input.disabled = false;
     btn.disabled = false;
@@ -2452,9 +2528,16 @@ $("#student-vote-add-text").addEventListener("keydown", (e) => {
 //  student-home 이 아니라는 이유로 신원이 사라져 "학급에 먼저 입장해 주세요"
 //  가 떴다. 이제는 실제 로그인 상태(student / adminSession / 전체 관리자)로
 //  판단하므로 어느 화면에 있든 신원이 유지된다.
+// 꼬리표가 없으면 가운뎃점도 빼고 이름만 남긴다.
+function roleTagHtml(tag) {
+  return tag ? `<span class="muted small"> · ${escapeHtml(tag)}</span>` : "";
+}
+
 function currentIdentity() {
   if (superAdminAuthed) {
-    return { name: SUPER_ADMIN.name, roleTag: "전체 관리자" };
+    // 꼬리표 없이 이름만. "정후교 · 전체 관리자" 라고 붙여 두면 어디에
+    // 글을 남기든 직함이 따라다녀서, 그냥 한 사람으로 보이지 않는다.
+    return { name: SUPER_ADMIN.name, roleTag: "" };
   }
   if (student) {
     return { name: student.name, roleTag: `학생 · ${classLabel(classCode)}` };
@@ -2554,7 +2637,7 @@ function renderFeedbackSender(senderSel, textareaSel, btnSel, identity) {
   if (!el) return;
   if (identity) {
     el.innerHTML = `제보하는 사람 <strong>${escapeHtml(identity.name)}</strong>` +
-      `<span class="muted small"> · ${escapeHtml(identity.roleTag)}</span>`;
+      roleTagHtml(identity.roleTag);
     el.classList.remove("err");
     textEl.disabled = false;
     btn.disabled = false;
@@ -2875,9 +2958,7 @@ const FOOD_INTERVAL = 24 * 60 * 60 * 1000;
 const CATCHUP_MS = 30 * 60 * 1000;      // 이만큼 지나 있으면 자라는 걸 보여준다
 
 // ---- 확대/축소 (그림 그리는 앱처럼) ----
-// 휴대폰에서도 "전체"가 정말 전체가 되도록 최소 배율을 넉넉히 낮춘다
-// (좁은 화면 300px 에 8560px 을 다 담으려면 0.035 쯤은 되어야 한다)
-const ZOOM_MIN = 0.03, ZOOM_MAX = 5;
+const ZOOM_MAX = 5;
 
 // ---- 밥 ----
 //  FISH_FED_MAX 는 firestore.rules 의 `fed <= 9` 와 반드시 같아야 한다.
@@ -3131,8 +3212,18 @@ function applyWorldSize() {
   world.style.width = Math.round(TANK_W * tankState.zoom) + "px";
   world.style.height = Math.round(TANK_H * tankState.zoom) + "px";
 }
-// 어항이 뷰포트보다 작아지면(많이 축소했을 때) 한쪽에 몰리지 않게 가운데로
-// 민다. 그리기·좌표 변환·솎아내기가 모두 이 값을 같이 써야 어긋나지 않는다.
+// 더 줄일 수 없는 배율 — 이보다 작아지면 어항이 칸보다 작아져서 어항이
+// 아닌 빈 곳이 보이고, 그 빈 곳까지 스크롤된다. 그래서 "칸을 꽉 채우는
+// 배율"을 바닥으로 잡는다. 이 아래로는 내려가지 않으므로 스크롤이 어항
+// 밖으로 나가는 일이 없다.
+function minZoom() {
+  const vp = $("#tank-viewport");
+  if (!vp || vp.clientWidth < 2 || vp.clientHeight < 2) return 0.03;
+  return Math.max(vp.clientWidth / TANK_W, vp.clientHeight / TANK_H);
+}
+
+// 바닥 배율을 지키므로 어항이 칸보다 작아질 일이 없다. 그래도 창 크기가
+// 막 바뀌는 순간 같은 틈을 대비해 0 으로 수렴하는 보정만 남겨 둔다.
 function tankOffset() {
   const vp = $("#tank-viewport");
   const z = tankState.zoom;
@@ -3153,7 +3244,7 @@ function setZoom(next, focusPx, focusPy) {
   const vp = $("#tank-viewport");
   if (!vp) return;
   const z0 = tankState.zoom;
-  const z1 = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+  const z1 = Math.max(minZoom(), Math.min(ZOOM_MAX, next));
   if (Math.abs(z1 - z0) < 0.0005) return;
   const fx = focusPx ?? vp.clientWidth / 2;
   const fy = focusPy ?? vp.clientHeight / 2;
@@ -3173,8 +3264,14 @@ function refreshZoomLabel() {
 function zoomToFit() {
   const vp = $("#tank-viewport");
   if (!vp) return;
-  const z = Math.min(vp.clientWidth / TANK_W, vp.clientHeight / TANK_H);
-  tankState.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+  // 탭을 막 열면 칸이 아직 0×0 일 수 있다. 그때 계산하면 최소 배율로
+  // 굳어 어항이 콩알만 하게 열린다 — 크기가 잡힌 뒤 다시 맞춘다.
+  if (vp.clientWidth < 2 || vp.clientHeight < 2) {
+    requestAnimationFrame(zoomToFit);
+    return;
+  }
+  // 칸을 꽉 채우는 배율까지만 물러난다. 더 줄이면 어항 밖이 보인다.
+  tankState.zoom = Math.min(ZOOM_MAX, minZoom());
   applyWorldSize();
   vp.scrollLeft = (TANK_W * tankState.zoom - vp.clientWidth) / 2;
   vp.scrollTop = (TANK_H * tankState.zoom - vp.clientHeight) / 2;
@@ -3837,16 +3934,10 @@ function openFishModal(open) {
   vp.addEventListener("pointerup", endPointer);
   vp.addEventListener("pointercancel", endPointer);
 
-  // 확대 단추는 어항 안에 떠 있어서, 그냥 두면 누를 때마다 클릭이 어항까지
-  // 흘러가 밥이 뿌려진다. 여기서 끊는다.
-  const zoomBtn = (sel, fn) => {
-    const el = $(sel);
-    el.addEventListener("pointerdown", (e) => e.stopPropagation());
-    el.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
-  };
-  zoomBtn("#tank-zoom-in", () => setZoom(tankState.zoom * 1.35));
-  zoomBtn("#tank-zoom-out", () => setZoom(tankState.zoom / 1.35));
-  zoomBtn("#tank-zoom-fit", () => zoomToFit());
+  // 단추는 스크롤 칸 밖(.tank-frame)에 있어서 클릭이 어항으로 새지 않는다.
+  $("#tank-zoom-in").addEventListener("click", () => setZoom(tankState.zoom * 1.35));
+  $("#tank-zoom-out").addEventListener("click", () => setZoom(tankState.zoom / 1.35));
+  $("#tank-zoom-fit").addEventListener("click", () => zoomToFit());
 
   // 커서를 대면 누구 물고기인지
   vp.addEventListener("pointermove", (e) => {
@@ -4012,7 +4103,7 @@ function openAdModal(open) {
     textEl.disabled = false;
     if (me) {
       senderEl.innerHTML = `보내는 사람 <strong>${escapeHtml(me.name)}</strong>` +
-        `<span class="muted small"> · ${escapeHtml(me.roleTag)}</span>`;
+        roleTagHtml(me.roleTag);
       senderEl.classList.remove("err");
     } else {
       // 이름 없이 들어오는 문의는 받지 않는다 — 누가 보냈는지 알아야 답을 준다.

@@ -156,6 +156,7 @@ export const BUCKETS = {
   fishAdd:   { max: 4,  windowMs: 10 * 60 * 1000, label: "물고기 넣기" },
   foodGrant: { max: 20, windowMs: 60 * 1000,     label: "밥 나눠주기" },
   fishOp:    { max: 10, windowMs: 60 * 1000,     label: "어항 정리" },
+  betaReset: { max: 2,  windowMs: 10 * 60 * 1000, label: "베타 초기화" },
 };
 
 // ---------- 변조 감지 ----------

@@ -607,6 +607,70 @@ export async function checkRulesPublished() {
   return out;
 }
 
+// ---------- 베타 초기화 (반마다 한 번) ----------
+//  아직 실제로 쓰기 전이라 연습 삼아 만든 것들을 한 번에 치운다.
+//  학생 명단(반에 등록한 것)만 남기고 나머지는 전부 지운다.
+//
+//  "한 번만"은 meta/betaReset 문서로 표시한다. 규칙이 이 문서를 만들 수만
+//  있고 고치거나 지울 수 없게 해 두어서, 지웠다 다시 만들어 두 번 쓰는
+//  길이 없다.
+const betaResetDoc = (code) => doc(db, "classes", code, "meta", "betaReset");
+
+/** 이 반이 이미 베타 초기화를 썼는지. 규칙이 아직이면 false(= 아직 안 씀). */
+export async function betaResetUsed(code) {
+  try {
+    const d = await getDoc(betaResetDoc(code));
+    return d.exists();
+  } catch { return false; }
+}
+
+/**
+ * 학생 명단만 남기고 그 반의 모든 기록을 지운다.
+ * @returns {Promise<{secrets:number, fish:number, grants:number, reports:number, votes:number}>}
+ */
+export async function betaReset(code) {
+  const counts = { secrets: 0, fish: 0, grants: 0, reports: 0, votes: 0 };
+  const wipe = async (colRef, key) => {
+    try {
+      const snap = await getDocs(colRef);
+      const batch = writeBatch(db);
+      let n = 0;
+      snap.forEach((d) => { batch.delete(doc(colRef, d.id)); n++; });
+      if (n) await batch.commit();
+      counts[key] = n;
+    } catch { /* 막혀 있으면 그 칸만 건너뛴다 */ }
+  };
+
+  // 소원·비밀번호·마니또 배정
+  await wipe(collection(db, "classes", code, "secrets"), "secrets");
+  // 어항과 밥
+  await wipe(fishCol(code), "fish");
+  await wipe(grantCol(code), "grants");
+  // 신고함
+  await wipe(collection(db, "classes", code, "reports"), "reports");
+
+  // 배정 상태
+  try { await deleteDoc(stateDoc(code)); } catch {}
+
+  // 이 반이 올린 이번 주 투표 항목과 그 표
+  try {
+    const snap = await getDocs(collection(db, "voteItems"));
+    const batch = writeBatch(db);
+    let n = 0;
+    snap.forEach((d) => {
+      if ((d.data() || {}).classCode === code) {
+        batch.delete(doc(collection(db, "voteItems"), d.id)); n++;
+      }
+    });
+    if (n) await batch.commit();
+    counts.votes = n;
+  } catch {}
+
+  // 한 번 썼다는 표시. 규칙이 아직이면 못 남기지만, 지우는 것 자체는 됐다.
+  try { await setDoc(betaResetDoc(code), { at: serverTimestamp() }); } catch {}
+  return counts;
+}
+
 // ---------- 어항 ----------
 //  반마다 하나. 물고기 크기는 저장하지 않는다 — seed 와 createdAt 으로
 //  매번 계산한다(js/fish.js). 그래서 앱을 꺼둬도 자라고, 2000마리가

@@ -1,0 +1,18 @@
+# 서비스 계정 열쇠는 절대 저장소에 들어가면 안 된다.
+# 이 저장소는 GitHub Pages 로 공개되므로, 올라가는 순간 Firebase 프로젝트가
+# 통째로 남의 손에 넘어간다. 열쇠는 GitHub Actions 시크릿
+# (FIREBASE_SERVICE_ACCOUNT) 으로만 쓴다.
+*serviceaccount*.json
+*service-account*.json
+*adminsdk*.json
+*-firebase-adminsdk-*.json
+firebase-key*.json
+*.pem
+*.p12
+.env
+.env.*
+
+# 도구가 남기는 것들
+node_modules/
+.firebase/
+*.log

@@ -57,32 +57,6 @@ export const THEMES = [
     },
   },
 
-  // ---- 독일 ----
-  //  국기(흑적금)와 독일제국기(흑백적), 비스마르크, 브란덴부르크 문·쾰른
-  //  대성당·라이히스탁을 한 화면에 담은 대형 테마. 밤의 금박 유리 화면.
-  {
-    id: "germany",
-    name: "독일",
-    group: "독일",
-    era: "제국의 독수리부터 오늘의 흑·적·금까지",
-    tagline: "종이빛 유리 · 브란덴부르크 문 · 비스마르크 · 두 개의 국기",
-    swatch: ["#f1efea", "#8a6a12", "#c8102e"],
-    preview: {
-      kind: "germany",
-      bg: "linear-gradient(180deg, #f6f4f0 0%, #f1efea 60%, #e8e4da 100%)",
-      ink: "#1a1a1c",
-      muted: "#8d887e",
-      card: "rgba(255, 255, 255, 0.72)",
-      edge: "rgba(138, 106, 18, 0.4)",
-      accent: "linear-gradient(180deg, #c8102e 0%, #8f0b20 100%)",
-      onAccent: "#ffffff",
-      radius: "8px",
-      blur: "7px",
-      shadow: "0 5px 14px rgba(60, 48, 20, 0.16)",
-      spec: "rgba(255, 255, 255, 0.9)",
-    },
-  },
-
   // ---- 리퀴드 글라스 ----
   //  테두리를 긋지 않고 위아래 가장자리만 눌러 유리처럼 보이게 하는 단색 테마.
   //  · 흰 배경, 검은 글자, 회색 한 단계뿐이고 파랑·금색 같은 강조색이
@@ -118,8 +92,5 @@ export const isTheme = (id) => THEME_IDS.includes(id);
 export const getTheme = (id) => THEMES.find((t) => t.id === id) || THEMES[0];
 
 // 화면에서 묶어 보여줄 순서
-export const THEME_GROUPS = ["기본", "재미", "독일"];
+export const THEME_GROUPS = ["기본", "재미"];
 
-// 참고(코드에만 남김): 1933~1945년 나치 독일의 상징은 독일 형법 86a조가
-// 지금도 전시를 금지하는 혐오 표식이라 이 테마에 넣지 않았습니다.
-// 화면에는 따로 안내를 띄우지 않습니다.
