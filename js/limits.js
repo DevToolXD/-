@@ -19,7 +19,12 @@ export const LIMITS = {
   // ---- 어항: 물고기 ----
   fishArtMin: 4,        // art.size() >= 4
   fishArtMax: 6000,     // art.size() <= 6000
-  fishFedMax: 9,        // fed <= 9  (밥을 이만큼 먹으면 더 못 먹는다)
+  // 예전엔 9번 먹으면 "배가 불러요"라며 더 못 먹게 막았다. 그림 성장
+  // 공식(js/fish.js)은 어차피 처음 9번만 계산에 쓰므로 더 먹는다고 커지진
+  // 않지만, 먹는 행위 자체를 막을 이유는 없어서 없앴다. 숫자는 그래도
+  // 남겨 둔다 — 개발자도구로 fed 를 무한정 밀어 넣는 것까지 막는
+  // 안전장치일 뿐, 정상적인 사용에서는 절대 닿지 않는다.
+  fishFedMax: 999999,
   fishNameMax: 20,      // cleanStr(name, 20)
   ownerIdMax: 64,       // cleanStr(ownerId, 64)
 

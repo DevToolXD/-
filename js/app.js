@@ -2961,10 +2961,10 @@ const CATCHUP_MS = 30 * 60 * 1000;      // 이만큼 지나 있으면 자라는 
 const ZOOM_MAX = 5;
 
 // ---- 밥 ----
-//  FISH_FED_MAX 는 firestore.rules 의 `fed <= 9` 와 반드시 같아야 한다.
-//  예전에는 이 값을 클라이언트가 몰라서, 9번 먹은 물고기에게 밥을 주면
-//  서버가 규칙으로 막고 그 오류 문구가 그대로 화면에 떴다. 이제는 보내기
-//  전에 여기서 걸러서 "배가 불러요" 라고만 말한다.
+//  "배가 불러서 밥을 못 준다"는 없앴다 — 물고기는 언제든 먹을 수 있다.
+//  FISH_FED_MAX 는 firestore.rules 와 반드시 같아야 하는 숫자이긴 한데,
+//  지금은 정상적인 사용으로는 닿을 일이 없는 아주 큰 안전장치일 뿐이다
+//  (개발자도구로 fed 를 무한정 밀어 넣는 극단적인 경우만 막는다).
 const FISH_FED_MAX = data.FISH_FED_MAX;
 const FEED_AGGRO = 10;                  // 밥 냄새를 맡고 몰려드는 마리 수
 const FEED_WINNERS = 2;                 // 그중 실제로 먹는 마리 수
@@ -3590,14 +3590,9 @@ async function throwFood(wx, wy) {
   }
   const near = feedableFish(now, wx, wy);
   if (!near.length) {
-    // 배부른 물고기밖에 없는 건지, 아예 아무도 없는 건지 구분해서 알려준다
-    const anyNear = tankState.fish.some((f) => {
-      const p = fishPos(f, now);
-      return Math.hypot(p.x - wx, p.y - wy) <= FEED_RADIUS;
-    });
-    setHint("#tank-hint", anyNear
-      ? "이 근처 물고기는 배가 불러요. 다른 곳에 뿌려보세요."
-      : "이 근처에 물고기가 없어요. 물고기 가까이에 뿌려보세요.", false);
+    // 이제 물고기는 배가 부르지 않으니, 여기 걸리는 건 사실상 "근처에
+    // 아무도 없다"뿐이다. (FISH_FED_MAX 는 정상적으로는 닿지 않는다)
+    setHint("#tank-hint", "이 근처에 물고기가 없어요. 물고기 가까이에 뿌려보세요.", false);
     return;
   }
   if (!(await ensureRole(["student", "admin", "superadmin"]))) return;
@@ -3642,7 +3637,7 @@ async function eatFood(winners, burst) {
   for (const f of winners) {
     const fresh = tankState.fish.find((x) => x.id === f.id) || f;
     const fed = Number(fresh.fed) || 0;
-    if (fed >= FISH_FED_MAX) continue;      // 그 사이 누가 먹였으면 건너뛴다
+    if (fed >= FISH_FED_MAX) continue;      // 안전장치(사실상 절대 안 걸림)
     const before = fishlib.sizeOf(fresh, Date.now());
     try {
       await data.feedFish(classCode, fresh);

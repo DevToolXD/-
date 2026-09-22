@@ -98,7 +98,7 @@ service cloud.firestore {
         allow update: if request.resource.data.keys().hasOnly(
                ['ownerId','ownerName','name','art','seed','fed','createdAt'])
           && request.resource.data.fed == resource.data.fed + 1
-          && request.resource.data.fed <= 9
+          && request.resource.data.fed <= 999999
           && request.resource.data.art == resource.data.art
           && request.resource.data.ownerId == resource.data.ownerId
           && request.resource.data.name == resource.data.name

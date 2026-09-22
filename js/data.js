@@ -810,9 +810,11 @@ export function watchFoodGrant(code, studentId, onChange) {
 /** 밥주기: fed 를 1 늘린다. 규칙이 +1 외에는 막는다. */
 export async function feedFish(code, fish) {
   const fed = Number(fish.fed) || 0;
-  // 규칙의 `fed <= 9` 를 여기서 먼저 지킨다. 넘겨서 보내면 서버가 막고
-  // 그 오류가 학생 화면에 그대로 떴었다.
-  if (fed >= FISH_FED_MAX) throw new Error("이 물고기는 배가 불러요.");
+  // "배가 불러서 못 먹는다"는 없앴다. FISH_FED_MAX 는 이제 정상적인
+  // 사용으로는 절대 닿지 않는 안전장치일 뿐이다(개발자도구로 fed 를
+  // 무한정 밀어 넣는 것만 막는다). 규칙과 같은 숫자를 여기서 먼저
+  // 확인해야, 그 극단적인 경우에도 서버 오류가 아니라 이 문구가 뜬다.
+  if (fed >= FISH_FED_MAX) throw new Error("이 물고기는 더 못 먹여요.");
   await updateDoc(fishDoc(code, fish.id), { fed: fed + 1 });
 }
 

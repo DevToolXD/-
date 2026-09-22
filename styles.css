@@ -1773,6 +1773,12 @@ body.theme-mono .topbar {
   z-index: 40;
   border-radius: 0 0 var(--radius) var(--radius);
 }
+/* #scroll-progress(파랑→보라 진행 바, z-index:210)는 화면 맨 위에 항상 떠
+   있어서, 상단바가 sticky 로 진짜 위에 붙어도 그 위로 3px짜리 색 띠가
+   깔려 마치 유리가 화면 끝에서 3px 떨어져 떠 있는 것처럼 보인다. 또한
+   이 테마는 화면 어디에도 강조색을 안 남기는 게 원칙인데 이 바만 예외로
+   파랑·보라를 남기고 있었다. 리퀴드 글라스에서는 끈다. */
+body.theme-mono #scroll-progress { display: none; }
 /* 사이드바는 이미 position: fixed 로 왼쪽에 고정돼 있다. 여기서 relative 로
    덮으면 고정이 풀려 본문 한가운데로 떠내려간다 — ::before 링은 fixed 에도
    그대로 붙으니 모달(정적 요소)에만 relative 를 준다. */
