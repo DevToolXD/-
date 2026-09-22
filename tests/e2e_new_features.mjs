@@ -147,30 +147,36 @@ async function main() {
     check("새 소원 등록 시 다시쓰기 메모가 사라짐", sec.wishRewriteNote === null && sec.wish === newWish);
   }
 
-  console.log("\n[3] 학생 수가 홀수면 선생님 자동 참여");
+  console.log("\n[3] 회귀 테스트: 학생 수가 홀수여도 선생님은 배정에 참여하지 않는다");
+  // 예전에는 홀수일 때 선생님을 배정 풀에 끼워 넣었다 — "짝을 맞춰야 한다"는
+  // 잘못된 전제 때문이었다. 순환(고리) 방식은 인원이 몇 명이든(홀수 포함)
+  // 모두가 정확히 한 명씩 주고받으므로 그럴 필요가 없었고, 그 코드 때문에
+  // 실제로 학생이 선생님에게 배정되거나 선생님의 마니또가 되는 일이 있었다.
+  // 지금의 assignManito() 는 학생 수와 무관하게 학생끼리만 돈다.
   {
-    const students = await makeStudents(5);
-    const pool = await assign(students, true);
-    check("풀 크기 = 학생 5명 + 선생님 1명 = 6", pool.length === 6);
-    const teacherSecret = fromFields(await get(`classes/${TEST_CODE}/secrets/${TEACHER_ID}`));
-    check("선생님이 누군가를 돌봄(caringForId 존재)", !!teacherSecret.caringForId);
-    const someoneCaresForTeacher = [];
-    for (const s of students) {
-      const sec = fromFields(await get(`classes/${TEST_CODE}/secrets/${s.id}`));
-      if (sec.caringForId === TEACHER_ID) someoneCaresForTeacher.push(s.id);
-    }
-    check("학생 중 한 명이 선생님을 돌봄", someoneCaresForTeacher.length === 1);
-    // 정리: 선생님 시크릿 원상복구(테스트 오염 방지)
-    await del(`classes/${TEST_CODE}/secrets/${TEACHER_ID}`);
-  }
-
-  console.log("\n[4] 학생 수가 짝수면 선생님 미참여");
-  {
-    const students = await makeStudents(4);
-    const pool = await assign(students, false);
-    check("풀 크기 = 학생 4명 그대로 (선생님 제외)", pool.length === 4);
+    const students = await makeStudents(5); // 홀수
+    const pool = await assign(students, false); // false = 지금의 실제 동작
+    check("풀 크기 = 학생 5명 그대로(홀수여도 선생님 안 낌)", pool.length === 5);
     const teacherSecret = await get(`classes/${TEST_CODE}/secrets/${TEACHER_ID}`);
     check("선생님 시크릿 문서가 생성되지 않음", !!teacherSecret.error);
+    for (const s of students) {
+      const sec = fromFields(await get(`classes/${TEST_CODE}/secrets/${s.id}`));
+      check(`${s.name}: 선생님을 돌보지 않음`, sec.caringForId !== TEACHER_ID);
+    }
+  }
+
+  console.log("\n[4] 예전 형식과의 호환: 규칙은 선생님 시크릿 문서 자체를 막지 않는다");
+  // 위 [3]에서 앱은 더 이상 이 문서를 만들지 않지만, 이미 예전 버전에서
+  // 만들어져 남아 있는 반의 데이터가 갑자기 깨지면 안 된다. 그래서 규칙
+  // 자체는(앱 로직과 별개로) 여전히 이 문서를 허용해야 한다.
+  {
+    const students = await makeStudents(4);
+    const pool = await assign(students, true); // 예전 형식을 흉내
+    check("예전 형식대로 써도 규칙이 거부하지 않음(호환 유지)", pool.length === 5);
+    const teacherSecret = fromFields(await get(`classes/${TEST_CODE}/secrets/${TEACHER_ID}`));
+    check("선생님 문서도 정상적으로 읽힘", !!teacherSecret.caringForId);
+    // 정리: 선생님 시크릿 원상복구(테스트 오염 방지)
+    await del(`classes/${TEST_CODE}/secrets/${TEACHER_ID}`);
   }
 
   console.log("\n[5] 슈퍼 관리자의 몰래 배정(수동 지정)");

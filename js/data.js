@@ -180,17 +180,17 @@ export async function verifyAdmin(code, adminCode) {
 }
 
 // ---------- 마니또 배정 / 재배정 ----------
-// 학생 수가 홀수면 선생님도 마니또 참여자로 자동 포함(짝수를 맞추기 위함).
-// 이미 짝수면 선생님은 포함하지 않음.
+// 예전에는 학생 수가 홀수면 선생님을 끼워 넣어 짝수로 맞췄는데, 그럴 필요가
+// 없었다. 순환(고리) 방식(A→B→C→…→A)은 인원이 몇 명이든(홀수여도) 모두가
+// 정확히 한 명씩 주고받으므로 짝을 맞출 이유가 없다. 그런데도 선생님을
+// 끼워 넣는 바람에, 홀수 반에서는 학생이 실제로 선생님에게 배정되거나
+// 선생님의 마니또가 되는 일이 생겼다. 이제는 학생끼리만 돈다.
 export async function assignManito(code) {
   const students = (await listStudents(code)).filter((s) => !s.synthetic);
   if (students.length < 2) {
     throw new Error("학생이 2명 이상 있어야 배정할 수 있습니다.");
   }
-  const teacherIncluded = students.length % 2 === 1;
-  const pool = teacherIncluded
-    ? [...students, { id: TEACHER_ID, name: TEACHER_NAME }]
-    : students;
+  const pool = students;
 
   const cycle = buildCycle(pool.length);
   const updates = new Map(pool.map((s) => [s.id, { caringForId: null, caringForName: null }]));
@@ -219,7 +219,10 @@ export async function assignManito(code) {
   batch.set(stateDoc(code), {
     assignedAt: serverTimestamp(),
     studentCount: students.length,
-    teacherIncluded,
+    // 필드는 남겨 둔다(규칙과 예전 문서 형태 호환). 새 배정은 항상 false다 —
+    // getPool() 이 이 값을 보고 예전에 이미 배정된 반(선생님이 낀 채로 아직
+    // 재배정 전인 반)은 깨지지 않게 그대로 보여준다.
+    teacherIncluded: false,
   });
   await batch.commit();
   return pool.length;

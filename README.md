@@ -60,10 +60,11 @@ node tests/check_rules.mjs
    도와주는 친구가 배정되면 그 친구의 소원이 먼저 보이고, 이름은 **복권처럼
    긁어야** 확인할 수 있습니다. **본인의 마니또(자신을 도와주는 사람)는
    화면에 절대 노출되지 않습니다.**
-3. **선생님(학급 관리자)**: 관리자 코드로 로그인(최초 입력값이 그 반의
-   코드로 등록됨) → 학생 명단 입력/삭제 → **마니또 랜덤 배정**(자기 자신
-   제외, 1:1, 순환 구조로 중복 없음. **학생 수가 홀수면 선생님도 자동으로
-   참여**해 짝을 맞춥니다) → 우리 반 학생들의 소원을 열람하고 부적절하거나
+3. **선생님(학급 관리자)**: 학년 선생님 열쇠로 첫 등록(그 뒤로는 직접 정한
+   비밀번호로 로그인) → 학생 명단 입력/삭제 → **마니또 랜덤 배정**(자기
+   자신 제외, 1:1, 순환 구조로 중복 없음. 순환 방식이라 인원이 홀수여도
+   모두가 정확히 한 명씩 주고받으므로 **선생님은 배정에 참여하지
+   않습니다**) → 우리 반 학생들의 소원을 열람하고 부적절하거나
    잘못 쓴 소원은 **다시 쓰기 요청** 가능 → **전체 관계 공개** 표 확인 →
    필요하면 **재배정**.
 4. **전체 관리자**: 화면 맨 아래 **광고 문의** 칸에 정해진 비밀 코드를 적고
@@ -413,8 +414,8 @@ Firebase Authentication도 서버(Cloud Functions)도 없는 정적 사이트라
 | `classes/{code}` | `adminSalt`, `adminHash` | 그 반의 관리자 코드 해시 |
 | `classes/{code}/students/{id}` | `name` | 학생 이름 (선생님이 삭제 가능) |
 | `classes/{code}/secrets/{id}` | `salt`,`pwHash`,`hasPassword`,`wish`,`wishSetAt`,`wishRewriteNote`,`caringForId`,`caringForName` | 비밀번호 해시 + **본인의 소원** + 다시쓰기 요청 메모 + **내가 도와주는 대상**(guardian → protege 방향) |
-| `classes/{code}/secrets/_teacher_` | 위와 동일 | 학생 수가 홀수일 때 자동 참여하는 선생님의 시크릿(가짜 학생 취급) |
-| `classes/{code}/meta/state` | `assignedAt`,`studentCount`,`teacherIncluded` | 배정 완료 여부 + 이번 배정에 선생님이 포함됐는지 |
+| `classes/{code}/secrets/_teacher_` | 위와 동일 | 예전 버전에서 홀수 반일 때 선생님이 배정에 자동 참여하던 시절의 흔적. 지금은 새 배정에 쓰이지 않는다 |
+| `classes/{code}/meta/state` | `assignedAt`,`studentCount`,`teacherIncluded` | 배정 완료 여부. `teacherIncluded` 는 항상 `false` 로 쓰인다(예전 형식과의 호환용으로만 남김) |
 | `classes/{code}/reports/{autoId}` | `name`,`roleTag`,`text`,`reason`,`status`,`createdAt` | 검열에 걸린 투표 항목 시도 → 그 반 담임선생님의 "신고함" 탭. 선생님은 `status`만 `approved`/`rejected`로 바꿀 수 있고 내용은 고칠 수 없음 |
 | `adminAccounts/{code}_{studentId}` | `classCode`,`studentId`,`name`,`active`,`grantedAt` | 계정에 붙은 관리자 권한. 부여 시각은 서버 시각으로 못박고, 한 번 만들어진 기록은 수정 불가(거둘 땐 삭제) |
 | `voteItems/{autoId}` | `label`,`count`,`weekKey`,`addedBy`,`addedByRole`,`createdAt` | 주간 투표 항목 (반과 무관한 전역 컬렉션). 투표는 규칙상 **정확히 +1씩만**, 라벨·주차·올린이는 수정 불가 |

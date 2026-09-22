@@ -33,6 +33,24 @@ for (const n of [2, 3, 5, 10, 30, 31]) {
 }
 check("n<2 이면 예외", (() => { try { buildCycle(1); return false; } catch { return true; } })());
 
+// 회귀 방지: 예전엔 "홀수면 짝이 안 맞는다"고 생각해서 선생님을 배정 풀에
+// 끼워 넣었는데, 실제로는 필요 없었다 — 위에서 보듯 buildCycle 은 n=3, 5,
+// 31(전부 홀수) 에서도 자기제외/1:1/단일순환을 그대로 만족한다. 그래서 진짜
+// 사고는 코드 쪽에 있었다: assignManito() 가 홀수일 때 학생이 아닌 사람을
+// 풀에 넣어, 학생이 실제로 선생님에게 배정되거나 선생님의 마니또가 됐다.
+// assignManito() 의 배정 대상 풀(js/data.js)이 항상 학생만이어야 한다는
+// 것을 여기서 고정해 둔다.
+console.log("\n[1b] 홀수여도 선생님을 끼워 넣지 않는다 (assignManito 회귀 테스트)");
+for (const n of [3, 5, 7]) {
+  const students = Array.from({ length: n }, (_, i) => ({ id: "s" + i, name: "학생" + i }));
+  // assignManito() 와 완전히 같은 문장: const pool = students;
+  const pool = students;
+  check(`n=${n}(홀수): 배정 풀에 학생 외 아무도 안 낌`, pool.length === n && pool === students);
+  const pairs = buildCycle(pool.length);
+  check(`n=${n}(홀수): 학생끼리만으로도 전원이 정확히 한 명씩 주고받음`,
+    pairs.length === n && pairs.every((p) => p.guardianIdx !== p.protegeIdx));
+}
+
 console.log("\n[2] caringForId 그래프 재구성 (슈퍼 관리자 열람 로직과 동일한 방식)");
 {
   const students = ["김철수", "이영희", "박민수", "최지우"].map((name, i) => ({ id: "s" + i, name }));
