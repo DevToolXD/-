@@ -317,13 +317,12 @@ export async function requestWishRewrite(code, id, note) {
 
 // ---------- 슈퍼 관리자 (전체 학급 열람/편집) ----------
 export async function superAdminOverview() {
-  const out = [];
-  for (const code of CLASS_CODES) {
-    const students = (await listStudents(code)).filter((s) => !s.synthetic);
-    const assigned = await isAssigned(code);
-    out.push({ code, count: students.length, assigned });
-  }
-  return out;
+  // 9개 반을 하나씩 순서대로 기다리면 반 수만큼 왕복 시간이 그대로
+  // 더해진다. 읽는 문서 수는 같아도 한꺼번에 보내면 훨씬 빨리 끝난다.
+  return Promise.all(CLASS_CODES.map(async (code) => {
+    const [students, assigned] = await Promise.all([listStudents(code), isAssigned(code)]);
+    return { code, count: students.filter((s) => !s.synthetic).length, assigned };
+  }));
 }
 
 // 슈퍼 관리자는 등록 여부와 상관없이 어떤 학생의 소원도 수정 가능
@@ -704,7 +703,11 @@ export async function addFish(code, ownerId, ownerName, name, art) {
   if (doc.art.length > FISH_ART_MAX) throw new Error("그림이 너무 커요. 조금만 덜어내 주세요.");
 
   const ref = await addDoc(fishCol(code), { ...doc, createdAt: serverTimestamp() });
-  return ref.id;
+  // 서버 시각은 아직 안 왔으니(serverTimestamp 는 로컬에서 값을 모른다)
+  // 지금 시각으로 근사한 값을 같이 돌려준다. 어항이 더 이상 실시간 구독을
+  // 안 하므로, 방금 넣은 내 물고기를 화면에 바로 보여주려면 호출한 쪽이
+  // 이 값을 그대로 로컬 목록에 끼워 넣어야 한다.
+  return { id: ref.id, ...doc, createdAt: Date.now() };
 }
 
 export async function listFish(code) {
@@ -722,19 +725,6 @@ function readFish(d) {
   const ms = t && typeof t.toMillis === "function" ? t.toMillis()
     : (t instanceof Date ? t.getTime() : Date.now());
   return { id: d.id, ...v, createdAt: ms };
-}
-
-/** 어항을 실시간으로 구독한다. 해제 함수를 돌려준다. */
-export function watchFish(code, onChange) {
-  try {
-    return onSnapshot(fishCol(code), (snap) => {
-      const out = [];
-      snap.forEach((d) => out.push(readFish(d)));
-      onChange(out);
-    }, () => {});
-  } catch {
-    return () => {};
-  }
 }
 
 // ---- 밥 나눠주기 ----

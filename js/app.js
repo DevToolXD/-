@@ -199,8 +199,9 @@ const SEC_SEEN = new Set();          // 같은 행동을 연달아 여러 번 �
 function noteSecurity(action, detail) {
   const stamp = `${action}|${detail || ""}`;
   if (SEC_SEEN.has(stamp)) return;
+  // 같은 행동은 페이지를 연 동안 한 번만 적는다 — 우클릭을 계속 하는
+  // 학생이 1분마다 서버에 쓰기를 쌓지 않게.
   SEC_SEEN.add(stamp);
-  setTimeout(() => SEC_SEEN.delete(stamp), 60000);
   const me = currentIdentity();
   data.logSecurityEvent(
     me?.name || "로그인 안 한 사람", classCode, me?.roleTag || "", action, detail || "",
@@ -2098,10 +2099,30 @@ $("#sa-food-give").addEventListener("click", async (e) => {
 const RULES_CONSOLE_URL =
   `https://console.firebase.google.com/project/${firebaseConfig.projectId}/firestore/rules`;
 
-async function refreshRulesState() {
+// 규칙이 최신이라고 한 번 확인되면, 그 뒤로 관리자 화면을 열 때마다
+// 매번 6개 컬렉션을 다시 읽을 이유가 없다 — 규칙은 배포할 때만 바뀐다.
+// 확인됐다는 결과만 잠깐(6시간) 기억해 두고, 그 안에는 자동 확인을
+// 건너뛴다. "새로고침" 버튼을 직접 누르면 이 캐시를 무시하고 바로 다시
+// 확인한다.
+const RULES_OK_KEY = "manito.rulesOk";
+const RULES_OK_TTL = 6 * 60 * 60 * 1000;
+
+async function refreshRulesState({ force = false } = {}) {
   const state = $("#sa-rules-state");
   const actions = $("#sa-rules-actions");
   const how = $("#sa-rules-how");
+  if (!force) {
+    try {
+      const cached = JSON.parse(lsGet(RULES_OK_KEY) || "null");
+      if (cached?.ok && Date.now() - cached.checkedAt < RULES_OK_TTL) {
+        state.textContent = "규칙이 최신이에요. 더 하실 일 없습니다.";
+        state.className = "rules-state ok";
+        actions.hidden = true;
+        how.hidden = true;
+        return;
+      }
+    } catch {}
+  }
   state.textContent = "확인 중…";
   state.className = "rules-state";
   actions.hidden = true;
@@ -2110,10 +2131,12 @@ async function refreshRulesState() {
   try { r = await data.checkRulesPublished(); }
   catch { r = { ok: false, missing: [] }; }
   if (r.ok) {
+    try { lsSet(RULES_OK_KEY, JSON.stringify({ ok: true, checkedAt: Date.now() })); } catch {}
     state.textContent = "규칙이 최신이에요. 더 하실 일 없습니다.";
     state.classList.add("ok");
     return;
   }
+  try { localStorage.removeItem(RULES_OK_KEY); } catch {}
   // 오류가 아니라 '할 일'이다. 빨간 경고로 띄우면 앱이 고장 난 것처럼 보인다.
   // 빠진 자리 목록은 js/limits.js 의 RULE_PROBES 에서 그대로 온다 —
   // 여기에 또 적어 두면 컬렉션이 늘 때마다 한쪽만 고치게 된다.
@@ -2125,7 +2148,7 @@ async function refreshRulesState() {
   how.hidden = false;
 }
 
-$("#sa-rules-check").addEventListener("click", refreshRulesState);
+$("#sa-rules-check").addEventListener("click", () => refreshRulesState({ force: true }));
 
 // ---- 개발자 도구를 열어 본 흔적 ----
 async function refreshSecurityLog() {
@@ -2951,6 +2974,19 @@ const TANK_CLASS = "0603";              // 어항이 있는 반
 const TANK_W = 8560, TANK_H = 4280;     // 어항 한 판의 크기(px)
 const TANK_CAP = 2000;                  // 최대 마리 수
 const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
+
+// ---- 어항 데이터: 실시간 구독을 끄고 캐시 + 유효기간으로 바꿨다 ----
+//  전에는 어항 탭을 열 때마다 전체 물고기 컬렉션(최대 2000마리)을
+//  onSnapshot 으로 구독했다. 그러면 (1) 여는 순간 최대 2000건을 읽고,
+//  (2) 열어 둔 채로 있는 동안 "누구든" 물고기를 넣거나 밥을 줄 때마다
+//  그 변경이 열려 있는 구독자 수만큼 그대로 다시 청구된다 — 반 학생
+//  30명이 각자 열어 두면 한 번의 밥주기가 30번의 읽기가 되는 식이다.
+//  성장은 서버에 저장하지 않고 seed+시각으로 매번 계산하므로(js/fish.js),
+//  물고기 "목록" 자체는 20분 안에는 사실상 거의 안 바뀐다. 그래서 이제는
+//  기기에 캐시해 두고, 이 유효기간이 지났을 때만 실제로 한 번 읽는다.
+//  그 사이에 몇 번을 열고 닫든 서버는 안 부른다. 내가 직접 넣거나 먹인
+//  물고기는 서버를 다시 안 불러도 그 자리에서 캐시에 바로 반영한다.
+const TANK_CACHE_TTL = 20 * 60 * 1000;  // 이 안에는 다시 열어도 서버를 안 부른다
 const FOOD_PER_DAY = 3;                 // 하루에 생기는 밥
 const FOOD_MAX = 6;                     // 저절로 쌓이는 밥의 상한(이틀치)
 const FOOD_HARD_MAX = 999;              // 선생님이 준 밥까지 합친 최대
@@ -2982,7 +3018,6 @@ const tankState = {
   zoom: 1,
   follow: null,       // 따라다닐 물고기 id
   hover: null,
-  unsub: null,
   raf: null,
   grow: new Map(),    // id -> {from, to, at}  껐다 켠 사이 자란 만큼 보여주기
   aggro: new Map(),   // id -> {at, tx, ty, hold}  밥으로 몰려가는 중
@@ -2991,7 +3026,9 @@ const tankState = {
   pan: null,          // 끌어서 옮기는 중
   armed: false,       // 밥을 집어 든 상태 — 이때만 뿌릴 수 있다
   grantTotal: 0,      // 선생님이 지금까지 준 밥의 누적 개수
+  fishFetchedAt: 0,   // 물고기 목록을 서버에서 마지막으로 실제로 받아온 시각
   grantUnsub: null,
+  grantFallback: 0,   // 실시간 통로가 막혔을 때만 한 번 직접 읽는 타이머
 };
 
 const tankKey = (k) => `manito.tank.${k}:${classCode}:${student?.id || "-"}`;
@@ -3647,16 +3684,47 @@ async function eatFood(winners, burst) {
       console.warn("밥주기 실패:", err?.message || err);
       continue;
     }
-    const after = fishlib.sizeOf({ ...fresh, fed: fed + 1 }, Date.now());
+    // 실시간 구독이 없으니, 서버에 성공한 만큼은 여기서 직접 반영해 둔다.
+    // 안 그러면 캐시 유효기간(20분) 안에 같은 물고기를 또 먹여도 이전 fed
+    // 값 그대로 계산해서 화면이 서버 상태보다 뒤처진다.
+    fresh.fed = fed + 1;
+    const after = fishlib.sizeOf(fresh, Date.now());
     if (after - before > 0.01) {
       tankState.grow.set(fresh.id, { from: before, to: after, at: Date.now() });
     }
     eaten.push(fresh.name);
   }
-  if (eaten.length) toast(`${iga(eaten.join(", "))} 밥을 먹었어요!`);
+  if (eaten.length) { saveTankCache(); toast(`${iga(eaten.join(", "))} 밥을 먹었어요!`); }
   else setHint("#tank-hint", "밥이 물에 흩어졌어요.", true);
 }
 
+
+// ---- 물고기 목록 캐시 ----
+//  반 전체가 보는 같은 데이터라 학생 개인이 아니라 학급코드로만 묶는다.
+const tankCacheKey = () => `manito.tank.cache:${classCode}`;
+// localStorage 는 5MB 남짓이라 그림이 가득 찬 어항은 못 담을 수 있다.
+// 그럴 때도 이 탭 안에서는 메모리 사본으로 캐시가 계속 통한다.
+let tankMemCache = null; // { key, fish, cachedAt }
+function loadTankCache() {
+  try {
+    const raw = JSON.parse(lsGet(tankCacheKey()) || "null");
+    if (raw && Array.isArray(raw.fish) && typeof raw.cachedAt === "number") return raw;
+  } catch {}
+  return tankMemCache?.key === tankCacheKey() ? tankMemCache : null;
+}
+// cachedAt 을 안 넘기면 "서버에서 실제로 받아온 시각"을 그대로 유지한다.
+// 밥주기·물고기 넣기처럼 내가 한 일을 캐시에 바로 반영할 때 이 시각까지
+// 지금으로 밀어버리면, 어항을 계속 만지작거리는 사람은 유효기간이 끝없이
+// 늘어나 다른 사람이 넣은 물고기를 영영 못 보게 된다.
+function saveTankCache(cachedAt = tankState.fishFetchedAt || Date.now()) {
+  tankMemCache = { key: tankCacheKey(), fish: tankState.fish, cachedAt };
+  try {
+    lsSet(tankCacheKey(), JSON.stringify({ fish: tankState.fish, cachedAt }));
+  } catch {
+    // 캐시가 너무 커서(그림이 많이 쌓인 반) 저장이 실패해도 어항 자체는
+    // 멀쩡히 돌아간다 — 다음에 또 서버에서 받아올 뿐이다.
+  }
+}
 
 // ---- 열기 / 닫기 ----
 function openTank() {
@@ -3681,8 +3749,7 @@ function openTank() {
   const seenAt = Number(lsGet(tankKey("seenAt")) || 0);
   const showGrowth = seenAt && now - seenAt >= CATCHUP_MS;
 
-  if (tankState.unsub) tankState.unsub();
-  tankState.unsub = data.watchFish(classCode, (rows) => {
+  const applyFishRows = (rows) => {
     if (showGrowth) {
       for (const f of rows) {
         const before = fishlib.sizeOf(f, seenAt);
@@ -3697,25 +3764,51 @@ function openTank() {
     if (showGrowth && tankState.grow.size) {
       setHint("#tank-hint", `안 보는 사이 ${tankState.grow.size}마리가 자랐어요.`, true);
     }
-  });
-  // 선생님이 넣어준 밥을 먼저 한 번 확인하고(실시간 통로가 막혀 있어도
-  // 받을 수 있게), 그 다음 실시간으로 지켜본다.
-  data.getFoodGrant(classCode, student?.id || "-")
-    .then((total) => applyFoodGrant(total, false))
-    .catch(() => {});
+  };
+
+  // 캐시가 아직 유효기간(20분) 안이면 서버를 아예 부르지 않는다. 지났거나
+  // 처음 여는 거면 그때만 한 번 읽는다. 그 사이 늘어난 물고기·먹인 밥은
+  // 다음 유효기간이 돌아올 때 한꺼번에 반영된다 — 어차피 성장이 느려서
+  // 20분 차이는 눈에 띄지 않는다.
+  const cache = loadTankCache();
+  if (cache && now - cache.cachedAt < TANK_CACHE_TTL) {
+    tankState.fishFetchedAt = cache.cachedAt;
+    applyFishRows(cache.fish);
+  } else {
+    data.listFish(classCode).then((rows) => {
+      tankState.fishFetchedAt = now;
+      applyFishRows(rows);
+      saveTankCache(now);
+    }).catch(() => {
+      // 네트워크가 안 되면 오래된 캐시라도 보여준다 — 빈 어항보다는 낫다.
+      if (cache) { tankState.fishFetchedAt = cache.cachedAt; applyFishRows(cache.fish); }
+    });
+  }
+  // onSnapshot 은 구독하는 순간 지금 값을 한 번 바로 돌려주므로 따로
+  // getDoc 으로 또 읽지 않는다. 다만 학교망이 실시간 통로를 막으면 그
+  // 첫 값이 영영 안 오니, 4초 안에 안 오면 그때만 한 번 직접 읽는다.
+  let firstGrant = true;
   if (tankState.grantUnsub) tankState.grantUnsub();
-  tankState.grantUnsub = data.watchFoodGrant(classCode, student?.id || "-",
-    (total) => applyFoodGrant(total, true));
+  const sid = student?.id || "-";
+  tankState.grantUnsub = data.watchFoodGrant(classCode, sid, (total) => {
+    applyFoodGrant(total, !firstGrant);
+    firstGrant = false;
+  });
+  clearTimeout(tankState.grantFallback);
+  tankState.grantFallback = setTimeout(() => {
+    if (!firstGrant || !tankState.raf) return;
+    data.getFoodGrant(classCode, sid).then((total) => applyFoodGrant(total, false)).catch(() => {});
+  }, 4000);
 
   lsSet(tankKey("seenAt"), String(now));
   if (!tankState.raf) tankLoop();
 }
 function closeTank() {
-  if (tankState.unsub) { tankState.unsub(); tankState.unsub = null; }
   if (tankState.raf) { cancelAnimationFrame(tankState.raf); tankState.raf = null; }
   tankState.aggro.clear();
   tankState.pellets = [];
   if (tankState.grantUnsub) { tankState.grantUnsub(); tankState.grantUnsub = null; }
+  clearTimeout(tankState.grantFallback);
   lsSet(tankKey("seenAt"), String(Date.now()));
   closeTankPanel();
 }
@@ -3969,8 +4062,12 @@ function openFishModal(open) {
       if (!(await confirmModal(`${eul(`${f.name}(${f.ownerName})`)} 어항에서 뺄까요?`))) return;
       if (!(await ensureRole(["admin", "superadmin"]))) return;
       if (!useToken("fishOp")) return;
-      try { await data.deleteFish(classCode, f.id); toast("어항에서 뺐어요."); }
-      catch (err) { setHint("#tank-hint", "실패: " + err.message, false); }
+      try {
+        await data.deleteFish(classCode, f.id);
+        tankState.fish = tankState.fish.filter((x) => x.id !== f.id);
+        saveTankCache();
+        toast("어항에서 뺐어요.");
+      } catch (err) { setHint("#tank-hint", "실패: " + err.message, false); }
       return;
     }
     if (!tankState.armed) return;              // 밥을 집어야 뿌릴 수 있다
@@ -4061,7 +4158,10 @@ function openFishModal(open) {
     if (!useToken("fishAdd")) return;
     busy(btn, true, "넣는 중…");
     try {
-      await data.addFish(classCode, student?.id || me.name, me.name, nameRaw, art);
+      const fish = await data.addFish(classCode, student?.id || me.name, me.name, nameRaw, art);
+      // 서버를 다시 읽지 않고 방금 만든 물고기를 그대로 목록에 끼워 넣는다.
+      tankState.fish.push(fish);
+      saveTankCache();
       lsSet(tankKey("addedAt"), String(Date.now()));
       openFishModal(false);
       toast("어항에 넣었어요!");
@@ -4249,19 +4349,34 @@ $("#codex-nav-btn").addEventListener("click", async () => {
   showView("codex");
   await refreshCodex();
 });
-$("#codex-refresh").addEventListener("click", refreshCodex);
+$("#codex-refresh").addEventListener("click", () => refreshCodex({ force: true }));
 
-async function refreshCodex() {
+// 발견자 수는 누가 처음 그 이스터에그를 찾아야만 바뀐다 — 도감을 열 때마다
+// 15개 문서를 새로 읽을 이유가 없다. 잠깐(3분) 캐시해 두고, "새로고침"
+// 버튼을 직접 누르면 그때만 진짜로 다시 읽는다.
+const EGG_STATS_TTL = 3 * 60 * 1000;
+let eggStatsCache = null; // { stats, cachedAt }
+
+async function refreshCodex({ force = false } = {}) {
   const found = loadFoundEggs();
   $("#codex-summary").innerHTML =
     `전체 ${EGG_TOTAL}개 중 <b class="ticker" id="codex-found-n">0</b>개 발견 · 쉬움 5 · 중간 5 · 어려움 5`;
   tickNumber($("#codex-found-n"), found.length);
   const list = $("#codex-list");
-  list.innerHTML = `<li class="muted small">발견자 수 불러오는 중…</li>`;
   let stats = {};
   let statsFailed = false;
-  try { stats = await data.getEggStats(EGGS.map((e) => e.id)); }
-  catch { statsFailed = true; }
+  if (!force && eggStatsCache && Date.now() - eggStatsCache.cachedAt < EGG_STATS_TTL) {
+    stats = eggStatsCache.stats;
+  } else {
+    list.innerHTML = `<li class="muted small">발견자 수 불러오는 중…</li>`;
+    try {
+      stats = await data.getEggStats(EGGS.map((e) => e.id));
+      eggStatsCache = { stats, cachedAt: Date.now() };
+    } catch {
+      statsFailed = true;
+      if (eggStatsCache) stats = eggStatsCache.stats; // 실패해도 예전 값이라도 보여준다
+    }
+  }
   const diffClass = { "쉬움": "easy", "중간": "mid", "어려움": "hard" };
   list.innerHTML = EGGS.map((e) => {
     const got = found.includes(e.id);
