@@ -14,9 +14,12 @@ import {
   deleteDoc,
   writeBatch,
   query,
+  where,
   orderBy,
   limit,
   serverTimestamp,
+  increment,
+  getCountFromServer,
   onSnapshot,
 } from "./firebase.js?v=DEV";
 import { randomHex, hashSecret, safeEqual } from "./crypto.js?v=DEV";
@@ -92,6 +95,14 @@ export async function addStudents(code, names) {
 export async function deleteStudent(code, id) {
   await deleteDoc(secretsDoc(code, id));
   await deleteDoc(doc(studentsCol(code), id));
+}
+
+// 로그인 화면은 기기에 캐시한 명단을 쓴다. 그 사이 선생님이 지운 학생으로
+// 들어가면 ensureSecretDoc() 이 시크릿 문서를 새로 만들어 버리므로,
+// 로그인 직전에 이 한 건만 확인한다(명단 전체 30건 대신 1건).
+export async function studentExists(code, id) {
+  const s = await getDoc(doc(studentsCol(code), id));
+  return s.exists();
 }
 
 // ---------- 학생 인증 ----------
@@ -317,11 +328,11 @@ export async function requestWishRewrite(code, id, note) {
 
 // ---------- 슈퍼 관리자 (전체 학급 열람/편집) ----------
 export async function superAdminOverview() {
-  // 9개 반을 하나씩 순서대로 기다리면 반 수만큼 왕복 시간이 그대로
-  // 더해진다. 읽는 문서 수는 같아도 한꺼번에 보내면 훨씬 빨리 끝난다.
+  // 인원수만 필요하므로 명단을 통째로 받지 않고 개수만 센다 — 반마다
+  // 학생 수만큼이던 읽기가 1회가 된다. 9개 반은 한꺼번에 보낸다.
   return Promise.all(CLASS_CODES.map(async (code) => {
-    const [students, assigned] = await Promise.all([listStudents(code), isAssigned(code)]);
-    return { code, count: students.filter((s) => !s.synthetic).length, assigned };
+    const [cnt, assigned] = await Promise.all([getCountFromServer(studentsCol(code)), isAssigned(code)]);
+    return { code, count: cnt.data().count, assigned };
   }));
 }
 
@@ -349,13 +360,134 @@ export async function superAdminSetCare(code, guardianId, protegeId) {
   });
 }
 
+// ---------- 바뀐 것만 받아오기 ----------
+//  목록을 열 때마다 통째로 다시 읽으면 문서 수만큼 청구된다(어항 300마리면
+//  300번). 대신 기기에 둔 목록(prev)보다 늦게 생긴 문서만 받고, 그 사이
+//  지워진 게 있는지는 개수만 세서(1000건당 1회) 확인한다. 그래서 평소에는
+//  "새 문서 수 + 1" 만 청구되고, 아무것도 안 바뀌었으면 2회로 끝난다.
+//
+//  prev = { rows, mark, total }
+//   rows  : 가진 목록. _local 이 붙은 줄은 내가 방금 쓰고 아직 서버에서
+//           다시 받아 보지 않은 것(서버 개수 total 에 아직 안 들어 있다)
+//   mark  : 서버에서 받은 것 중 가장 늦은 createdAt(ms)
+//   total : 그때 서버에 있던 문서 수
+//  지워진 게 있거나 확인이 실패하면 그냥 통째로 다시 읽는다 — 틀린 목록을
+//  보여주는 것보다 한 번 더 읽는 게 낫다.
+function readRow(d) {
+  const v = d.data() || {};
+  const t = v.createdAt;
+  const ms = t && typeof t.toMillis === "function" ? t.toMillis()
+    : (t instanceof Date ? t.getTime() : null);
+  // 시각이 없는 문서는 화면용으로만 지금 시각을 쓰고, 기준점(mark)에는
+  // 절대 넣지 않는다 — 기기 시계가 빠르면 그 뒤에 들어온 문서를 놓친다.
+  return ms == null ? { id: d.id, ...v, createdAt: Date.now(), _noTs: true } : { id: d.id, ...v, createdAt: ms };
+}
+const newest = (rows, floor = 0) =>
+  rows.reduce((m, r) => (r._noTs ? m : Math.max(m, r.createdAt || 0)), floor);
+const byTime = (a, b) => a.createdAt - b.createdAt;
+
+// 개수가 모자라면(누가 지웠으면) 어느 것이 지워졌는지 개수만으로 찾아낸다.
+//  가진 목록을 시각 순으로 반씩 나눠 "이 구간에 서버엔 몇 개?"를 물어보고,
+//  모자란 쪽만 계속 쪼갠다. 지워진 게 하나면 2000마리여도 11번 남짓 —
+//  통째로 다시 받는(2000번) 것보다 훨씬 싸다. 구간은 [앞, 다음 묶음의 시작)
+//  으로 잡아서 ms 아래 자릿수가 달라도 한 문서가 두 구간에 걸치지 않는다.
+//  partial: 목록이 최근 것만 담고 있음(게시판). 그 앞에서 지워진 건 화면에
+//  없으니 찾지 않는다.
+async function findDeleted(colRef, rows, gone, partial, total) {
+  if (!rows.length) return null;
+  const dead = new Set();
+  let budget = 48;
+  // Timestamp.toMillis() 는 ms 아래 자리까지 돌려주는데, 조건에 넣는 Date 는
+  // ms 까지만 담긴다. 그래서 묶음과 경계를 모두 "ms 정수"로 맞춘다 — 안
+  // 그러면 1000.2 와 1000.7 사이에서 자른 경계가 1000 으로 내려가 두 문서가
+  // 같은 쪽으로 세어진다.
+  const msOf = (r) => Math.floor(r.createdAt);
+  const count = async (lo, hi) => {
+    if (--budget < 0) throw new Error("budget");
+    const cs = [where("createdAt", ">=", new Date(lo))];
+    if (hi != null) cs.push(where("createdAt", "<", new Date(hi)));
+    return (await getCountFromServer(query(colRef, ...cs))).data().count;
+  };
+  const walk = async (list, hi, onServer) => {
+    if (onServer === list.length) return;
+    if (onServer > list.length) throw new Error("unknown docs");
+    if (onServer === 0) { list.forEach((r) => dead.add(r.id)); return; }
+    // 가운데 근처에서, 같은 ms 끼리는 떼어 놓지 않는 자리로 자른다
+    const mid = list.length >> 1;
+    let m = mid;
+    while (m < list.length && msOf(list[m]) === msOf(list[m - 1])) m++;
+    if (m >= list.length) { m = mid; while (m > 0 && msOf(list[m]) === msOf(list[m - 1])) m--; }
+    if (m <= 0) {
+      // 전부 같은 ms 라 개수로는 더 못 쪼갠다(한 번에 같이 저장된 문서들).
+      // 이 구간에 남은 몇 개만 직접 받아 보고, 목록에서 빠진 걸 가려낸다.
+      const cs = [where("createdAt", ">=", new Date(msOf(list[0])))];
+      if (hi != null) cs.push(where("createdAt", "<", new Date(hi)));
+      const alive = new Set((await getDocs(query(colRef, ...cs))).docs.map((d) => d.id));
+      if (alive.size !== onServer || [...alive].some((id) => !list.some((r) => r.id === id))) {
+        throw new Error("unknown docs");
+      }
+      list.forEach((r) => { if (!alive.has(r.id)) dead.add(r.id); });
+      return;
+    }
+    const left = list.slice(0, m), right = list.slice(m);
+    const leftN = await count(msOf(left[0]), msOf(right[0]));
+    await walk(left, msOf(right[0]), leftN);
+    await walk(right, hi, onServer - leftN);
+  };
+  try {
+    // 전체 목록이면 "전체 구간의 서버 개수"는 방금 센 total 그대로다
+    const onServer = partial ? await count(msOf(rows[0]), null) : total;
+    await walk(rows, null, onServer);
+  } catch {
+    return null;
+  }
+  if (!partial && dead.size !== gone) return null;
+  return dead;
+}
+
+async function syncCollection(colRef, prev, cap = 0) {
+  if (prev && Array.isArray(prev.rows) && prev.mark > 0 && Number.isInteger(prev.total) && prev.total >= 0) {
+    try {
+      const [snap, cnt] = await Promise.all([
+        getDocs(query(colRef, where("createdAt", ">", new Date(prev.mark)))),
+        getCountFromServer(colRef),
+      ]);
+      const fresh = snap.docs.map(readRow);
+      const known = new Set(prev.rows.filter((r) => !r._local).map((r) => r.id));
+      const added = fresh.filter((r) => !known.has(r.id));
+      const total = cnt.data().count;
+      // 서버에서 다시 받은 줄이 로컬 사본을 대신한다. 다시 안 받은 _local
+      // 줄은 그 사이 지워진 것이다(내가 쓴 건 항상 mark 보다 늦다).
+      const freshIds = new Set(fresh.map((r) => r.id));
+      let rows = prev.rows.filter((r) => !r._local && !freshIds.has(r.id)).concat(fresh).sort(byTime);
+      const gone = prev.total + added.length - total;
+      if (gone > 0) {
+        const dead = await findDeleted(colRef, rows, gone, !!cap, total);
+        rows = dead ? rows.filter((r) => !dead.has(r.id)) : null;
+      } else if (gone < 0) {
+        rows = null;          // 설명이 안 되는 차이 — 통째로 다시 받는다
+      }
+      if (rows) {
+        if (cap && rows.length > cap) rows = rows.slice(rows.length - cap);
+        return { rows, mark: newest(fresh, prev.mark), total, full: false };
+      }
+    } catch { /* 아래에서 통째로 다시 읽는다 */ }
+  }
+  const snap = await getDocs(cap ? query(colRef, orderBy("createdAt", "desc"), limit(cap)) : colRef);
+  const rows = snap.docs.map(readRow).sort(byTime);
+  let total = rows.length;
+  if (cap && rows.length >= cap) {
+    try { total = (await getCountFromServer(colRef)).data().count; } catch { total = -1; }
+  }
+  // total 을 모르면(-1) 다음에도 통째로 읽게 된다 — 틀리는 것보다는 낫다.
+  return { rows, mark: newest(rows), total, full: true };
+}
+
 // ---------- 버그 제보 게시판 (반 구분 없이 전체 공용, 최신순) ----------
-export async function listFeedback() {
-  const q = query(feedbackCol(), orderBy("createdAt", "desc"), limit(100));
-  const snap = await getDocs(q);
-  const out = [];
-  snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
-  return out;
+export const FEEDBACK_SHOWN = 100;
+/** 최근 100개. prev 를 넘기면 그 뒤로 바뀐 것만 받아 합친다. */
+export function syncFeedback(prev) {
+  return syncCollection(feedbackCol(), prev, FEEDBACK_SHOWN);
 }
 
 // 광고 문의와 동일하게 이름은 화면에서 입력받지 않고 로그인한 본인 것이 넘어온다.
@@ -387,7 +519,16 @@ export async function deleteFeedback(id) {
 //  컬렉션 목록 읽기는 규칙이 막아 둘 수 있지만 문서 하나씩 읽는 건 열려 있다.
 //  이스터에그 id 는 앱이 이미 전부 알고 있으므로, id 목록을 받으면 목록 조회
 //  없이 하나씩 읽어 모은다. 그래야 규칙 버전과 무관하게 항상 숫자가 나온다.
+//  최신 규칙은 목록 읽기를 열어 두었으므로 먼저 목록으로 한 번에 읽는다 —
+//  아직 아무도 못 찾은 이스터에그는 문서가 없어서 청구되지 않는다(15회 →
+//  찾아진 개수만큼). 규칙이 예전 것이라 목록이 막히면 하나씩 읽는다.
 export async function getEggStats(ids) {
+  try {
+    const snap = await getDocs(eggStatsCol());
+    const out = {};
+    snap.forEach((d) => { out[d.id] = Number(d.data().count) || 0; });
+    return out;
+  } catch { /* 예전 규칙: 아래에서 하나씩 */ }
   if (Array.isArray(ids) && ids.length) {
     const out = {};
     await Promise.all(ids.map(async (id) => {
@@ -444,14 +585,15 @@ export function weekRangeLabel(key) {
 const MAX_VOTE_LABEL = 40;
 
 // 특정 주차의 투표 항목 (득표순)
+//  예전에는 모든 주의 항목을 최근 300개까지 받아 와서 이번 주 것만 골랐다.
+//  몇 주만 지나도 투표 화면을 열 때마다 300번씩 청구됐다. 이제 서버가
+//  그 주 것만 돌려준다. (같음 조건 하나라 따로 색인을 만들 필요가 없다)
 export async function listVoteItems(key = weekKeyOf()) {
-  const snap = await getDocs(query(voteItemsCol(), orderBy("createdAt", "desc"), limit(300)));
+  const snap = await getDocs(query(voteItemsCol(), where("weekKey", "==", key), limit(300)));
   const out = [];
   snap.forEach((d) => {
     const v = d.data();
-    if (v.weekKey === key) {
-      out.push({ id: d.id, label: v.label, count: Number(v.count) || 0, addedBy: v.addedBy || "" });
-    }
+    out.push({ id: d.id, label: v.label, count: Number(v.count) || 0, addedBy: v.addedBy || "" });
   });
   out.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ko"));
   return out;
@@ -475,8 +617,11 @@ export async function addVoteItem(code, label, addedBy, addedByRole, rosterNames
   }
 
   const key = weekKeyOf();
-  const existing = await listVoteItems(key);
-  if (existing.some((it) => it.label === clean)) {
+  // 같은 이름이 있는지만 보면 되므로 그 한 건만 찾는다(같음 조건 두 개는
+  // 색인 없이도 된다).
+  const dup = await getDocs(query(voteItemsCol(),
+    where("weekKey", "==", key), where("label", "==", clean), limit(1)));
+  if (!dup.empty) {
     throw new Error("이미 같은 항목이 올라와 있어요.");
   }
   const ref = await addDoc(voteItemsCol(), {
@@ -490,11 +635,20 @@ export async function addVoteItem(code, label, addedBy, addedByRole, rosterNames
   return { ok: true, id: ref.id };
 }
 
+// 읽고 +1 해서 쓰던 것을 서버에서 +1 하게 바꿨다. 읽기가 하나 줄고,
+// 두 사람이 동시에 눌러 한 표가 사라지던 경우도 없어진다. 규칙의
+// "count == 이전 + 1" 은 그대로 통과한다.
 export async function voteForItem(itemId) {
-  const snap = await getDoc(voteItemDoc(itemId));
-  if (!snap.exists()) throw new Error("사라진 항목이에요. 새로고침 해주세요.");
-  const cur = Number(snap.data().count) || 0;
-  await updateDoc(voteItemDoc(itemId), { count: cur + 1 });
+  try {
+    await updateDoc(voteItemDoc(itemId), { count: increment(1) });
+  } catch (e) {
+    // 없는 문서를 고치려 하면 서버가 not-found 대신 권한 거절로 답할 수도
+    // 있다. 실패했을 때만 한 번 읽어서 "사라진 항목"인지 가려낸다.
+    const gone = e?.code === "not-found" ||
+      !(await getDoc(voteItemDoc(itemId)).then((s) => s.exists(), () => true));
+    if (gone) throw new Error("사라진 항목이에요. 새로고침 해주세요.");
+    throw e;
+  }
 }
 
 // ---------- 주간 마감 / 채택 ----------
@@ -703,28 +857,15 @@ export async function addFish(code, ownerId, ownerName, name, art) {
   if (doc.art.length > FISH_ART_MAX) throw new Error("그림이 너무 커요. 조금만 덜어내 주세요.");
 
   const ref = await addDoc(fishCol(code), { ...doc, createdAt: serverTimestamp() });
-  // 서버 시각은 아직 안 왔으니(serverTimestamp 는 로컬에서 값을 모른다)
-  // 지금 시각으로 근사한 값을 같이 돌려준다. 어항이 더 이상 실시간 구독을
-  // 안 하므로, 방금 넣은 내 물고기를 화면에 바로 보여주려면 호출한 쪽이
-  // 이 값을 그대로 로컬 목록에 끼워 넣어야 한다.
-  return { id: ref.id, ...doc, createdAt: Date.now() };
+  // 서버 시각은 아직 모르니 지금 시각으로 근사한다. 어항은 실시간 구독을
+  // 안 하므로 호출한 쪽이 이 줄을 목록에 바로 끼워 넣는다. _local 은
+  // syncCollection() 에 "아직 서버에서 다시 받아 보지 않은 줄"이라고 알린다.
+  return { id: ref.id, ...doc, createdAt: Date.now(), _local: true };
 }
 
-export async function listFish(code) {
-  const snap = await getDocs(fishCol(code));
-  const out = [];
-  snap.forEach((d) => out.push(readFish(d)));
-  return out;
-}
-
-// Firestore 타임스탬프를 ms 로 펴서 준다. 방금 만든 문서는 서버 시각이
-// 아직 안 와서 null 일 수 있는데, 그때는 지금 시각으로 본다.
-function readFish(d) {
-  const v = d.data() || {};
-  const t = v.createdAt;
-  const ms = t && typeof t.toMillis === "function" ? t.toMillis()
-    : (t instanceof Date ? t.getTime() : Date.now());
-  return { id: d.id, ...v, createdAt: ms };
+/** 어항 목록. prev 를 넘기면 그 뒤로 새로 들어온 물고기만 받아 합친다. */
+export function syncFish(code, prev) {
+  return syncCollection(fishCol(code), prev);
 }
 
 // ---- 밥 나눠주기 ----
@@ -978,10 +1119,9 @@ export async function listAdInquiries() {
   return out;
 }
 
+// 읽지 않고 서버에서 +1. 문서가 없으면 1로 만들어지므로 규칙의
+// "새로 만들 땐 1, 고칠 땐 +1" 을 그대로 지킨다.
 export async function recordEggFound(eggId) {
   if (typeof eggId !== "string" || !/^[a-z0-9]{1,32}$/.test(eggId)) return;
-  const ref = eggStatsDoc(eggId);
-  const s = await getDoc(ref);
-  const current = s.exists() ? Number(s.data().count) || 0 : 0;
-  await setDoc(ref, { count: current + 1 }, { merge: true });
+  await setDoc(eggStatsDoc(eggId), { count: increment(1) }, { merge: true });
 }

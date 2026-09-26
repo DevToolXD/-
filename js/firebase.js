@@ -97,13 +97,17 @@ export const writeBatch = firestoreApi
     }
   : () => { throw new Error(FRIENDLY_MSG); };
 export const query = need("query");
+export const where = need("where");
 export const orderBy = need("orderBy");
 export const limit = need("limit");
 export const serverTimestamp = need("serverTimestamp");
+export const increment = need("increment");
+// 문서를 받지 않고 개수만 센다. 1000건당 읽기 1회로 청구된다.
+export const getCountFromServer = need("getCountFromServer", true);
 
-// 실시간 구독. 어항에서 누가 물고기를 넣거나 밥을 주면 다른 사람 화면에도
-// 바로 보여야 해서 쓴다. CDN 로드가 실패했으면 아무 것도 하지 않는 해제
-// 함수를 돌려준다 — 호출한 쪽이 분기하지 않아도 되게.
+// 실시간 구독. 구독 중인 문서가 바뀔 때마다 구독자마다 읽기가 청구되므로
+// 문서 하나(선생님이 준 내 밥)에만 쓴다. CDN 로드가 실패했으면 아무 것도
+// 하지 않는 해제 함수를 돌려준다 — 호출한 쪽이 분기하지 않아도 되게.
 export const onSnapshot = firestoreApi
   ? (...args) => firestoreApi.onSnapshot(...args)
   : () => () => {};

@@ -5,6 +5,7 @@ import * as data from "./data.js?v=DEV";
 import { BLOCK_MESSAGE, screenVoteLabel } from "./moderation.js?v=DEV";
 import * as guard from "./guard.js?v=DEV";
 import * as fishlib from "./fish.js?v=DEV";
+import { cacheGet, cacheSet, cacheClear } from "./localcache.js?v=DEV";
 import { eul, iga } from "./korean.js?v=DEV";
 import { THEMES, THEME_IDS, THEME_GROUPS, DEFAULT_THEME, isTheme, getTheme }
   from "./themes.js?v=DEV";
@@ -781,6 +782,45 @@ $$(".role-btn").forEach((b) =>
 // =============================================================
 let nameToId = new Map();
 
+// ---- 명단 캐시 ----
+//  로그인 화면을 열 때마다 반 명단(30명이면 30회)을 다시 읽었다. 명단은
+//  선생님이 학생을 넣고 뺄 때만 바뀌므로 기기에 30분 둔다.
+//   · 목록에 없는 이름을 치면 그때 한 번 새로 받는다(새로 들어온 학생).
+//   · 로그인 직전에 그 학생 문서 하나만 확인한다(그 사이 지워진 학생).
+//   · 선생님 화면은 항상 새로 받고, 받은 김에 캐시도 갈아 끼운다.
+const ROSTER_TTL = 30 * 60 * 1000;
+const rosterKey = (code) => `manito.roster:${code}`;
+async function rosterFor(code, { force = false } = {}) {
+  if (!force) {
+    try {
+      const c = JSON.parse(lsGet(rosterKey(code)) || "null");
+      if (c && Array.isArray(c.rows) && Date.now() - c.at < ROSTER_TTL) return c.rows;
+    } catch {}
+  }
+  const rows = await data.listStudents(code);
+  lsSet(rosterKey(code), JSON.stringify({ rows, at: Date.now() }));
+  return rows;
+}
+function fillNameList(students) {
+  const list = $("#student-name-list");
+  list.innerHTML = "";
+  nameToId = new Map();
+  for (const s of students) {
+    nameToId.set(s.name, s.id);
+    const opt = document.createElement("option");
+    opt.value = s.name;
+    list.appendChild(opt);
+  }
+}
+let rosterRefetched = false;   // 로그인 화면 한 번에 "없는 이름" 재조회는 한 번만
+async function idForName(name) {
+  let id = nameToId.get(name);
+  if (id || rosterRefetched || !name) return id;
+  rosterRefetched = true;
+  try { fillNameList(await rosterFor(classCode, { force: true })); } catch {}
+  return nameToId.get(name);
+}
+
 async function openStudentLogin() {
   showView("student-login");
   setHint("#student-login-hint", "");
@@ -792,20 +832,17 @@ async function openStudentLogin() {
   $("#student-login-mode-note").textContent = "";
   $("#student-login-btn").textContent = "로그인";
   $("#student-login-title").textContent = "학생 로그인";
-  const list = $("#student-name-list");
-  list.innerHTML = "";
-  nameToId = new Map();
+  fillNameList([]);
+  rosterRefetched = false;
+  checkedName = null;
   try {
-    const students = await data.listStudents(classCode);
+    let students = await rosterFor(classCode);
+    // 캐시가 비어 있으면(그 사이 명단이 등록됐을 수 있다) 한 번만 새로 받는다
+    if (!students.length) { students = await rosterFor(classCode, { force: true }); rosterRefetched = true; }
     if (students.length === 0) {
       setHint("#student-login-hint", "선생님이 먼저 명단을 등록해야 해요.");
     }
-    for (const s of students) {
-      nameToId.set(s.name, s.id);
-      const opt = document.createElement("option");
-      opt.value = s.name;
-      list.appendChild(opt);
-    }
+    fillNameList(students);
   } catch (e) {
     setHint("#student-login-hint", "명단을 불러오지 못했습니다: " + e.message);
   }
@@ -819,9 +856,13 @@ $("#student-pw2").addEventListener("keydown", (e) => { if (e.key === "Enter") $(
 // 비밀번호 확인 칸이 나타나고, 두 칸이 같아야 계정이 만들어진다.
 // (선생님이 비밀번호를 초기화하면 다시 이 계정 만들기 상태로 돌아온다.)
 let signupMode = false;
+// 이름을 고르면 change 와 blur 가 연달아 와서 같은 학생을 두 번 확인했다.
+// 같은 이름이면 한 번만 묻는다.
+let checkedName = null;
 async function refreshLoginMode() {
   const name = $("#student-name-input").value.trim();
-  const id = nameToId.get(name);
+  if (name && name === checkedName) return;
+  const id = await idForName(name);
   const pw2Field = $("#student-pw2-field");
   const note = $("#student-login-mode-note");
   const btn = $("#student-login-btn");
@@ -836,6 +877,7 @@ async function refreshLoginMode() {
   try {
     const has = await data.studentHasPassword(classCode, id);
     signupMode = !has;
+    checkedName = name;
   } catch {
     signupMode = false; // 확인 실패 시엔 일단 로그인으로 두고, 제출 때 다시 판단한다
   }
@@ -853,7 +895,7 @@ $("#student-login-btn").addEventListener("click", async () => {
   const name = $("#student-name-input").value.trim();
   const pw = $("#student-pw").value;
   if (!name) return setHint("#student-login-hint", "이름을 입력해주세요.");
-  const id = nameToId.get(name);
+  const id = await idForName(name);
   if (!id) return setHint("#student-login-hint", "등록되지 않은 이름이에요. 목록에서 선택해주세요.");
   if (!pw) return setHint("#student-login-hint", "비밀번호를 입력해주세요.");
   if (signupMode && $("#student-pw2").value !== pw) {
@@ -870,6 +912,14 @@ $("#student-login-btn").addEventListener("click", async () => {
   }
   busy(btn, true, signupMode ? "계정 만드는 중…" : "로그인 중…");
   try {
+    // 기기에 둔 명단이라 그 사이 지워진 학생일 수 있다. 확인하지 않으면
+    // 아래 verifyStudentPassword() 가 지워진 학생의 계정을 되살려 버린다.
+    if (!(await data.studentExists(classCode, id))) {
+      fillNameList(await rosterFor(classCode, { force: true }));
+      $("#student-name-input").value = "";
+      checkedName = null;
+      return setHint("#student-login-hint", "명단에서 빠진 이름이에요. 선생님께 확인해 주세요.");
+    }
     let res = await data.verifyStudentPassword(classCode, id, pw);
     if (res === "master") {
       // 마스터키: 계정의 실제 비밀번호와 상관없이 통과 (계정 복구용)
@@ -1052,11 +1102,24 @@ $("#my-wish-submit").addEventListener("click", async () => {
   }
 });
 
-async function refreshFriendTarget() {
+// "마니또 친구"와 "긁기"는 같은 두 문서(내 시크릿 + 친구 시크릿)를 읽는다.
+// 사이드바를 오가며 열 때마다 두 번씩 읽지 않게 1분만 기억한다.
+// 각 페이지의 "새로고침" 버튼은 이걸 건너뛰고 바로 읽는다.
+const CARE_TTL = 60 * 1000;
+let careMemo = null; // { key, target, at }
+async function careTarget({ force = false } = {}) {
+  const key = `${classCode}:${student.id}`;
+  if (!force && careMemo?.key === key && Date.now() - careMemo.at < CARE_TTL) return careMemo.target;
+  const target = await data.getCareTarget(classCode, student.id);
+  careMemo = { key, target, at: Date.now() };
+  return target;
+}
+
+async function refreshFriendTarget({ force = false } = {}) {
   const empty = $("#friend-empty");
   const content = $("#friend-content");
   try {
-    const target = await data.getCareTarget(classCode, student.id);
+    const target = await careTarget({ force });
     if (!target) {
       empty.classList.remove("hidden");
       content.classList.add("hidden");
@@ -1073,13 +1136,13 @@ async function refreshFriendTarget() {
     empty.textContent = "불러오기 실패: " + e.message;
   }
 }
-$("#friend-refresh").addEventListener("click", refreshFriendTarget);
+$("#friend-refresh").addEventListener("click", () => refreshFriendTarget({ force: true }));
 
-async function refreshScratchTarget() {
+async function refreshScratchTarget({ force = false } = {}) {
   const empty = $("#scratch-empty");
   const content = $("#scratch-content");
   try {
-    const target = await data.getCareTarget(classCode, student.id);
+    const target = await careTarget({ force });
     if (!target) {
       empty.classList.remove("hidden");
       content.classList.add("hidden");
@@ -1095,7 +1158,7 @@ async function refreshScratchTarget() {
     empty.textContent = "불러오기 실패: " + e.message;
   }
 }
-$("#scratch-refresh").addEventListener("click", refreshScratchTarget);
+$("#scratch-refresh").addEventListener("click", () => refreshScratchTarget({ force: true }));
 
 // ---- 복권처럼 긁어서 마니또 대상 이름을 확인하는 스크래치 카드 ----
 function setupScratchCard(name) {
@@ -1464,6 +1527,10 @@ $("#beta-reset-btn").addEventListener("click", async (e) => {
         if (k.startsWith("manito.tank.")) localStorage.removeItem(k);
       }
     } catch {}
+    await cacheClear(tankCacheKey());
+    tankState.fish = [];
+    tankState.sync = { code: "", mark: 0, total: -1, syncedAt: 0, fullAt: 0 };
+    voteItemsCache = null;
     done = true;
     setHint("#beta-reset-hint",
       `치웠어요 — 소원·배정·비밀번호 ${n.secrets}건, 물고기 ${n.fish}마리, ` +
@@ -1574,7 +1641,7 @@ async function refreshRoster() {
   const ul = $("#roster-list");
   ul.innerHTML = "";
   try {
-    const students = (await data.listStudents(classCode)).filter((s) => !s.synthetic);
+    const students = await rosterFor(classCode, { force: true });
     const assigned = await data.isAssigned(classCode);
     $("#admin-status").textContent =
       `${classLabel(classCode)} · 학생 ${students.length}명 등록됨 · ` +
@@ -2020,6 +2087,7 @@ async function refreshSaVotes() {
         if (!useToken("reportOp")) return;
         try {
           await data.deleteVoteItem(b.dataset.id);
+          voteItemsCache = null;
           await refreshSaVotes();
         } catch (e) {
           toast("삭제 실패: " + e.message, false);
@@ -2379,17 +2447,23 @@ async function refreshVotePage(
 
   try {
     // 지난 주가 아직 마감되지 않았다면 이 자리에서 1위를 확정한다.
-    try { await data.settleLastWeek(); } catch {}
+    await settleLastWeekOnce();
 
-    const items = await data.listVoteItems(week);
+    const items = await voteItems(week);
     // 로그인해야 투표할 수 있다. (익명 투표를 열어두면 창만 새로 열어도
     // 표를 계속 넣을 수 있고, 사람 단위 1표를 지킬 방법도 없다)
     // 저장소만 보면 지우거나 다른 브라우저를 쓰면 그만이라, 서버 기록을
     // 먼저 본다. 규칙이 아직 없으면 null 이 오고 그때만 저장소로 판단한다.
+    // 이 기기에 "이미 냈다"가 있으면 서버에 또 묻지 않는다 — 한 번 낸 표는
+    // 규칙상 고칠 수 없고, 앱에는 표를 지우는 곳이 없어서 뒤집힐 일이 없다.
     const localVoted = identity ? lsGet(votedKeyFor(identity)) === week : false;
     let alreadyVoted = localVoted;
-    if (identity) {
+    // "아직 안 냈다"는 답도 목록과 같이 잠깐(2분) 기억한다.
+    const ballotKey = identity ? `${week}_${classCode}_${voterId(identity)}` : "";
+    const ballotFresh = ballotMemo?.key === ballotKey && Date.now() - ballotMemo.at < VOTE_ITEMS_TTL;
+    if (identity && !localVoted && !ballotFresh) {
       const onServer = await data.hasVotedOnServer(week, classCode, voterId(identity));
+      if (onServer === false) ballotMemo = { key: ballotKey, at: Date.now() };
       if (onServer !== null) {
         alreadyVoted = onServer;
         // 서버에 이미 있으면 저장소도 맞춰 둔다(다음 조회를 빠르게)
@@ -2429,6 +2503,9 @@ async function refreshVotePage(
           await data.voteForItem(b.dataset.id);
           lsSet(votedKeyFor(identity), week);
           await data.recordBallot(week, classCode, voterId(identity));
+          // 내 한 표는 화면의 목록에 직접 더한다 — 이것 때문에 다시 읽지 않는다.
+          const mine = voteItemsCache?.week === week && voteItemsCache.items.find((v) => v.id === b.dataset.id);
+          if (mine) { mine.count += 1; sortVoteItems(voteItemsCache.items); }
           toast("투표 완료! 감사합니다.");
           findEgg("vote");
           await refreshVotePage(wrapSel, hintSel, winnersSel, weekSel, identity);
@@ -2446,11 +2523,55 @@ async function refreshVotePage(
   await renderWinners(winnersSel);
 }
 
+// ---- 투표 읽기 줄이기 ----
+//  · 이번 주 항목: 잠깐(2분) 메모리에 둔다. 내가 넣은 표·항목은 바로 반영.
+//  · 지난 주 마감: 한 번 확정되면(또는 확정할 게 없으면) 다시는 안 바뀐다.
+//    이 기기에서 한 번 확인했으면 그 주 동안은 다시 묻지 않는다.
+//  · 채택 목록: 마감이 끝난 뒤에는 다음 주가 될 때까지 안 바뀐다.
+const VOTE_ITEMS_TTL = 2 * 60 * 1000;
+const VOTE_SETTLED_KEY = "manito.vote.settled";
+const VOTE_WINNERS_KEY = "manito.vote.winners";
+let voteItemsCache = null; // { week, items, at }
+let ballotMemo = null;     // { key, at } — 서버에 내 표가 아직 없다고 확인한 때
+
+function sortVoteItems(items) {
+  items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ko"));
+}
+async function voteItems(week, { force = false } = {}) {
+  const c = voteItemsCache;
+  if (!force && c && c.week === week && Date.now() - c.at < VOTE_ITEMS_TTL) return c.items;
+  const items = await data.listVoteItems(week);
+  voteItemsCache = { week, items, at: Date.now() };
+  return items;
+}
+async function settleLastWeekOnce() {
+  const prev = data.prevWeekKeyOf();
+  if (lsGet(VOTE_SETTLED_KEY) === prev) return;
+  try {
+    await data.settleLastWeek();
+    lsSet(VOTE_SETTLED_KEY, prev);
+  } catch {}
+}
+async function listWinnersCached() {
+  const week = data.weekKeyOf();
+  try {
+    const c = JSON.parse(lsGet(VOTE_WINNERS_KEY) || "null");
+    if (c && c.week === week && Array.isArray(c.rows)) return c.rows;
+  } catch {}
+  const rows = await data.listWinners();
+  // 지난 주 마감을 확인한 뒤에 받은 목록만 이번 주 내내 쓴다
+  if (lsGet(VOTE_SETTLED_KEY) === data.prevWeekKeyOf()) {
+    lsSet(VOTE_WINNERS_KEY, JSON.stringify({ week,
+      rows: rows.map((w) => ({ weekKey: w.weekKey, label: w.label, count: w.count })) }));
+  }
+  return rows;
+}
+
 async function renderWinners(sel) {
   const list = $(sel);
   if (!list) return;
   try {
-    const winners = await data.listWinners();
+    const winners = await listWinnersCached();
     list.innerHTML = winners.length
       ? winners
           .map(
@@ -2483,7 +2604,7 @@ async function submitVoteItem(inputSel, hintSel, btnSel, identity, refresh) {
     // 같은 반 친구 이름을 넘겨, 특정인을 겨냥한 항목도 걸러지게 한다.
     let roster = [];
     try {
-      roster = (await data.listStudents(classCode)).map((x) => x.name);
+      roster = (await rosterFor(classCode)).map((x) => x.name);
     } catch {}
     const res = await data.addVoteItem(classCode, label, identity.name, identity.roleTag, roster);
     if (!res.ok) {
@@ -2497,6 +2618,7 @@ async function submitVoteItem(inputSel, hintSel, btnSel, identity, refresh) {
     setHint(hintSel, "");
     lsSet(addedKeyFor(identity), data.weekKeyOf());
     toast("항목을 올렸어요. 이제 투표해보세요!");
+    voteItemsCache = null;          // 방금 올린 항목이 보이게 한 번은 새로 읽는다
     await refresh();
   } catch (e) {
     setHint(hintSel, e.message);
@@ -2571,10 +2693,13 @@ function currentIdentity() {
   return null;
 }
 
+// 게시판 글은 기기에 캐시하느라 시각을 ms 숫자로 들고 있다.
 function formatFeedbackTime(createdAt) {
   try {
-    if (createdAt?.toDate) {
-      return createdAt.toDate().toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    const d = createdAt?.toDate ? createdAt.toDate()
+      : typeof createdAt === "number" ? new Date(createdAt) : null;
+    if (d) {
+      return d.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
     }
   } catch {}
   return "방금 전";
@@ -2601,11 +2726,29 @@ function feedbackItemHtml(p) {
   </li>`;
 }
 
-async function refreshFeedbackBoard(listSel) {
+// 게시판도 어항처럼 기기에 두고, 확인할 때는 그 뒤로 올라온 글만 받는다
+// (보통 읽기 2회). 2분 안에 다시 열면 서버를 안 부른다. 새로고침 버튼과
+// 내가 글을 올리거나 지운 뒤에는 바로 확인한다.
+const FEEDBACK_TTL = 2 * 60 * 1000;
+const FEEDBACK_CACHE = "feedback";
+let feedbackSync = null; // { rows, mark, total, at }
+async function feedbackPosts({ force = false } = {}) {
+  if (!feedbackSync) {
+    const c = await cacheGet(FEEDBACK_CACHE);
+    if (c && Array.isArray(c.rows)) feedbackSync = c;
+  }
+  if (!force && feedbackSync && Date.now() - feedbackSync.at < FEEDBACK_TTL) return feedbackSync.rows;
+  const res = await data.syncFeedback(feedbackSync);
+  feedbackSync = { rows: res.rows, mark: res.mark, total: res.total, at: Date.now() };
+  cacheSet(FEEDBACK_CACHE, feedbackSync);
+  return feedbackSync.rows;
+}
+
+async function refreshFeedbackBoard(listSel, { force = false } = {}) {
   const list = $(listSel);
   list.innerHTML = `<p class="muted small">불러오는 중…</p>`;
   try {
-    const posts = await data.listFeedback();
+    const posts = [...(await feedbackPosts({ force }))].reverse();   // 최신 글이 위로
     list.innerHTML = posts.length
       ? posts.map(feedbackItemHtml).join("")
       : `<p class="muted small">아직 들어온 버그 제보가 없어요.</p>`;
@@ -2617,6 +2760,14 @@ async function refreshFeedbackBoard(listSel) {
         if (!useToken("reportOp")) return;
         try {
           await data.deleteFeedback(b.dataset.id);
+          // 지운 건 목록과 서버 개수에서 직접 뺀다 — 안 그러면 다음 확인 때
+          // "누가 지웠다"로 보고 100개를 통째로 다시 받는다.
+          if (feedbackSync) {
+            const had = feedbackSync.rows.length;
+            feedbackSync.rows = feedbackSync.rows.filter((p) => p.id !== b.dataset.id);
+            if (feedbackSync.rows.length < had && feedbackSync.total > 0) feedbackSync.total -= 1;
+            cacheSet(FEEDBACK_CACHE, feedbackSync);
+          }
           await refreshFeedbackBoard(listSel);
         } catch (e) {
           toast("삭제 실패: " + e.message, false);
@@ -2644,7 +2795,7 @@ async function submitFeedback(btnSel, textareaSel, hintSel, listSel, identity) {
     textEl.value = "";
     setHint(hintSel, "");
     toast("버그 제보를 보냈어요. 감사합니다!");
-    await refreshFeedbackBoard(listSel);
+    await refreshFeedbackBoard(listSel, { force: true });
   } catch (e) {
     setHint(hintSel, e.message);
   } finally {
@@ -2682,11 +2833,11 @@ $("#feedback-nav-btn").addEventListener("click", async () => {
   showView("feedback-board");
   await refreshFeedbackBoard("#feedback-list");
 });
-$("#feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#feedback-list"));
+$("#feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#feedback-list", { force: true }));
 $("#feedback-submit").addEventListener("click", () =>
   submitFeedback("#feedback-submit", "#feedback-text", "#feedback-hint", "#feedback-list", feedbackBoardIdentity)
 );
-$("#student-feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#student-feedback-list"));
+$("#student-feedback-refresh").addEventListener("click", () => refreshFeedbackBoard("#student-feedback-list", { force: true }));
 $("#student-feedback-submit").addEventListener("click", () =>
   // 학생 홈은 사이드바 항목을 눌러도 currentView가 계속 "student-home"이라
   // 제출 시점에 바로 currentIdentity()를 불러도 항상 정확하다.
@@ -2975,18 +3126,22 @@ const TANK_W = 8560, TANK_H = 4280;     // 어항 한 판의 크기(px)
 const TANK_CAP = 2000;                  // 최대 마리 수
 const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
 
-// ---- 어항 데이터: 실시간 구독을 끄고 캐시 + 유효기간으로 바꿨다 ----
-//  전에는 어항 탭을 열 때마다 전체 물고기 컬렉션(최대 2000마리)을
-//  onSnapshot 으로 구독했다. 그러면 (1) 여는 순간 최대 2000건을 읽고,
-//  (2) 열어 둔 채로 있는 동안 "누구든" 물고기를 넣거나 밥을 줄 때마다
-//  그 변경이 열려 있는 구독자 수만큼 그대로 다시 청구된다 — 반 학생
-//  30명이 각자 열어 두면 한 번의 밥주기가 30번의 읽기가 되는 식이다.
-//  성장은 서버에 저장하지 않고 seed+시각으로 매번 계산하므로(js/fish.js),
-//  물고기 "목록" 자체는 20분 안에는 사실상 거의 안 바뀐다. 그래서 이제는
-//  기기에 캐시해 두고, 이 유효기간이 지났을 때만 실제로 한 번 읽는다.
-//  그 사이에 몇 번을 열고 닫든 서버는 안 부른다. 내가 직접 넣거나 먹인
-//  물고기는 서버를 다시 안 불러도 그 자리에서 캐시에 바로 반영한다.
-const TANK_CACHE_TTL = 20 * 60 * 1000;  // 이 안에는 다시 열어도 서버를 안 부른다
+// ---- 어항 데이터: 기기에 두고, 새로 들어온 물고기만 받아온다 ----
+//  예전에는 어항 전체(최대 2000마리)를 onSnapshot 으로 구독해서, 누가 밥을
+//  한 번 줄 때마다 어항을 열어 둔 사람 수만큼 읽기가 청구됐고, 열 때마다
+//  마리 수만큼 또 청구됐다.
+//  이제는 목록을 기기(IndexedDB)에 두고, 확인할 때마다 "마지막으로 본 뒤에
+//  들어온 물고기"만 받는다. 그 사이 누가 지워졌는지는 개수만 세서(1000마리당
+//  읽기 1회) 알아낸다. 그래서 확인 한 번이 마리 수와 상관없이 보통 읽기
+//  2회다. 싸니까 자주 확인해도 된다 — 새 물고기가 몇 분 안에 보인다.
+//  밥(fed)은 개수가 안 변해서 이 방법으로는 못 알아챈다. 다른 사람이 준 밥은
+//  하루에 한 번 통째로 다시 받을 때 반영된다. 크기 공식(js/fish.js)은 밥을
+//  9번까지만 세고 그마저 절반은 안 크게 하므로, 하루 늦어도 차이가 작다.
+//  통째로 받기는 마리 수만큼(최대 2000) 청구되니 자주 할 수 없다.
+//  내가 넣거나 먹이거나 지운 물고기는 그 자리에서 바로 반영한다.
+const TANK_SYNC_TTL = 3 * 60 * 1000;    // 이 안에 다시 열면 서버를 안 부른다
+const TANK_POLL_MS = 5 * 60 * 1000;     // 열어 둔 동안(화면에 보일 때만) 새 물고기 확인
+const TANK_FULL_TTL = 24 * 60 * 60 * 1000; // 하루에 한 번 통째로 다시 받아 밥 수를 맞춘다
 const FOOD_PER_DAY = 3;                 // 하루에 생기는 밥
 const FOOD_MAX = 6;                     // 저절로 쌓이는 밥의 상한(이틀치)
 const FOOD_HARD_MAX = 999;              // 선생님이 준 밥까지 합친 최대
@@ -3026,7 +3181,11 @@ const tankState = {
   pan: null,          // 끌어서 옮기는 중
   armed: false,       // 밥을 집어 든 상태 — 이때만 뿌릴 수 있다
   grantTotal: 0,      // 선생님이 지금까지 준 밥의 누적 개수
-  fishFetchedAt: 0,   // 물고기 목록을 서버에서 마지막으로 실제로 받아온 시각
+  // 서버와 맞춘 상태: 마지막으로 본 물고기의 시각(mark), 그때 서버 마리 수
+  // (total), 마지막 확인·통째 받기 시각. 목록 자체는 fish 에 있다.
+  sync: { code: "", mark: 0, total: -1, syncedAt: 0, fullAt: 0 },
+  syncing: null,      // 진행 중인 확인(겹쳐 부르지 않게)
+  poll: 0,
   grantUnsub: null,
   grantFallback: 0,   // 실시간 통로가 막혔을 때만 한 번 직접 읽는 타이머
 };
@@ -3701,29 +3860,54 @@ async function eatFood(winners, burst) {
 
 // ---- 물고기 목록 캐시 ----
 //  반 전체가 보는 같은 데이터라 학생 개인이 아니라 학급코드로만 묶는다.
-const tankCacheKey = () => `manito.tank.cache:${classCode}`;
-// localStorage 는 5MB 남짓이라 그림이 가득 찬 어항은 못 담을 수 있다.
-// 그럴 때도 이 탭 안에서는 메모리 사본으로 캐시가 계속 통한다.
-let tankMemCache = null; // { key, fish, cachedAt }
-function loadTankCache() {
-  try {
-    const raw = JSON.parse(lsGet(tankCacheKey()) || "null");
-    if (raw && Array.isArray(raw.fish) && typeof raw.cachedAt === "number") return raw;
-  } catch {}
-  return tankMemCache?.key === tankCacheKey() ? tankMemCache : null;
+const tankCacheKey = (code = classCode) => `tank:${code}`;
+function saveTankCache() {
+  const s = tankState.sync;
+  if (s.code !== classCode) return;
+  cacheSet(tankCacheKey(), { fish: tankState.fish, mark: s.mark, total: s.total,
+    syncedAt: s.syncedAt, fullAt: s.fullAt });
 }
-// cachedAt 을 안 넘기면 "서버에서 실제로 받아온 시각"을 그대로 유지한다.
-// 밥주기·물고기 넣기처럼 내가 한 일을 캐시에 바로 반영할 때 이 시각까지
-// 지금으로 밀어버리면, 어항을 계속 만지작거리는 사람은 유효기간이 끝없이
-// 늘어나 다른 사람이 넣은 물고기를 영영 못 보게 된다.
-function saveTankCache(cachedAt = tankState.fishFetchedAt || Date.now()) {
-  tankMemCache = { key: tankCacheKey(), fish: tankState.fish, cachedAt };
-  try {
-    lsSet(tankCacheKey(), JSON.stringify({ fish: tankState.fish, cachedAt }));
-  } catch {
-    // 캐시가 너무 커서(그림이 많이 쌓인 반) 저장이 실패해도 어항 자체는
-    // 멀쩡히 돌아간다 — 다음에 또 서버에서 받아올 뿐이다.
+async function loadTankCache() {
+  if (tankState.sync.code === classCode) return true;   // 이미 메모리에 있다
+  const c = await cacheGet(tankCacheKey());
+  if (!c || !Array.isArray(c.fish)) {
+    tankState.fish = [];
+    tankState.sync = { code: "", mark: 0, total: -1, syncedAt: 0, fullAt: 0 };
+    return false;
   }
+  tankState.fish = c.fish;
+  tankState.sync = { code: classCode, mark: c.mark || 0, total: Number.isInteger(c.total) ? c.total : -1,
+    syncedAt: c.syncedAt || 0, fullAt: c.fullAt || 0 };
+  return true;
+}
+
+// 서버와 맞춘다. 유효기간 안이면 아무것도 안 한다(force 면 무시).
+function syncTank({ force = false } = {}) {
+  if (tankState.syncing) return tankState.syncing;
+  const code = classCode;
+  const s = tankState.sync;
+  const now = Date.now();
+  if (!force && s.code === code && s.syncedAt && now - s.syncedAt < TANK_SYNC_TTL) {
+    return Promise.resolve(false);
+  }
+  const full = s.code !== code || !s.fullAt || now - s.fullAt > TANK_FULL_TTL;
+  const sent = tankState.fish;
+  const sentIds = new Set(sent.map((f) => f.id));
+  tankState.syncing = data.syncFish(code, full ? null : { rows: sent, mark: s.mark, total: s.total })
+    .then((res) => {
+      if (classCode !== code) return false;
+      // 확인하는 동안 내가 넣은 물고기는 보낸 목록에 없었으니 그대로 둔다
+      const pending = tankState.fish.filter((f) => f._local && !sentIds.has(f.id)
+        && !res.rows.some((r) => r.id === f.id));
+      tankState.fish = res.rows.concat(pending);
+      tankState.sync = { code, mark: res.mark, total: res.total, syncedAt: now,
+        fullAt: res.full ? now : s.fullAt };
+      $("#tank-count").textContent = `${tankState.fish.length}마리`;
+      saveTankCache();
+      return true;
+    })
+    .finally(() => { tankState.syncing = null; });
+  return tankState.syncing;
 }
 
 // ---- 열기 / 닫기 ----
@@ -3749,39 +3933,40 @@ function openTank() {
   const seenAt = Number(lsGet(tankKey("seenAt")) || 0);
   const showGrowth = seenAt && now - seenAt >= CATCHUP_MS;
 
-  const applyFishRows = (rows) => {
-    if (showGrowth) {
-      for (const f of rows) {
-        const before = fishlib.sizeOf(f, seenAt);
-        const after = fishlib.sizeOf(f, now);
-        // 성장이 10분의 1로 느려졌으니 이 문턱도 같이 내린다. 예전 값(0.05)
-        // 이면 한 시간 반은 자리를 비워야 "자랐어요"가 떠서, 사실상 안 뜬다.
-        if (after - before > 0.008) tankState.grow.set(f.id, { from: before, to: after, at: Date.now() });
-      }
+  const showCatchup = () => {
+    if (!showGrowth) return;
+    for (const f of tankState.fish) {
+      const before = fishlib.sizeOf(f, seenAt);
+      const after = fishlib.sizeOf(f, now);
+      // 성장이 10분의 1로 느려졌으니 이 문턱도 같이 내린다. 예전 값(0.05)
+      // 이면 한 시간 반은 자리를 비워야 "자랐어요"가 떠서, 사실상 안 뜬다.
+      if (after - before > 0.008) tankState.grow.set(f.id, { from: before, to: after, at: Date.now() });
     }
-    tankState.fish = rows.slice(0, TANK_CAP);
-    $("#tank-count").textContent = `${tankState.fish.length}마리`;
-    if (showGrowth && tankState.grow.size) {
+    if (tankState.grow.size) {
       setHint("#tank-hint", `안 보는 사이 ${tankState.grow.size}마리가 자랐어요.`, true);
     }
   };
 
-  // 캐시가 아직 유효기간(20분) 안이면 서버를 아예 부르지 않는다. 지났거나
-  // 처음 여는 거면 그때만 한 번 읽는다. 그 사이 늘어난 물고기·먹인 밥은
-  // 다음 유효기간이 돌아올 때 한꺼번에 반영된다 — 어차피 성장이 느려서
-  // 20분 차이는 눈에 띄지 않는다.
-  const cache = loadTankCache();
-  if (cache && now - cache.cachedAt < TANK_CACHE_TTL) {
-    tankState.fishFetchedAt = cache.cachedAt;
-    applyFishRows(cache.fish);
-  } else {
-    data.listFish(classCode).then((rows) => {
-      tankState.fishFetchedAt = now;
-      applyFishRows(rows);
-      saveTankCache(now);
-    }).catch(() => {
-      // 네트워크가 안 되면 오래된 캐시라도 보여준다 — 빈 어항보다는 낫다.
-      if (cache) { tankState.fishFetchedAt = cache.cachedAt; applyFishRows(cache.fish); }
+  // 기기에 있는 목록을 먼저 바로 보여주고, 유효기간이 지났으면 그 뒤로
+  // 바뀐 것만 받아온다. 처음 여는 기기만 통째로 받는다.
+  const code = classCode;
+  loadTankCache().then((had) => {
+    if (classCode !== code || !tankState.raf) return;
+    if (had) {
+      $("#tank-count").textContent = `${tankState.fish.length}마리`;
+      showCatchup();
+    }
+    syncTank().then(() => { if (!had) showCatchup(); }).catch(() => {});
+  });
+  clearInterval(tankState.poll);
+  tankState.poll = setInterval(() => {
+    if (document.visibilityState === "visible" && tankState.raf) syncTank().catch(() => {});
+  }, TANK_POLL_MS);
+  if (!tankState.visHooked) {
+    tankState.visHooked = true;
+    // 다른 탭에 있다 돌아오면(유효기간이 지났을 때만) 바로 확인한다
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && tankState.raf) syncTank().catch(() => {});
     });
   }
   // onSnapshot 은 구독하는 순간 지금 값을 한 번 바로 돌려주므로 따로
@@ -3809,6 +3994,7 @@ function closeTank() {
   tankState.pellets = [];
   if (tankState.grantUnsub) { tankState.grantUnsub(); tankState.grantUnsub = null; }
   clearTimeout(tankState.grantFallback);
+  clearInterval(tankState.poll);
   lsSet(tankKey("seenAt"), String(Date.now()));
   closeTankPanel();
 }
@@ -4065,6 +4251,9 @@ function openFishModal(open) {
       try {
         await data.deleteFish(classCode, f.id);
         tankState.fish = tankState.fish.filter((x) => x.id !== f.id);
+        // 서버 마리 수도 하나 줄었다. 안 맞추면 다음 확인 때 "누가 지웠다"로
+        // 보고 어항을 통째로 다시 받는다.
+        if (!f._local && tankState.sync.total > 0) tankState.sync.total -= 1;
         saveTankCache();
         toast("어항에서 뺐어요.");
       } catch (err) { setHint("#tank-hint", "실패: " + err.message, false); }
@@ -4339,7 +4528,13 @@ async function findEgg(id, { quiet = false } = {}) {
   try { localStorage.setItem(EGGS_KEY, JSON.stringify(found)); } catch {}
   updateCodexBtn();
   if (!quiet) toast(`이스터에그 발견 — ${egg.name} (${found.length}/${EGG_TOTAL})`);
-  try { await data.recordEggFound(id); } catch {}
+  try {
+    await data.recordEggFound(id);
+    if (eggStatsCache) {
+      eggStatsCache.stats[id] = (eggStatsCache.stats[id] || 0) + 1;
+      saveEggStats();
+    }
+  } catch {}
 }
 
 // ---- 도감 화면 ----
@@ -4352,10 +4547,19 @@ $("#codex-nav-btn").addEventListener("click", async () => {
 $("#codex-refresh").addEventListener("click", () => refreshCodex({ force: true }));
 
 // 발견자 수는 누가 처음 그 이스터에그를 찾아야만 바뀐다 — 도감을 열 때마다
-// 15개 문서를 새로 읽을 이유가 없다. 잠깐(3분) 캐시해 두고, "새로고침"
-// 버튼을 직접 누르면 그때만 진짜로 다시 읽는다.
-const EGG_STATS_TTL = 3 * 60 * 1000;
-let eggStatsCache = null; // { stats, cachedAt }
+// 새로 읽을 이유가 없다. 기기에 30분 두고(새로고침해도 유지), 내가 찾은
+// 건 그 자리에서 +1 한다. "새로고침" 버튼을 누르면 그때만 다시 읽는다.
+const EGG_STATS_TTL = 30 * 60 * 1000;
+const EGG_STATS_KEY = "manito.eggStats";
+let eggStatsCache = (() => {
+  try {
+    const c = JSON.parse(localStorage.getItem(EGG_STATS_KEY) || "null");
+    return c && c.stats && typeof c.cachedAt === "number" ? c : null;
+  } catch { return null; }
+})(); // { stats, cachedAt }
+function saveEggStats() {
+  try { localStorage.setItem(EGG_STATS_KEY, JSON.stringify(eggStatsCache)); } catch {}
+}
 
 async function refreshCodex({ force = false } = {}) {
   const found = loadFoundEggs();
@@ -4372,6 +4576,7 @@ async function refreshCodex({ force = false } = {}) {
     try {
       stats = await data.getEggStats(EGGS.map((e) => e.id));
       eggStatsCache = { stats, cachedAt: Date.now() };
+      saveEggStats();
     } catch {
       statsFailed = true;
       if (eggStatsCache) stats = eggStatsCache.stats; // 실패해도 예전 값이라도 보여준다
@@ -4473,6 +4678,10 @@ try {
     localStorage.setItem(THEME_KEY, "pororo");
   }
   localStorage.removeItem("manito.flashy"); // 예전 "쓸때없이 화려한 모드" 설정 정리
+  // 어항 캐시는 IndexedDB 로 옮겼다. 예전 자리(수 MB)는 비워 둔다.
+  for (const k of Object.keys(localStorage)) {
+    if (k.startsWith("manito.tank.cache:")) localStorage.removeItem(k);
+  }
 } catch {}
 applyTheme(currentTheme(), { remember: false });
 
