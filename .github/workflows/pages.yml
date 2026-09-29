@@ -62,6 +62,19 @@ jobs:
           if [ -n "$SA" ]; then echo "have=yes" >> "$GITHUB_OUTPUT"
           else echo "have=no" >> "$GITHUB_OUTPUT"; fi
 
+      # 게시하기 전에 에뮬레이터에서 규칙을 시험한다. 앱이 하는 쓰기(진짜 SDK)
+      # 하나라도 막히거나, 막아야 할 쓰기가 통과하면 여기서 멈춘다 — 규칙도
+      # 사이트도 올라가지 않는다. 테스트 도구는 저장소 밖에 설치한다(이 폴더가
+      # 통째로 사이트로 올라가기 때문).
+      - name: Test rules in the Firestore emulator
+        run: |
+          T="$RUNNER_TEMP/rules-test"
+          mkdir -p "$T" && cp tests/rules_emulator.spec.mjs "$T/spec.mjs"
+          (cd "$T" && npm init -y >/dev/null && npm i --no-audit --no-fund @firebase/rules-unit-testing@3 firebase@10)
+          RULES="$PWD/firestore.rules" npx --yes firebase-tools@13 emulators:exec \
+            --only firestore --project demo-manito "node $T/spec.mjs"
+          rm -f ./*-debug.log
+
       - name: Publish Firestore rules
         if: steps.cred.outputs.have == 'yes'
         env:

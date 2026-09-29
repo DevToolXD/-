@@ -26,8 +26,29 @@ const BUCKET_KEY = "manito.buckets";
 const LOCK_KEY = "manito.loginLocks";
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
 const lsDel = (k) => { try { localStorage.removeItem(k); } catch {} };
+
+// 저장 공간이 가득 차면 setItem 이 조용히 실패한다. 예전에는 그 경우 세션도
+// 기기 키도 저장되지 않아서, 로그인하자마자 무엇을 해도 "로그인이 만료됐어요"
+// 가 떴고 다시 로그인해도 똑같았다. 이제는
+//   1) 실패하면 이 앱이 쌓아 둔 캐시(다시 받으면 되는 것들)를 비우고 한 번 더,
+//   2) 그래도 안 되면 이 탭의 메모리에라도 들고 있는다.
+const DISPOSABLE = ["manito.tank.cache:", "manito.roster:", "manito.eggStats", "manito.vote.winners"];
+function freeSpace() {
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (DISPOSABLE.some((p) => k.startsWith(p))) localStorage.removeItem(k);
+    }
+  } catch {}
+}
+function lsSet(k, v) {
+  for (let i = 0; i < 2; i++) {
+    try { localStorage.setItem(k, v); if (localStorage.getItem(k) === v) return true; } catch {}
+    freeSpace();
+  }
+  return false;
+}
+const mem = new Map();   // 저장소에 못 쓴 값(이 탭에서만)
 const readJSON = (k, fallback) => {
   try { return JSON.parse(lsGet(k) || "") ?? fallback; } catch { return fallback; }
 };
@@ -36,10 +57,12 @@ const readJSON = (k, fallback) => {
 // 이 기기에서만 유효한 서명 키. 세션 토큰은 이 키로 서명되므로, 다른 기기로
 // 토큰을 복사해 가도 검증에 실패한다.
 function deviceKey() {
-  let k = lsGet(DEVICE_KEY);
+  let k = lsGet(DEVICE_KEY) || mem.get(DEVICE_KEY);
   if (!k || !/^[0-9a-f]{64}$/.test(k)) {
     k = randomHex(32);
-    lsSet(DEVICE_KEY, k);
+    // 저장이 안 되면 부를 때마다 새 키가 만들어져 모든 서명이 깨진다 —
+    // 그래서 메모리에 꼭 붙들어 둔다.
+    if (!lsSet(DEVICE_KEY, k)) mem.set(DEVICE_KEY, k);
   }
   return k;
 }
@@ -78,7 +101,9 @@ export async function issueSession({ role, classCode, subjectId = null, name = n
     v: 2,
   };
   payload.sig = await hmacHex(deviceKey(), payloadString(payload));
-  lsSet(SESSION_KEY, JSON.stringify(payload));
+  const body = JSON.stringify(payload);
+  if (lsSet(SESSION_KEY, body)) mem.delete(SESSION_KEY);
+  else mem.set(SESSION_KEY, body);   // 새로고침하면 사라지지만, 쓰는 동안은 안 끊긴다
   return payload;
 }
 
@@ -87,13 +112,15 @@ export async function issueSession({ role, classCode, subjectId = null, name = n
  * @returns {Promise<null | {role,classCode,subjectId,name,expiresAt}>}
  */
 export async function readSession() {
-  const raw = readJSON(SESSION_KEY, null);
+  let raw = readJSON(SESSION_KEY, null);
+  if (!raw && mem.has(SESSION_KEY)) { try { raw = JSON.parse(mem.get(SESSION_KEY)); } catch {} }
   if (!raw || typeof raw !== "object") return null;
+  const drop = () => { lsDel(SESSION_KEY); mem.delete(SESSION_KEY); return null; };
   // v2 이전(서명 없는) 세션은 더 이상 신뢰하지 않는다 → 다시 로그인
-  if (raw.v !== 2 || !raw.sig) { lsDel(SESSION_KEY); return null; }
-  if (!raw.expiresAt || Date.now() > raw.expiresAt) { lsDel(SESSION_KEY); return null; }
+  if (raw.v !== 2 || !raw.sig) return drop();
+  if (!raw.expiresAt || Date.now() > raw.expiresAt) return drop();
   const expect = await hmacHex(deviceKey(), payloadString(raw));
-  if (!safeEqual(expect, raw.sig)) { lsDel(SESSION_KEY); return null; }
+  if (!safeEqual(expect, raw.sig)) return drop();
   return raw;
 }
 
@@ -107,15 +134,27 @@ export async function rotateSession() {
   return issueSession({ role: s.role, classCode: s.classCode, subjectId: s.subjectId, name: s.name });
 }
 
-export function clearSessionToken() { lsDel(SESSION_KEY); }
+export function clearSessionToken() { lsDel(SESSION_KEY); mem.delete(SESSION_KEY); }
 
-/** 지금 세션이 요구 역할 중 하나인지 확인하고, 맞으면 토큰을 회전시킨다. */
+/**
+ * 지금 세션이 요구 역할 중 하나인지 확인하고, 맞으면 토큰을 회전시킨다.
+ *  · 세션이 없거나 깨졌거나 기간이 지났으면 → session-invalid ("만료")
+ *  · 세션은 멀쩡한데 이 동작을 할 역할이 아니면 → forbidden
+ *    예전에는 이것도 "만료"로 알리고 로그아웃시켰다. 그래서 역할이 안 맞는
+ *    사람(예: 관리자 권한이 붙은 학생)은 다시 로그인해도 같은 역할이라
+ *    "만료 → 로그인 → 만료"를 끝없이 되풀이했다.
+ */
 export async function requireRole(roles) {
   const s = await readSession();
   const allowed = Array.isArray(roles) ? roles : [roles];
-  if (!s || !allowed.includes(s.role)) {
+  if (!s) {
     const e = new Error("로그인이 만료됐어요. 다시 로그인해 주세요.");
     e.code = "session-invalid";
+    throw e;
+  }
+  if (!allowed.includes(s.role)) {
+    const e = new Error("지금 로그인한 계정으로는 할 수 없는 동작이에요.");
+    e.code = "forbidden";
     throw e;
   }
   await rotateSession();
@@ -162,8 +201,8 @@ export const BUCKETS = {
 // ---------- 변조 감지 ----------
 //  연타 제한과 로그인 잠금은 localStorage 에 그냥 적혀 있었다. 개발자
 //  도구에서 used 를 0 으로 고치면 모든 제한이 즉시 풀렸다는 뜻이다.
-//  이제 기기 키로 만든 체크섬을 같이 적어서, 값만 손대면 알아채고 그
-//  기록을 "가득 쓴 상태"로 되돌린다.
+//  이제 기기 키로 만든 체크섬을 같이 적어서, 값만 손댄 기록은 믿지 않는다
+//  (빈 기록으로 새로 시작 — 아래 loadGuarded 설명 참고).
 //
 //  솔직한 한계: 브라우저에 있는 값이라 통째로 지우면 초기화되는 건
 //  막을 수 없다(서버가 없으니). 다만 "숫자 하나 고치기"로는 못 뚫는다.
@@ -187,8 +226,8 @@ function saveGuarded(key, value) {
   lsSet(key, JSON.stringify({ v: body, sum: checksum(body) }));
 }
 
-/** 봉투를 열어 확인한다. 체크섬이 안 맞으면 onTamper() 의 값을 쓴다. */
-function loadGuarded(key, onTamper) {
+/** 봉투를 열어 확인한다. 체크섬이 안 맞으면 빈 기록으로 새로 시작한다. */
+function loadGuarded(key) {
   const raw = readJSON(key, null);
   if (!raw || typeof raw !== "object") return {};
   // 봉투가 아니면 빈 기록으로 본다. 옛 형식을 그대로 받아주면 "옛 형식으로
@@ -196,10 +235,15 @@ function loadGuarded(key, onTamper) {
   // 카운터가 초기화되는데, 이는 키를 지우는 것과 같은 정도라 더 약해지지 않는다)
   if (typeof raw.v !== "string" || typeof raw.sum !== "string") return {};
   if (checksum(raw.v) !== raw.sum) {
-    console.warn(`[guard] ${key} 가 손대진 흔적이 있어 초기화합니다.`);
-    const safe = onTamper();
-    saveGuarded(key, safe);
-    return safe;
+    // 예전엔 여기서 "가득 쓴 상태 / 가장 긴 잠금"으로 벌을 줬다. 그런데
+    // 체크섬이 안 맞는 가장 흔한 이유는 조작이 아니라 기기 키가 바뀐 것이다
+    // (저장 공간이 꽉 차 키를 못 저장하면 부를 때마다 새 키가 생겼다). 그러면
+    // 잘못한 것 없는 학생이 "비밀번호를 여러 번 틀렸어요. 10분" 에 계속 갇혔다.
+    // 기록을 통째로 지우면 어차피 초기화되므로 벌은 막아 주는 게 없고 억울한
+    // 사람만 만든다. 빈 기록으로 새로 시작한다.
+    console.warn(`[guard] ${key} 를 확인할 수 없어 새로 시작합니다.`);
+    lsDel(key);
+    return {};
   }
   try {
     const parsed = JSON.parse(raw.v);
@@ -209,19 +253,8 @@ function loadGuarded(key, onTamper) {
   }
 }
 
-// 연타 제한 기록을 고쳤으면, 모든 통을 방금 가득 쓴 상태로 되돌린다.
-// 고쳐서 얻을 수 있는 게 없도록.
-function bucketsOnTamper() {
-  const now = Date.now();
-  const out = {};
-  for (const [name, cfg] of Object.entries(BUCKETS)) {
-    out[name] = { since: now, used: cfg.max };
-  }
-  return out;
-}
-
 function loadBuckets() {
-  return loadGuarded(BUCKET_KEY, bucketsOnTamper);
+  return loadGuarded(BUCKET_KEY);
 }
 
 /** 남은 토큰 수를 계산한다(창이 지났으면 가득 찬 상태로 리셋). */
@@ -289,7 +322,9 @@ export function refundToken(name) {
   if (!st || !st.used) return;
   st.used -= 1;
   all[name] = st;
-  lsSet(BUCKET_KEY, JSON.stringify(all));
+  // 체크섬 봉투에 담아야 한다. 예전엔 맨 JSON 으로 적어서, 다음에 읽을 때
+  // "봉투가 아님 → 빈 기록"이 되어 모든 연타 제한이 통째로 풀렸다.
+  saveGuarded(BUCKET_KEY, all);
 }
 
 // =============================================================
@@ -297,17 +332,16 @@ export function refundToken(name) {
 // =============================================================
 const LOCK_STEPS = [0, 0, 0, 10, 30, 60, 180, 600]; // 초 단위
 
-// 잠금 기록을 고쳤으면 가장 긴 잠금을 건다.
-function locksOnTamper() {
-  const until = Date.now() + LOCK_STEPS[LOCK_STEPS.length - 1] * 1000;
-  return { "*": { fails: LOCK_STEPS.length, until } };
+function loadLocks() {
+  const locks = loadGuarded(LOCK_KEY);
+  // 예전 버전이 "조작 의심"으로 걸어 둔 기기 전체 잠금("*")은 대개 억울한
+  // 잠금이었다(기기 키가 바뀌었을 뿐). 남아 있으면 풀어 준다.
+  delete locks["*"];
+  return locks;
 }
-function loadLocks() { return loadGuarded(LOCK_KEY, locksOnTamper); }
 
 export function loginLockLeft(key) {
   const locks = loadLocks();
-  // 기록을 손댄 흔적이 있으면 어떤 키로 물어도 잠긴 것으로 본다
-  if (locks["*"]?.until > Date.now()) return locks["*"].until - Date.now();
   const st = locks[key];
   if (!st?.until) return 0;
   return Math.max(0, st.until - Date.now());

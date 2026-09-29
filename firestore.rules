@@ -41,11 +41,34 @@ service cloud.firestore {
       return request.resource.data.keys().size() <= 10;
     }
 
+    // 문서 ID 는 영문·숫자·_·- 만. 자동 ID(20자)와 "_teacher_" 가 이 형식이다.
+    //  ID 는 화면의 data-id 속성 등에 그대로 쓰이므로, 따옴표나 < 가 든 ID 로
+    //  문서를 만들어 남의 화면을 망가뜨리는 길을 여기서 막는다.
+    function safeId(id) {
+      return id.matches('^[A-Za-z0-9_-]{1,64}$');
+    }
+
+    // 바뀌지 않았거나(예전 앱) 서버 시각으로만 채운 값인지.
+    // 새로 생긴 선택 필드(touchedAt 등)를 예전 앱과 같이 쓰기 위해 쓴다.
+    function keptOrNow(field) {
+      return request.resource.data.get(field, null) == request.time
+        || (resource != null && request.resource.data.get(field, null) == resource.data.get(field, null))
+        || (resource == null && !(field in request.resource.data));
+    }
+
     match /classes/{code} {
       allow get: if validClassCode(code);
       allow list: if false;
       // adminHash/adminSalt 는 해시값이라 조회돼도 원문이 노출되지 않음
-      allow create, update: if validClassCode(code)
+      //  ⚠️ 예전에는 update 도 열려 있어서, 누구든 이 문서를 덮어써 그 반
+      //  선생님 비밀번호를 바꿔치기할 수 있었다. 앱은 처음 등록할 때만 쓰므로
+      //  만들기만 허용하고, 이미 등록된 비밀번호는 바꿀 수 없게 한다.
+      allow create: if validClassCode(code)
+        && request.resource.data.keys().hasOnly(['adminSalt','adminHash','createdAt'])
+        && nonEmptyStr(request.resource.data.adminHash, 200)
+        && nonEmptyStr(request.resource.data.adminSalt, 200);
+      allow update: if validClassCode(code)
+        && !('adminHash' in resource.data)
         && request.resource.data.keys().hasOnly(['adminSalt','adminHash','createdAt'])
         && nonEmptyStr(request.resource.data.adminHash, 200)
         && nonEmptyStr(request.resource.data.adminSalt, 200);
@@ -54,7 +77,10 @@ service cloud.firestore {
       // ---- 학생 명단: 이름만 저장. 선생님이 삭제도 할 수 있음 ----
       match /students/{id} {
         allow get, list: if validClassCode(code);
-        allow create: if validClassCode(code) && cleanStr(request.resource.data.name, 40);
+        allow create: if validClassCode(code) && safeId(id) && smallDoc()
+          && request.resource.data.keys().hasOnly(['name','createdAt'])
+          && cleanStr(request.resource.data.name, 40)
+          && serverTime(request.resource.data.createdAt);
         allow update: if false;
         allow delete: if validClassCode(code);
       }
@@ -63,15 +89,35 @@ service cloud.firestore {
       match /secrets/{id} {
         allow get: if validClassCode(code);
         allow list: if false;
-        allow create: if validClassCode(code) && request.resource.data.keys().hasOnly(
-          ['hasPassword','wish','wishSetAt','wishRewriteNote','caringForId','caringForName']);
-        allow update: if validClassCode(code)
-          && request.resource.data.keys().hasOnly(
-               ['hasPassword','wish','wishSetAt','wishRewriteNote','caringForId','caringForName','salt','pwHash'])
-          && nullableStr(request.resource.data.get('wish', null), 300)
+        // 새로 만들 때는 빈 계정만: 비밀번호·소원이 미리 들어 있을 수 없다
+        allow create: if validClassCode(code) && safeId(id) && request.resource.data.keys().hasOnly(
+            ['hasPassword','wish','wishSetAt','wishRewriteNote','caringForId','caringForName'])
+          && request.resource.data.get('hasPassword', false) == false
+          && request.resource.data.get('wish', null) == null
+          && request.resource.data.get('wishSetAt', null) == null
           && nullableStr(request.resource.data.get('wishRewriteNote', null), 300)
           && nullableStr(request.resource.data.get('caringForId', null), 200)
           && nullableStr(request.resource.data.get('caringForName', null), 40);
+        allow update: if validClassCode(code)
+          && request.resource.data.keys().hasOnly(
+               ['hasPassword','wish','wishSetAt','wishRewriteNote','caringForId','caringForName','salt','pwHash'])
+          && request.resource.data.get('hasPassword', false) is bool
+          && nullableStr(request.resource.data.get('wish', null), 300)
+          && nullableStr(request.resource.data.get('wishRewriteNote', null), 300)
+          && nullableStr(request.resource.data.get('caringForId', null), 200)
+          && nullableStr(request.resource.data.get('caringForName', null), 40)
+          && nullableStr(request.resource.data.get('salt', null), 200)
+          && nullableStr(request.resource.data.get('pwHash', null), 200)
+          // 소원 등록 시각은 서버 시각이거나 비우거나 그대로여야 한다
+          && (request.resource.data.get('wishSetAt', null) == null
+              || request.resource.data.get('wishSetAt', null) == request.time
+              || request.resource.data.get('wishSetAt', null) == resource.data.get('wishSetAt', null))
+          // 이미 비밀번호가 있는 계정의 비밀번호를 한 번에 바꿔치기할 수 없다.
+          // (선생님의 "비밀번호 초기화"로 먼저 비워야만 새로 정할 수 있고,
+          //  그러면 본인이 다음 로그인 때 "계정 만들기" 화면을 보게 된다.)
+          && (request.resource.data.get('pwHash', null) == null
+              || request.resource.data.get('pwHash', null) == resource.data.get('pwHash', null)
+              || resource.data.get('hasPassword', false) != true);
         allow delete: if validClassCode(code);
       }
 
@@ -79,11 +125,15 @@ service cloud.firestore {
       //  크기는 저장하지 않는다. seed 와 createdAt 으로 매번 계산하므로
       //  2000마리가 20분마다 쓰기를 일으키는 일이 없다.
       //  밥은 fed 를 +1 하는 것만 허용한다(다른 필드는 못 건드림).
+      //  touchedAt: 만들거나 밥을 먹을 때마다 서버 시각이 찍힌다. 앱은 "마지막으로
+      //  본 뒤 touchedAt 이 늦은 물고기"만 받아서, 새 물고기와 남이 준 밥을
+      //  한 번의 조회로 알아챈다(예전 앱이 쓴 문서엔 없을 수 있어 선택 필드).
       match /fish/{id} {
         allow get, list: if validClassCode(code);
-        allow create: if smallDoc()
+        allow create: if validClassCode(code) && safeId(id) && smallDoc()
           && request.resource.data.keys().hasOnly(
-               ['ownerId','ownerName','name','art','seed','fed','createdAt'])
+               ['ownerId','ownerName','name','art','seed','fed','createdAt','touchedAt'])
+          && keptOrNow('touchedAt')
           && cleanStr(request.resource.data.ownerId, 64)
           && cleanStr(request.resource.data.ownerName, 40)
           && cleanStr(request.resource.data.name, 20)
@@ -95,15 +145,18 @@ service cloud.firestore {
           && request.resource.data.fed == 0
           && serverTime(request.resource.data.createdAt);
         // 밥주기: fed 를 정확히 1 늘리는 것만. 그림·주인·시각은 못 바꾼다.
-        allow update: if request.resource.data.keys().hasOnly(
-               ['ownerId','ownerName','name','art','seed','fed','createdAt'])
+        allow update: if validClassCode(code)
+          && request.resource.data.keys().hasOnly(
+               ['ownerId','ownerName','name','art','seed','fed','createdAt','touchedAt'])
           && request.resource.data.fed == resource.data.fed + 1
           && request.resource.data.fed <= 999999
           && request.resource.data.art == resource.data.art
           && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.ownerName == resource.data.ownerName
           && request.resource.data.name == resource.data.name
           && request.resource.data.seed == resource.data.seed
-          && request.resource.data.createdAt == resource.data.createdAt;
+          && request.resource.data.createdAt == resource.data.createdAt
+          && keptOrNow('touchedAt');
         // 정리는 선생님·전체 관리자 화면의 버튼으로만 (다른 컬렉션과 같은 신뢰 모델)
         allow delete: if validClassCode(code);
       }
@@ -121,7 +174,7 @@ service cloud.firestore {
         //  한 번에 늘릴 수 있는 폭(9999)을 제한한다. Auth 가 없어 "선생님만"은
         //  강제할 수 없지만, 이 상한 덕분에 한 번의 위조 쓰기로 상한까지
         //  단번에 채울 수는 없다.
-        allow create: if validClassCode(code) && smallDoc()
+        allow create: if validClassCode(code) && safeId(studentId) && smallDoc()
           && request.resource.data.keys().hasOnly(['total','updatedAt'])
           && request.resource.data.total is int
           && request.resource.data.total > 0
@@ -144,7 +197,7 @@ service cloud.firestore {
       match /reports/{id} {
         allow get: if false;
         allow list: if validClassCode(code);
-        allow create: if validClassCode(code) && smallDoc()
+        allow create: if validClassCode(code) && safeId(id) && smallDoc()
           && request.resource.data.keys().hasOnly(['name','roleTag','text','reason','status','createdAt'])
           && cleanStr(request.resource.data.name, 40)
           && nullableStr(request.resource.data.get('roleTag', ''), 60)
@@ -204,11 +257,14 @@ service cloud.firestore {
     // ---- 주간 투표 항목 (사용자가 직접 올린다) ----
     //  검열은 클라이언트에서 하고 걸린 건 reports 로 보낸다. 규칙 단에서
     //  뜻까지 판단할 수는 없으므로 여기서는 형태(길이·필드·+1 증가)만 강제한다.
+    //  touchedAt: 만들거나 표를 받을 때마다 서버 시각. 앱은 그 뒤로 바뀐 항목만
+    //  받는다(예전 앱이 쓴 문서엔 없을 수 있어 선택 필드).
     match /voteItems/{id} {
       allow get, list: if true;
-      allow create: if smallDoc()
+      allow create: if safeId(id) && smallDoc()
         && request.resource.data.keys().hasOnly(
-             ['label','count','weekKey','addedBy','addedByRole','createdAt'])
+             ['label','count','weekKey','addedBy','addedByRole','createdAt','touchedAt'])
+        && keptOrNow('touchedAt')
         && cleanStr(request.resource.data.label, 40)
         && request.resource.data.label.size() >= 2
         && request.resource.data.count == 0
@@ -218,11 +274,14 @@ service cloud.firestore {
         && serverTime(request.resource.data.createdAt);
       // 투표는 정확히 +1 씩만. 다른 필드는 손댈 수 없다.
       allow update: if request.resource.data.keys().hasOnly(
-             ['label','count','weekKey','addedBy','addedByRole','createdAt'])
+             ['label','count','weekKey','addedBy','addedByRole','createdAt','touchedAt'])
         && request.resource.data.count == resource.data.count + 1
         && request.resource.data.label == resource.data.label
         && request.resource.data.weekKey == resource.data.weekKey
-        && request.resource.data.addedBy == resource.data.addedBy;
+        && request.resource.data.addedBy == resource.data.addedBy
+        && request.resource.data.get('addedByRole', '') == resource.data.get('addedByRole', '')
+        && request.resource.data.createdAt == resource.data.createdAt
+        && keptOrNow('touchedAt');
       // 삭제 버튼은 전체 관리자 화면에만 있음 (다른 컬렉션과 같은 신뢰 모델)
       allow delete: if true;
     }
@@ -254,7 +313,7 @@ service cloud.firestore {
     //  감지할 수 있는 신호(단축키·우클릭·창 크기 변화)만 기록된다.
     match /securityLog/{id} {
       allow get, list: if true;
-      allow create: if smallDoc()
+      allow create: if safeId(id) && smallDoc()
         && request.resource.data.keys().hasOnly(
              ['name','classCode','roleTag','action','detail','at'])
         && cleanStr(request.resource.data.name, 40)
@@ -285,7 +344,7 @@ service cloud.firestore {
     // ---- 피드백 게시판: 반 구분 없이 전체 공용, 누구나 읽고 씀 ----
     match /feedback/{id} {
       allow get, list: if true;
-      allow create: if smallDoc()
+      allow create: if safeId(id) && smallDoc()
         && request.resource.data.keys().hasOnly(['name','roleTag','message','createdAt'])
         && cleanStr(request.resource.data.name, 40)
         && (request.resource.data.get('roleTag', '') == ''
@@ -330,7 +389,7 @@ service cloud.firestore {
       allow list: if true;
       // 이름은 필수다. cleanStr 는 빈 문자열을 통과시키지 않으므로
       // 익명(이름 없는) 광고 문의는 규칙 단에서 저장이 거부된다.
-      allow create: if smallDoc()
+      allow create: if safeId(id) && smallDoc()
         && request.resource.data.keys().hasOnly(['name','roleTag','message','createdAt'])
         && cleanStr(request.resource.data.name, 40)
         && nullableStr(request.resource.data.get('roleTag', ''), 60)

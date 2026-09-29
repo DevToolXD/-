@@ -15,14 +15,18 @@
 
 이 앱에서 가장 자주 난 사고가 이것이었습니다. 규칙 파일은 저장소에서만
 바뀌고 서버 규칙은 옛날 그대로라, 앱이 서버가 막을 요청을 보내고 학생
-화면에 "권한이 없습니다"가 뜨는 일이 반복됐습니다. 그래서 세 겹으로
+화면에 "권한이 없습니다"가 뜨는 일이 반복됐습니다. 그래서 네 겹으로
 막아 두었습니다.
 
 | 겹 | 무엇을 막나 | 어디에 |
 |---|---|---|
 | 자동 게시 | 규칙을 올리는 것을 잊는 일 | `.github/workflows/pages.yml` |
+| 에뮬레이터 시험 | 규칙이 앱의 동작을 막거나, 막아야 할 쓰기를 통과시키는 일 — 게시 **전에** 진짜 SDK 로 51가지를 시험하고, 하나라도 틀리면 규칙도 사이트도 올리지 않음 | `tests/rules_emulator.spec.mjs` |
 | 한도 대조 | 규칙과 앱이 다른 숫자를 아는 일 | `tests/rules_match.test.mjs` |
 | 자리 확인 | 새 컬렉션을 확인 목록에서 빠뜨리는 일 | 같은 파일 + `js/limits.js` |
+
+앱은 규칙보다 먼저 배포돼도 깨지지 않게 만들어져 있습니다. 새 규칙에서만
+받아 주는 필드(`touchedAt`)는 써 보고 거절되면 빼고 다시 씁니다.
 
 한도(그림 길이, 밥 횟수 같은 숫자)는 **`js/limits.js` 한 곳에만** 적습니다.
 규칙 파일과 어긋나면 배포 전에 빌드가 멈춥니다.
@@ -360,7 +364,7 @@ js/
   themes.js           # 테마 목록 (기본 / 뽀로로 / 독일)
   moderation.js     # 투표 항목 검열 (부적절한 항목 1차 거름망)
   app.js                 # UI / 라우팅 / 유리 효과 / 이스터에그 / 투표 / 광고 문의
-firestore.rules        # ⭐ 보안 규칙 (아래 안내대로 콘솔에 붙여넣기)
+firestore.rules        # ⭐ 보안 규칙 (푸시하면 자동 게시 — 시크릿 필요)
 tests/                  # Node 검증 스크립트
 .github/workflows/      # GitHub Pages 자동 배포
 ```
@@ -422,7 +426,8 @@ Firebase Authentication도 서버(Cloud Functions)도 없는 정적 사이트라
 | `classes/{code}/meta/state` | `assignedAt`,`studentCount`,`teacherIncluded` | 배정 완료 여부. `teacherIncluded` 는 항상 `false` 로 쓰인다(예전 형식과의 호환용으로만 남김) |
 | `classes/{code}/reports/{autoId}` | `name`,`roleTag`,`text`,`reason`,`status`,`createdAt` | 검열에 걸린 투표 항목 시도 → 그 반 담임선생님의 "신고함" 탭. 선생님은 `status`만 `approved`/`rejected`로 바꿀 수 있고 내용은 고칠 수 없음 |
 | `adminAccounts/{code}_{studentId}` | `classCode`,`studentId`,`name`,`active`,`grantedAt` | 계정에 붙은 관리자 권한. 부여 시각은 서버 시각으로 못박고, 한 번 만들어진 기록은 수정 불가(거둘 땐 삭제) |
-| `voteItems/{autoId}` | `label`,`count`,`weekKey`,`addedBy`,`addedByRole`,`createdAt` | 주간 투표 항목 (반과 무관한 전역 컬렉션). 투표는 규칙상 **정확히 +1씩만**, 라벨·주차·올린이는 수정 불가 |
+| `classes/{code}/fish/{autoId}` | `ownerId`,`ownerName`,`name`,`art`,`seed`,`fed`,`createdAt`,`touchedAt` | 어항 물고기. 밥은 **정확히 +1씩만**, 그림·주인·이름은 수정 불가. `touchedAt` 은 만들거나 밥을 먹을 때 서버 시각이 찍혀, 다른 기기가 "바뀐 것만" 받아 가게 한다 |
+| `voteItems/{autoId}` | `label`,`count`,`weekKey`,`addedBy`,`addedByRole`,`createdAt`,`touchedAt` | 주간 투표 항목 (반과 무관한 전역 컬렉션). 투표는 규칙상 **정확히 +1씩만**, 라벨·주차·올린이·꼬리표는 수정 불가. `touchedAt` 은 표를 받을 때마다 서버 시각 |
 | `voteWinners/{weekKey}` | `label`,`count`,`itemId`,`decidedAt` | 그 주의 채택 결과. 문서 ID가 **그 주 월요일 날짜**라 한 주에 하나뿐이고, 한 번 정해지면 수정·삭제 불가 |
 | `feedback/{autoId}` | `name`,`roleTag`,`message`,`createdAt` | 버그 제보 게시판 글 (반과 무관한 전역 컬렉션, 누구나 읽고 씀. `name`이 비면 규칙 단에서 거부되어 익명 글은 만들 수 없음. 삭제는 전체 관리자만 노출되는 버튼으로) |
 | `eggStats/{eggId}` | `count` | 이스터에그별 **발견자 수만** 세는 카운터 (누가 찾았는지는 저장하지 않음) |
@@ -441,7 +446,10 @@ Firebase Authentication도 서버(Cloud Functions)도 없는 정적 사이트라
 
 ---
 
-## 🔐 보안 규칙 적용 (직접 하셔야 합니다)
+## 🔐 보안 규칙 적용
+
+위의 `FIREBASE_SERVICE_ACCOUNT` 시크릿을 등록해 두면 푸시할 때마다 자동으로
+게시됩니다. 시크릿 없이 손으로 올려야 할 때만 아래대로 합니다.
 
 1. [Firebase 콘솔](https://console.firebase.google.com/project/manito-e14c1/firestore/rules) 접속
 2. **Firestore Database → 규칙(Rules)** 탭 이동
@@ -451,12 +459,19 @@ Firebase Authentication도 서버(Cloud Functions)도 없는 정적 사이트라
 ### 규칙이 막아주는 것
 - 학급코드가 `0601`~`0609`/`1889` 형식이 아니면 어떤 경로도 접근 불가
 - `secrets` 컬렉션 **열거(list) 차단** → 무작위 수집 방지
-- 문서 필드 형태(허용된 키·길이) 검증
-- `modeVotes`는 `pororo`/`hachuping` 문서만, `count`(음이 아닌 정수) 필드만 허용
+- 문서 필드 형태(허용된 키·길이) 검증, 새 문서의 **ID 는 영문·숫자·`_`·`-`만**
+  (ID 가 화면 속성에 쓰이므로 따옴표·꺾쇠로 화면을 망가뜨리는 길을 막음)
+- **이미 등록된 선생님 비밀번호는 덮어쓸 수 없음** (예전엔 누구나 그 반 관리자
+  해시를 바꿔치기할 수 있었음)
+- **비밀번호가 있는 학생 계정의 비밀번호를 한 번에 바꿔치기할 수 없음** —
+  선생님의 "비밀번호 초기화"로 먼저 비워야만 새로 정할 수 있고, 그러면 본인이
+  다음 로그인 때 "계정 만들기" 화면을 보게 되어 티가 남
+- 새 시크릿 문서는 빈 계정만(소원·비밀번호가 미리 든 채로 만들 수 없음),
+  소원 등록 시각은 서버 시각만
 - `feedback`은 `name`,`roleTag`,`message`,`createdAt` 필드만 허용하고 각각 길이 제한(최대 40/60/500자) 적용, 작성 후 수정 불가
-- `eggStats`·`modeVotes`는 **정확히 +1씩만** 증가 가능 — 숫자를 크게 써넣어
+- `eggStats`·투표·밥은 **정확히 +1씩만** 증가 가능 — 숫자를 크게 써넣어
   발견자 수나 득표수를 부풀릴 수 없음
-- `createdAt`은 **서버 시각만** 허용 — 클라이언트가 시간을 위조할 수 없음
+- `createdAt`·`touchedAt`은 **서버 시각만** 허용 — 클라이언트가 시간을 위조할 수 없음
 - 모든 문자열에서 **제어문자 차단**, 문서 필드 개수 상한
 - `adInquiries`는 개별 문서 직접 조회 차단(작성·목록만)
 

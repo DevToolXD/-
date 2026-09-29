@@ -406,6 +406,9 @@ async function ensureRole(roles) {
     return await guard.requireRole(roles);
   } catch (e) {
     toast(e.message, false);
+    // 로그인은 살아 있는데 역할만 안 맞는 경우엔 로그아웃시키지 않는다.
+    // (예전엔 여기서도 로그아웃 → 다시 로그인해도 같은 역할 → 또 로그아웃)
+    if (e.code === "forbidden") return null;
     clearSession();
     student = null;
     adminSession = null;
@@ -784,11 +787,12 @@ let nameToId = new Map();
 
 // ---- 명단 캐시 ----
 //  로그인 화면을 열 때마다 반 명단(30명이면 30회)을 다시 읽었다. 명단은
-//  선생님이 학생을 넣고 뺄 때만 바뀌므로 기기에 30분 둔다.
+//  선생님이 학생을 넣고 뺄 때만 바뀌고(이름은 규칙상 고칠 수 없다), 아래
+//  두 가지가 그 변화를 잡아 주므로 기기에 일주일 둔다.
 //   · 목록에 없는 이름을 치면 그때 한 번 새로 받는다(새로 들어온 학생).
 //   · 로그인 직전에 그 학생 문서 하나만 확인한다(그 사이 지워진 학생).
 //   · 선생님 화면은 항상 새로 받고, 받은 김에 캐시도 갈아 끼운다.
-const ROSTER_TTL = 30 * 60 * 1000;
+const ROSTER_TTL = 7 * 24 * 60 * 60 * 1000;
 const rosterKey = (code) => `manito.roster:${code}`;
 async function rosterFor(code, { force = false } = {}) {
   if (!force) {
@@ -1086,7 +1090,10 @@ $("#my-wish-submit").addEventListener("click", async () => {
     "\n\n한 번 등록하면 다음 마니또 배정 전까지 바꿀 수 없어요."
   );
   if (!ok) return;
-  if (!(await ensureRole("student"))) return;
+  // 관리자 권한이 붙은 학생은 세션 역할이 superadmin 이다. 그래도 자기 소원은
+  // 써야 하므로 같이 받아 준다(예전엔 "student" 만 받아서 이런 학생은 소원을
+  // 등록할 때마다 "로그인이 만료됐어요"와 함께 쫓겨났다).
+  if (!(await ensureRole(["student", "superadmin"]))) return;
   if (!useToken("wish", "#my-wish-hint")) return;
   const btn = $("#my-wish-submit");
   busy(btn, true, "등록 중…");
@@ -1499,7 +1506,8 @@ $("#beta-reset-btn").addEventListener("click", async (e) => {
     `· 학생들이 정한 비밀번호 (다음 로그인 때 새로 정하게 됩니다)\n` +
     `· 어항의 물고기와 밥\n` +
     `· 신고함\n` +
-    `· 우리 반이 올린 투표 항목\n\n` +
+    `· 우리 반 학생들의 이번 주 투표 기록 (다시 투표할 수 있게 됩니다)\n` +
+    `  (투표 항목은 모든 반이 같이 쓰는 것이라 그대로 둡니다)\n\n` +
     `계속할까요?`,
     { okText: "다음" }
   );
@@ -1524,17 +1532,19 @@ $("#beta-reset-btn").addEventListener("click", async (e) => {
     // 이 기기에 남은 것들(밥·쿨다운·마지막으로 본 시각)도 같이 치운다
     try {
       for (const k of Object.keys(localStorage)) {
-        if (k.startsWith("manito.tank.")) localStorage.removeItem(k);
+        if (k.startsWith("manito.tank.") || k.startsWith("manito.voted")) localStorage.removeItem(k);
       }
     } catch {}
+    ballotMemo = null;
+    careMemo = null;
     await cacheClear(tankCacheKey());
     tankState.fish = [];
     tankState.sync = { code: "", mark: 0, total: -1, syncedAt: 0, fullAt: 0 };
-    voteItemsCache = null;
+    staleVotes();
     done = true;
     setHint("#beta-reset-hint",
       `치웠어요 — 소원·배정·비밀번호 ${n.secrets}건, 물고기 ${n.fish}마리, ` +
-      `밥 기록 ${n.grants}건, 신고 ${n.reports}건, 투표 항목 ${n.votes}개. ` +
+      `밥 기록 ${n.grants}건, 신고 ${n.reports}건, 투표 기록 ${n.votes}건. ` +
       `학생 명단 ${roster.length}명은 그대로예요.`, true);
     await Promise.all([refreshRoster(), refreshAdminWishlist(), refreshReports()]);
   } catch (err) {
@@ -1583,10 +1593,10 @@ async function refreshReports() {
             const actions = done
               ? `<span class="muted small">${r.status === "approved" ? "다시 추가함" : "차단 유지"}</span>`
               : `<div class="report-actions">
-                   <button class="btn btn-primary btn-sm report-approve" data-id="${r.id}">다시 추가</button>
-                   <button class="btn btn-ghost btn-sm report-reject" data-id="${r.id}">차단 유지</button>
+                   <button class="btn btn-primary btn-sm report-approve" data-id="${escapeHtml(r.id)}">다시 추가</button>
+                   <button class="btn btn-ghost btn-sm report-reject" data-id="${escapeHtml(r.id)}">차단 유지</button>
                  </div>`;
-            return `<li class="feedback-item report-item ${done ? "done" : ""}" data-id="${r.id}">
+            return `<li class="feedback-item report-item ${done ? "done" : ""}" data-id="${escapeHtml(r.id)}">
               <div class="row-between">
                 <span class="feedback-author">${escapeHtml(r.name || "이름 없음")}${
                   r.roleTag ? `<span class="feedback-role"> · ${escapeHtml(r.roleTag)}</span>` : ""
@@ -1607,7 +1617,8 @@ async function refreshReports() {
         if (!useToken("reportOp")) return;
         busy(b, true, "추가 중…");
         try {
-          await data.approveReport(classCode, b.dataset.id);
+          await data.approveReport(classCode, b.dataset.id, rows.find((x) => x.id === b.dataset.id));
+          staleVotes();
           toast("투표 목록에 추가했어요.");
           await refreshReports();
         } catch (e) {
@@ -1649,13 +1660,13 @@ async function refreshRoster() {
     // 학생마다 점 세 개(⋯) 메뉴 — 비밀번호 초기화 / 명단에서 삭제
     ul.innerHTML = students
       .map(
-        (s) => `<li class="chip chip-removable" data-id="${s.id}">
+        (s) => `<li class="chip chip-removable" data-id="${escapeHtml(s.id)}">
           ${escapeHtml(s.name)}
           <span class="chip-menu-wrap">
-            <button class="chip-more" data-id="${s.id}" title="${escapeHtml(s.name)} 관리" aria-haspopup="true" aria-expanded="false">⋯</button>
-            <div class="chip-menu hidden" data-menu-for="${s.id}">
-              <button class="chip-menu-reset" data-id="${s.id}">비밀번호 초기화</button>
-              <button class="chip-menu-del danger" data-id="${s.id}">명단에서 삭제</button>
+            <button class="chip-more" data-id="${escapeHtml(s.id)}" title="${escapeHtml(s.name)} 관리" aria-haspopup="true" aria-expanded="false">⋯</button>
+            <div class="chip-menu hidden" data-menu-for="${escapeHtml(s.id)}">
+              <button class="chip-menu-reset" data-id="${escapeHtml(s.id)}">비밀번호 초기화</button>
+              <button class="chip-menu-del danger" data-id="${escapeHtml(s.id)}">명단에서 삭제</button>
             </div>
           </span>
         </li>`
@@ -1799,7 +1810,7 @@ async function refreshAdminWishlist() {
     }
     tbody.innerHTML = rows
       .map(
-        (r) => `<tr data-id="${r.id}" data-name="${escapeHtml(r.name)}">
+        (r) => `<tr data-id="${escapeHtml(r.id)}" data-name="${escapeHtml(r.name)}">
           <td>${escapeHtml(r.name)}</td>
           <td>${r.wish ? escapeHtml(r.wish) : "<span class='muted small'>아직 없음</span>"}</td>
           <td>${r.wish ? '<button class="btn btn-ghost btn-sm wishlist-rewrite-btn">다시 쓰기 요청</button>' : ""}</td>
@@ -1968,11 +1979,11 @@ async function loadClassDetail(code) {
     const optionsFor = (selfId) =>
       rows
         .filter((r) => r.id !== selfId)
-        .map((r) => `<option value="${r.id}">${escapeHtml(r.name)}</option>`)
+        .map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)}</option>`)
         .join("");
     tbody.innerHTML = rows
       .map(
-        (r) => `<tr data-id="${r.id}">
+        (r) => `<tr data-id="${escapeHtml(r.id)}">
           <td>${escapeHtml(r.name)}</td>
           <td>
             <select class="sa-care-select">
@@ -2075,7 +2086,7 @@ async function refreshSaVotes() {
               <td>${escapeHtml(v.label)}</td>
               <td>${escapeHtml(v.addedBy || "")}</td>
               <td>${v.count}</td>
-              <td><button class="btn btn-ghost btn-sm sa-vote-del" data-id="${v.id}">삭제</button></td>
+              <td><button class="btn btn-ghost btn-sm sa-vote-del" data-id="${escapeHtml(v.id)}">삭제</button></td>
             </tr>`
           )
           .join("")
@@ -2087,7 +2098,7 @@ async function refreshSaVotes() {
         if (!useToken("reportOp")) return;
         try {
           await data.deleteVoteItem(b.dataset.id);
-          voteItemsCache = null;
+          staleVotes();
           await refreshSaVotes();
         } catch (e) {
           toast("삭제 실패: " + e.message, false);
@@ -2477,7 +2488,7 @@ async function refreshVotePage(
       ? items
           .map(
             (v) => `<button class="role-btn glass-card vote-item ${v.count > 0 && v.count === top ? "leading" : ""}"
-              data-id="${v.id}" ${canVote ? "" : "disabled"}>
+              data-id="${escapeHtml(v.id)}" ${canVote ? "" : "disabled"}>
               <span class="role-title">${escapeHtml(v.label)}${
                 v.count > 0 && v.count === top ? `<span class="vote-lead-badge">1위</span>` : ""
               }</span>
@@ -2504,8 +2515,8 @@ async function refreshVotePage(
           lsSet(votedKeyFor(identity), week);
           await data.recordBallot(week, classCode, voterId(identity));
           // 내 한 표는 화면의 목록에 직접 더한다 — 이것 때문에 다시 읽지 않는다.
-          const mine = voteItemsCache?.week === week && voteItemsCache.items.find((v) => v.id === b.dataset.id);
-          if (mine) { mine.count += 1; sortVoteItems(voteItemsCache.items); }
+          const mine = voteSync?.week === week && voteSync.rows.find((v) => v.id === b.dataset.id);
+          if (mine) { mine.count = (Number(mine.count) || 0) + 1; cacheSet(VOTE_CACHE, voteSync); }
           toast("투표 완료! 감사합니다.");
           findEgg("vote");
           await refreshVotePage(wrapSel, hintSel, winnersSel, weekSel, identity);
@@ -2524,25 +2535,49 @@ async function refreshVotePage(
 }
 
 // ---- 투표 읽기 줄이기 ----
-//  · 이번 주 항목: 잠깐(2분) 메모리에 둔다. 내가 넣은 표·항목은 바로 반영.
+//  · 이번 주 항목: 기기(IndexedDB)에 두고, 확인할 때는 그 뒤로 새로 올라오거나
+//    표를 받은 항목만 받는다(보통 읽기 2회). 1분 안에 다시 열면 안 묻는다.
+//    내가 넣은 표·항목은 바로 반영한다.
 //  · 지난 주 마감: 한 번 확정되면(또는 확정할 게 없으면) 다시는 안 바뀐다.
 //    이 기기에서 한 번 확인했으면 그 주 동안은 다시 묻지 않는다.
 //  · 채택 목록: 마감이 끝난 뒤에는 다음 주가 될 때까지 안 바뀐다.
-const VOTE_ITEMS_TTL = 2 * 60 * 1000;
+const VOTE_ITEMS_TTL = 60 * 1000;
+// 예전 앱·예전 규칙에서 넣은 표(touchedAt 없이)는 바뀐 것 조회에 안 잡히므로,
+// 가끔은 이번 주 항목을 통째로 다시 받는다(몇십 개뿐이라 싸다). 서버에
+// touchedAt 이 찍히기 시작했으면(새 규칙 게시 뒤) 그 간격을 늘린다.
+const VOTE_FULL_TTL = 3 * 60 * 60 * 1000;
+const VOTE_FULL_TTL_OLD = 30 * 60 * 1000;
+const VOTE_CACHE = "votes";
 const VOTE_SETTLED_KEY = "manito.vote.settled";
 const VOTE_WINNERS_KEY = "manito.vote.winners";
-let voteItemsCache = null; // { week, items, at }
+let voteSync = null;       // { week, rows, mark, total, at, fullAt }
 let ballotMemo = null;     // { key, at } — 서버에 내 표가 아직 없다고 확인한 때
 
 function sortVoteItems(items) {
   items.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "ko"));
 }
-async function voteItems(week, { force = false } = {}) {
-  const c = voteItemsCache;
-  if (!force && c && c.week === week && Date.now() - c.at < VOTE_ITEMS_TTL) return c.items;
-  const items = await data.listVoteItems(week);
-  voteItemsCache = { week, items, at: Date.now() };
+function voteRowsToItems(rows) {
+  const items = rows.map((r) => ({ id: r.id, label: r.label, count: Number(r.count) || 0, addedBy: r.addedBy || "" }));
+  sortVoteItems(items);
   return items;
+}
+// 다음에 열 때 유효기간과 상관없이 바로 확인하게 한다(지우기·승인 뒤 등)
+function staleVotes() { if (voteSync) voteSync.at = 0; }
+async function voteItems(week, { force = false } = {}) {
+  if (!voteSync) {
+    const c = await cacheGet(VOTE_CACHE);
+    if (c && c.week === week && Array.isArray(c.rows)) voteSync = c;
+  }
+  const s = voteSync && voteSync.week === week ? voteSync : null;
+  const now = Date.now();
+  if (!force && s && now - s.at < VOTE_ITEMS_TTL) return voteRowsToItems(s.rows);
+  const fullTtl = s && serverTouches(s.rows) ? VOTE_FULL_TTL : VOTE_FULL_TTL_OLD;
+  const full = !s || now - (s.fullAt || 0) > fullTtl;
+  const res = await data.syncVoteItems(week, full ? null : s);
+  voteSync = { week, rows: res.rows, mark: res.mark, tmark: res.tmark, total: res.total, at: now,
+    fullAt: res.full ? now : s.fullAt };
+  cacheSet(VOTE_CACHE, voteSync);
+  return voteRowsToItems(voteSync.rows);
 }
 async function settleLastWeekOnce() {
   const prev = data.prevWeekKeyOf();
@@ -2618,7 +2653,7 @@ async function submitVoteItem(inputSel, hintSel, btnSel, identity, refresh) {
     setHint(hintSel, "");
     lsSet(addedKeyFor(identity), data.weekKeyOf());
     toast("항목을 올렸어요. 이제 투표해보세요!");
-    voteItemsCache = null;          // 방금 올린 항목이 보이게 한 번은 새로 읽는다
+    staleVotes();                   // 방금 올린 항목이 보이게 바로 확인한다
     await refresh();
   } catch (e) {
     setHint(hintSel, e.message);
@@ -2714,9 +2749,9 @@ function isSuperAdminAuthed() {
 function canModerate() { return isSuperAdminAuthed() || !!adminSession; }
 function feedbackItemHtml(p) {
   const delBtn = canModerate()
-    ? `<button class="link-btn feedback-del-btn" data-id="${p.id}">삭제</button>`
+    ? `<button class="link-btn feedback-del-btn" data-id="${escapeHtml(p.id)}">삭제</button>`
     : "";
-  return `<li class="feedback-item" data-id="${p.id}">
+  return `<li class="feedback-item" data-id="${escapeHtml(p.id)}">
     <div class="row-between">
       <span class="feedback-author">${escapeHtml(p.name)}${p.roleTag ? ` <span class="feedback-time">· ${escapeHtml(p.roleTag)}</span>` : ""}</span>
       ${delBtn}
@@ -3134,14 +3169,18 @@ const TANK_ADD_COOLDOWN = 10 * 60 * 1000;   // 10분에 한 마리
 //  들어온 물고기"만 받는다. 그 사이 누가 지워졌는지는 개수만 세서(1000마리당
 //  읽기 1회) 알아낸다. 그래서 확인 한 번이 마리 수와 상관없이 보통 읽기
 //  2회다. 싸니까 자주 확인해도 된다 — 새 물고기가 몇 분 안에 보인다.
-//  밥(fed)은 개수가 안 변해서 이 방법으로는 못 알아챈다. 다른 사람이 준 밥은
-//  하루에 한 번 통째로 다시 받을 때 반영된다. 크기 공식(js/fish.js)은 밥을
-//  9번까지만 세고 그마저 절반은 안 크게 하므로, 하루 늦어도 차이가 작다.
-//  통째로 받기는 마리 수만큼(최대 2000) 청구되니 자주 할 수 없다.
+//  밥을 먹으면 서버가 그 물고기의 touchedAt 을 새로 찍으므로, 남이 준 밥도
+//  같은 조회에 함께 잡힌다. 통째로 다시 받기는 마리 수만큼(최대 2000)
+//  청구되니, touchedAt 을 모르는 예전 앱이 준 밥까지 맞추는 안전망으로만
+//  일주일에 한 번 한다.
 //  내가 넣거나 먹이거나 지운 물고기는 그 자리에서 바로 반영한다.
 const TANK_SYNC_TTL = 3 * 60 * 1000;    // 이 안에 다시 열면 서버를 안 부른다
-const TANK_POLL_MS = 5 * 60 * 1000;     // 열어 둔 동안(화면에 보일 때만) 새 물고기 확인
-const TANK_FULL_TTL = 24 * 60 * 60 * 1000; // 하루에 한 번 통째로 다시 받아 밥 수를 맞춘다
+const TANK_POLL_MS = 5 * 60 * 1000;     // 열어 둔 동안(화면에 보일 때만) 새 물고기·밥 확인
+const TANK_FULL_TTL = 7 * 24 * 60 * 60 * 1000;
+// 서버에 touchedAt 이 한 번도 안 찍혀 있으면(새 규칙이 아직 게시 전) 남이 준
+// 밥을 바뀐 것 조회로 못 잡으므로, 그동안은 하루에 한 번 통째로 받는다.
+const TANK_FULL_TTL_OLD = 24 * 60 * 60 * 1000;
+const serverTouches = (rows) => rows.some((r) => r.touchedAt && !r._local);
 const FOOD_PER_DAY = 3;                 // 하루에 생기는 밥
 const FOOD_MAX = 6;                     // 저절로 쌓이는 밥의 상한(이틀치)
 const FOOD_HARD_MAX = 999;              // 선생님이 준 밥까지 합친 최대
@@ -3864,7 +3903,7 @@ const tankCacheKey = (code = classCode) => `tank:${code}`;
 function saveTankCache() {
   const s = tankState.sync;
   if (s.code !== classCode) return;
-  cacheSet(tankCacheKey(), { fish: tankState.fish, mark: s.mark, total: s.total,
+  cacheSet(tankCacheKey(), { fish: tankState.fish, mark: s.mark, tmark: s.tmark || 0, total: s.total,
     syncedAt: s.syncedAt, fullAt: s.fullAt });
 }
 async function loadTankCache() {
@@ -3876,7 +3915,7 @@ async function loadTankCache() {
     return false;
   }
   tankState.fish = c.fish;
-  tankState.sync = { code: classCode, mark: c.mark || 0, total: Number.isInteger(c.total) ? c.total : -1,
+  tankState.sync = { code: classCode, mark: c.mark || 0, tmark: c.tmark || 0, total: Number.isInteger(c.total) ? c.total : -1,
     syncedAt: c.syncedAt || 0, fullAt: c.fullAt || 0 };
   return true;
 }
@@ -3890,17 +3929,18 @@ function syncTank({ force = false } = {}) {
   if (!force && s.code === code && s.syncedAt && now - s.syncedAt < TANK_SYNC_TTL) {
     return Promise.resolve(false);
   }
-  const full = s.code !== code || !s.fullAt || now - s.fullAt > TANK_FULL_TTL;
+  const fullTtl = serverTouches(tankState.fish) ? TANK_FULL_TTL : TANK_FULL_TTL_OLD;
+  const full = s.code !== code || !s.fullAt || now - s.fullAt > fullTtl;
   const sent = tankState.fish;
   const sentIds = new Set(sent.map((f) => f.id));
-  tankState.syncing = data.syncFish(code, full ? null : { rows: sent, mark: s.mark, total: s.total })
+  tankState.syncing = data.syncFish(code, full ? null : { rows: sent, mark: s.mark, tmark: s.tmark, total: s.total })
     .then((res) => {
       if (classCode !== code) return false;
       // 확인하는 동안 내가 넣은 물고기는 보낸 목록에 없었으니 그대로 둔다
       const pending = tankState.fish.filter((f) => f._local && !sentIds.has(f.id)
         && !res.rows.some((r) => r.id === f.id));
       tankState.fish = res.rows.concat(pending);
-      tankState.sync = { code, mark: res.mark, total: res.total, syncedAt: now,
+      tankState.sync = { code, mark: res.mark, tmark: res.tmark, total: res.total, syncedAt: now,
         fullAt: res.full ? now : s.fullAt };
       $("#tank-count").textContent = `${tankState.fish.length}마리`;
       saveTankCache();

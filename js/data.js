@@ -135,8 +135,12 @@ export async function resetStudentPassword(code, id) {
 }
 
 // 로그인 화면에서 "로그인"인지 "계정 만들기"인지 미리 판별하는 용도.
+//  이름을 고를 때 이미 시크릿을 한 번 읽으므로, 곧이어 누르는 "로그인"은
+//  그 값을 잠깐(1분) 다시 쓴다 — 같은 문서를 두 번 읽지 않게.
+let loginSecret = null; // { key, sec, at }
 export async function studentHasPassword(code, id) {
   const sec = await getSecret(code, id);
+  loginSecret = sec ? { key: `${code}/${id}`, sec, at: Date.now() } : null;
   return !!sec?.hasPassword;
 }
 
@@ -144,6 +148,7 @@ export async function setStudentPassword(code, id, password) {
   const salt = randomHex(16);
   const pwHash = await hashSecret(password, salt);
   await updateDoc(secretsDoc(code, id), { salt, pwHash, hasPassword: true });
+  loginSecret = null;
 }
 
 // ---------- 비밀 코드 ----------
@@ -162,11 +167,13 @@ export const isAdminGrantCode = (input) => matchesSecret(input, ADMIN_GRANT_HASH
 // 로그인 검증. 반환: 'ok' | 'master' | 'wrong' | 'needSetup'
 //  마스터키는 비밀번호를 아직 안 정한 계정에도 통한다(계정 복구용).
 export async function verifyStudentPassword(code, id, password) {
-  const sec = await ensureSecretDoc(code, id);
+  const memo = loginSecret;
+  const sec = memo && memo.key === `${code}/${id}` && Date.now() - memo.at < 60 * 1000
+    ? memo.sec : await ensureSecretDoc(code, id);
   if (await isMasterKey(password)) return "master";
-  if (!sec.hasPassword) return "needSetup";
+  if (!sec.hasPassword) { loginSecret = null; return "needSetup"; }
   const h = await hashSecret(password, sec.salt);
-  return h === sec.pwHash ? "ok" : "wrong";
+  return safeEqual(h, sec.pwHash) ? "ok" : "wrong";
 }
 
 // ---------- 학급 관리자(선생님) ----------
@@ -369,21 +376,42 @@ export async function superAdminSetCare(code, guardianId, protegeId) {
 //  prev = { rows, mark, total }
 //   rows  : 가진 목록. _local 이 붙은 줄은 내가 방금 쓰고 아직 서버에서
 //           다시 받아 보지 않은 것(서버 개수 total 에 아직 안 들어 있다)
-//   mark  : 서버에서 받은 것 중 가장 늦은 createdAt(ms)
+//   mark  : 서버에서 받은 것 중 가장 늦은 기준 시각(ms)
 //   total : 그때 서버에 있던 문서 수
+//  기준 시각은 보통 createdAt 이지만, 물고기·투표 항목은 touchedAt(만들거나
+//  밥·표를 받을 때마다 서버가 찍는 시각)을 쓴다. 그래서 새 문서뿐 아니라
+//  남이 준 밥·표도 같은 한 번의 조회로 알아챈다. touchedAt 이 생기기 전에
+//  만들어진 문서는 createdAt 으로 대신한다 — 그런 문서도 밥을 먹는 순간
+//  touchedAt 이 생기므로 놓치지 않는다.
 //  지워진 게 있거나 확인이 실패하면 그냥 통째로 다시 읽는다 — 틀린 목록을
 //  보여주는 것보다 한 번 더 읽는 게 낫다.
+// touchedAt 은 새 규칙에서만 받아 준다. 규칙은 따로 게시되므로, 앱이 먼저
+// 올라가도 깨지지 않게: touchedAt 을 붙여 써 보고 서버가 거절하면 빼고 다시
+// 쓴다. 빼고 쓴 게 통하면 "이 서버는 아직 예전 규칙"으로 기억해 두고 이번
+// 방문 동안은 처음부터 빼고 쓴다(거절된 쓰기가 반복되지 않게).
+let touchOk = true;
+async function withTouch(write, fields) {
+  if (touchOk) {
+    try { return await write({ ...fields, touchedAt: serverTimestamp() }); }
+    catch (e) { if (e?.code !== "permission-denied") throw e; }
+  }
+  const out = await write(fields);
+  touchOk = false;
+  return out;
+}
+
+const toMs = (t) => (t && typeof t.toMillis === "function" ? t.toMillis()
+  : (t instanceof Date ? t.getTime() : null));
 function readRow(d) {
   const v = d.data() || {};
-  const t = v.createdAt;
-  const ms = t && typeof t.toMillis === "function" ? t.toMillis()
-    : (t instanceof Date ? t.getTime() : null);
+  const ms = toMs(v.createdAt);
+  const row = { id: d.id, ...v, createdAt: ms };
+  if ("touchedAt" in v) row.touchedAt = toMs(v.touchedAt);
   // 시각이 없는 문서는 화면용으로만 지금 시각을 쓰고, 기준점(mark)에는
   // 절대 넣지 않는다 — 기기 시계가 빠르면 그 뒤에 들어온 문서를 놓친다.
-  return ms == null ? { id: d.id, ...v, createdAt: Date.now(), _noTs: true } : { id: d.id, ...v, createdAt: ms };
+  if (ms == null) { row.createdAt = Date.now(); row._noTs = true; }
+  return row;
 }
-const newest = (rows, floor = 0) =>
-  rows.reduce((m, r) => (r._noTs ? m : Math.max(m, r.createdAt || 0)), floor);
 const byTime = (a, b) => a.createdAt - b.createdAt;
 
 // 개수가 모자라면(누가 지웠으면) 어느 것이 지워졌는지 개수만으로 찾아낸다.
@@ -445,14 +473,34 @@ async function findDeleted(colRef, rows, gone, partial, total) {
   return dead;
 }
 
-async function syncCollection(colRef, prev, cap = 0) {
+//  opts.field : 기준 시각 필드(createdAt / touchedAt)
+//  opts.cap   : 최근 몇 개만 가질지(0 = 전부)
+//  opts.scope : 목록이 컬렉션 일부일 때 그 조건(예: 이번 주 투표). 바뀐 것
+//               조회에는 붙이지 않고(두 필드 조건이면 색인을 따로 만들어야
+//               한다) 받은 뒤 opts.match 로 거른다. 이 경우 지워진 것 찾기는
+//               하지 않고 통째로 다시 받는다(항목이 몇십 개뿐이다).
+//  touchedAt 을 쓰는 목록은 두 가지를 묻는다: createdAt 이 늦은 것(새 문서 —
+//  예전 규칙·예전 앱이 만든 문서엔 touchedAt 이 없다)과 touchedAt 이 늦은 것
+//  (밥·표를 받은 문서). 기준점도 따로 둔다(mark / tmark).
+async function syncCollection(colRef, prev, opts = {}) {
+  const { field = "createdAt", cap = 0, scope = [], match = null } = opts;
+  const touch = field === "touchedAt";
+  const newestC = (rows, floor = 0) => rows.reduce((m, r) => (r._noTs ? m : Math.max(m, r.createdAt || 0)), floor);
+  // touchedAt 기준점은 createdAt 기준점보다 앞설 수 없다: 마지막 확인 뒤에
+  // 밥을 먹은 물고기는 touchedAt 이 그 확인 시각(≥ createdAt 기준점)보다 늦다.
+  const newestT = (rows, floor) => rows.reduce((m, r) => Math.max(m, r.touchedAt || 0), floor);
+  const scoped = scope.length ? query(colRef, ...scope) : colRef;
   if (prev && Array.isArray(prev.rows) && prev.mark > 0 && Number.isInteger(prev.total) && prev.total >= 0) {
     try {
-      const [snap, cnt] = await Promise.all([
+      const tmark = Math.max(prev.tmark || 0, prev.mark);
+      const [snapC, snapT, cnt] = await Promise.all([
         getDocs(query(colRef, where("createdAt", ">", new Date(prev.mark)))),
-        getCountFromServer(colRef),
+        touch ? getDocs(query(colRef, where("touchedAt", ">", new Date(tmark)))) : null,
+        getCountFromServer(scoped),
       ]);
-      const fresh = snap.docs.map(readRow);
+      const byId = new Map();
+      for (const d of [...snapC.docs, ...(snapT ? snapT.docs : [])]) byId.set(d.id, readRow(d));
+      const fresh = [...byId.values()].filter((r) => !match || match(r));
       const known = new Set(prev.rows.filter((r) => !r._local).map((r) => r.id));
       const added = fresh.filter((r) => !known.has(r.id));
       const total = cnt.data().count;
@@ -462,32 +510,34 @@ async function syncCollection(colRef, prev, cap = 0) {
       let rows = prev.rows.filter((r) => !r._local && !freshIds.has(r.id)).concat(fresh).sort(byTime);
       const gone = prev.total + added.length - total;
       if (gone > 0) {
-        const dead = await findDeleted(colRef, rows, gone, !!cap, total);
+        const dead = scope.length ? null : await findDeleted(colRef, rows, gone, !!cap, total);
         rows = dead ? rows.filter((r) => !dead.has(r.id)) : null;
       } else if (gone < 0) {
         rows = null;          // 설명이 안 되는 차이 — 통째로 다시 받는다
       }
       if (rows) {
         if (cap && rows.length > cap) rows = rows.slice(rows.length - cap);
-        return { rows, mark: newest(fresh, prev.mark), total, full: false };
+        const mark = newestC(fresh, prev.mark);
+        return { rows, mark, tmark: newestT(fresh, Math.max(tmark, mark)), total, full: false };
       }
     } catch { /* 아래에서 통째로 다시 읽는다 */ }
   }
-  const snap = await getDocs(cap ? query(colRef, orderBy("createdAt", "desc"), limit(cap)) : colRef);
+  const snap = await getDocs(cap ? query(scoped, orderBy("createdAt", "desc"), limit(cap)) : scoped);
   const rows = snap.docs.map(readRow).sort(byTime);
   let total = rows.length;
   if (cap && rows.length >= cap) {
-    try { total = (await getCountFromServer(colRef)).data().count; } catch { total = -1; }
+    try { total = (await getCountFromServer(scoped)).data().count; } catch { total = -1; }
   }
   // total 을 모르면(-1) 다음에도 통째로 읽게 된다 — 틀리는 것보다는 낫다.
-  return { rows, mark: newest(rows), total, full: true };
+  const mark = newestC(rows);
+  return { rows, mark, tmark: newestT(rows, mark), total, full: true };
 }
 
 // ---------- 버그 제보 게시판 (반 구분 없이 전체 공용, 최신순) ----------
 export const FEEDBACK_SHOWN = 100;
 /** 최근 100개. prev 를 넘기면 그 뒤로 바뀐 것만 받아 합친다. */
 export function syncFeedback(prev) {
-  return syncCollection(feedbackCol(), prev, FEEDBACK_SHOWN);
+  return syncCollection(feedbackCol(), prev, { cap: FEEDBACK_SHOWN });
 }
 
 // 광고 문의와 동일하게 이름은 화면에서 입력받지 않고 로그인한 본인 것이 넘어온다.
@@ -624,7 +674,7 @@ export async function addVoteItem(code, label, addedBy, addedByRole, rosterNames
   if (!dup.empty) {
     throw new Error("이미 같은 항목이 올라와 있어요.");
   }
-  const ref = await addDoc(voteItemsCol(), {
+  const ref = await withTouch((f) => addDoc(voteItemsCol(), f), {
     label: clean,
     count: 0,
     weekKey: key,
@@ -635,12 +685,21 @@ export async function addVoteItem(code, label, addedBy, addedByRole, rosterNames
   return { ok: true, id: ref.id };
 }
 
+/** 이번 주 투표 항목. prev 를 넘기면 그 뒤로 새로 올라오거나 표를 받은 것만 받는다. */
+export function syncVoteItems(key, prev) {
+  return syncCollection(voteItemsCol(), prev, {
+    field: "touchedAt",
+    scope: [where("weekKey", "==", key)],
+    match: (r) => r.weekKey === key,
+  });
+}
+
 // 읽고 +1 해서 쓰던 것을 서버에서 +1 하게 바꿨다. 읽기가 하나 줄고,
 // 두 사람이 동시에 눌러 한 표가 사라지던 경우도 없어진다. 규칙의
 // "count == 이전 + 1" 은 그대로 통과한다.
 export async function voteForItem(itemId) {
   try {
-    await updateDoc(voteItemDoc(itemId), { count: increment(1) });
+    await withTouch((f) => updateDoc(voteItemDoc(itemId), f), { count: increment(1) });
   } catch (e) {
     // 없는 문서를 고치려 하면 서버가 not-found 대신 권한 거절로 답할 수도
     // 있다. 실패했을 때만 한 번 읽어서 "사라진 항목"인지 가려낸다.
@@ -752,7 +811,9 @@ export async function checkRulesPublished() {
   // 확인할 자리는 js/limits.js 의 RULE_PROBES 한 곳에만 적혀 있다.
   // 컬렉션을 새로 만들면 거기 한 줄만 더하면 앱과 검사 도구가 같이 안다.
   const probe = async (parts) => {
-    try { await getDocs(collection(db, ...parts)); return true; } catch { return false; }
+    // 열려 있는지만 보면 되므로 1건만 읽는다. 예전엔 컬렉션을 통째로 읽어서
+    // 확인 한 번에 보안 기록·투표 기록 수천 건이 청구될 수 있었다.
+    try { await getDocs(query(collection(db, ...parts), limit(1))); return true; } catch { return false; }
   };
   const results = await Promise.all(RULE_PROBES.map((r) => probe(r.path)));
   const out = { ok: true, missing: [] };
@@ -786,19 +847,31 @@ export async function betaResetUsed(code) {
  */
 export async function betaReset(code) {
   const counts = { secrets: 0, fish: 0, grants: 0, reports: 0, votes: 0 };
-  const wipe = async (colRef, key) => {
-    try {
-      const snap = await getDocs(colRef);
+  // 한 번의 묶음 쓰기는 500건까지다. 넘기면 통째로 실패하므로 나눠 보낸다
+  // (어항은 2000마리까지 찬다).
+  const deleteAll = async (refs) => {
+    for (let i = 0; i < refs.length; i += 450) {
       const batch = writeBatch(db);
-      let n = 0;
-      snap.forEach((d) => { batch.delete(doc(colRef, d.id)); n++; });
-      if (n) await batch.commit();
-      counts[key] = n;
+      refs.slice(i, i + 450).forEach((r) => batch.delete(r));
+      await batch.commit();
+    }
+    return refs.length;
+  };
+  const wipe = async (q, key) => {
+    try {
+      const snap = await getDocs(q);
+      counts[key] = await deleteAll(snap.docs.map((d) => d.ref));
     } catch { /* 막혀 있으면 그 칸만 건너뛴다 */ }
   };
 
-  // 소원·비밀번호·마니또 배정
-  await wipe(collection(db, "classes", code, "secrets"), "secrets");
+  // 소원·비밀번호·마니또 배정.
+  //  시크릿은 규칙이 목록 조회를 막아 두었다(비밀번호 해시를 한꺼번에
+  //  못 긁어 가게). 그래서 예전처럼 목록으로 찾으면 아무것도 못 지웠다.
+  //  명단의 학생 ID(와 예전 선생님 칸)로 하나씩 지운다.
+  try {
+    const ids = (await listStudents(code)).map((s) => s.id).concat(TEACHER_ID);
+    counts.secrets = await deleteAll(ids.map((id) => secretsDoc(code, id)));
+  } catch {}
   // 어항과 밥
   await wipe(fishCol(code), "fish");
   await wipe(grantCol(code), "grants");
@@ -808,19 +881,11 @@ export async function betaReset(code) {
   // 배정 상태
   try { await deleteDoc(stateDoc(code)); } catch {}
 
-  // 이 반이 올린 이번 주 투표 항목과 그 표
-  try {
-    const snap = await getDocs(collection(db, "voteItems"));
-    const batch = writeBatch(db);
-    let n = 0;
-    snap.forEach((d) => {
-      if ((d.data() || {}).classCode === code) {
-        batch.delete(doc(collection(db, "voteItems"), d.id)); n++;
-      }
-    });
-    if (n) await batch.commit();
-    counts.votes = n;
-  } catch {}
+  // 이 반 학생들이 낸 투표 기록 — 지우면 이번 주에 다시 투표할 수 있다.
+  //  예전에는 투표 "항목"에서 classCode 가 이 반인 것을 찾았는데, 항목에는
+  //  그 필드가 없어서 하나도 안 지워지면서 항목 전체를 다 읽기만 했다.
+  //  항목은 모든 반이 같이 쓰는 것이라 건드리지 않는다.
+  await wipe(query(collection(db, "voteBallots"), where("classCode", "==", code)), "votes");
 
   // 한 번 썼다는 표시. 규칙이 아직이면 못 남기지만, 지우는 것 자체는 됐다.
   try { await setDoc(betaResetDoc(code), { at: serverTimestamp() }); } catch {}
@@ -856,16 +921,17 @@ export async function addFish(code, ownerId, ownerName, name, art) {
   if (doc.art.length < 4) throw new Error("물고기를 그려주세요.");
   if (doc.art.length > FISH_ART_MAX) throw new Error("그림이 너무 커요. 조금만 덜어내 주세요.");
 
-  const ref = await addDoc(fishCol(code), { ...doc, createdAt: serverTimestamp() });
+  const ref = await withTouch((f) => addDoc(fishCol(code), f), { ...doc, createdAt: serverTimestamp() });
   // 서버 시각은 아직 모르니 지금 시각으로 근사한다. 어항은 실시간 구독을
   // 안 하므로 호출한 쪽이 이 줄을 목록에 바로 끼워 넣는다. _local 은
   // syncCollection() 에 "아직 서버에서 다시 받아 보지 않은 줄"이라고 알린다.
-  return { id: ref.id, ...doc, createdAt: Date.now(), _local: true };
+  const now = Date.now();
+  return { id: ref.id, ...doc, createdAt: now, touchedAt: now, _local: true };
 }
 
 /** 어항 목록. prev 를 넘기면 그 뒤로 새로 들어온 물고기만 받아 합친다. */
 export function syncFish(code, prev) {
-  return syncCollection(fishCol(code), prev);
+  return syncCollection(fishCol(code), prev, { field: "touchedAt" });
 }
 
 // ---- 밥 나눠주기 ----
@@ -946,7 +1012,11 @@ export async function feedFish(code, fish) {
   // 무한정 밀어 넣는 것만 막는다). 규칙과 같은 숫자를 여기서 먼저
   // 확인해야, 그 극단적인 경우에도 서버 오류가 아니라 이 문구가 뜬다.
   if (fed >= FISH_FED_MAX) throw new Error("이 물고기는 더 못 먹여요.");
-  await updateDoc(fishDoc(code, fish.id), { fed: fed + 1 });
+  // 기기에 둔 fed 는 남이 준 밥만큼 뒤처져 있을 수 있다. 그 값에 +1 해서
+  // 보내면 규칙("정확히 +1")이 거절해 물고기가 조용히 밥을 못 먹었다.
+  // 서버에서 +1 하게 해서 언제나 통과시킨다. touchedAt 은 다른 기기가 이
+  // 밥을 알아채게 한다.
+  await withTouch((f) => updateDoc(fishDoc(code, fish.id), f), { fed: increment(1) });
 }
 
 export async function deleteFish(code, id) {
@@ -1060,17 +1130,20 @@ export async function listReports(code) {
 }
 
 // 선생님이 "잘못된 판정이었다"고 판단하면 검열을 건너뛰고 그대로 올린다.
-export async function approveReport(code, id) {
-  const snap = await getDoc(reportDoc(code, id));
-  if (!snap.exists()) throw new Error("신고를 찾을 수 없어요.");
-  const r = snap.data();
+//  신고 문서는 규칙상 한 건씩 읽을 수(get) 없다 — 목록으로만 보인다. 예전엔
+//  여기서 getDoc 으로 다시 읽어서 승인이 항상 권한 오류로 실패했다. 그래서
+//  목록에서 이미 받은 신고(report)를 그대로 넘겨받는다.
+export async function approveReport(code, id, report) {
+  const r = report || {};
+  const label = sanitizeText(r.text, MAX_VOTE_LABEL);
+  if (!label) throw new Error("신고를 찾을 수 없어요.");
   const key = weekKeyOf();
-  await addDoc(voteItemsCol(), {
-    label: sanitizeText(r.text, MAX_VOTE_LABEL),
+  await withTouch((f) => addDoc(voteItemsCol(), f), {
+    label,
     count: 0,
     weekKey: key,
-    addedBy: r.name || "이름 없음",
-    addedByRole: r.roleTag || "",
+    addedBy: sanitizeText(r.name, APP.maxNameLength) || "이름 없음",
+    addedByRole: sanitizeText(r.roleTag, 60),
     createdAt: serverTimestamp(),
   });
   await updateDoc(reportDoc(code, id), { status: "approved" });
